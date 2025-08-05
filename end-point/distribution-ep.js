@@ -136,11 +136,66 @@ exports.getOrderData = async (req, res) => {
 
 // In your distribution endpoint file (distribution-ep.js)
 // In your distribution endpoint file (distribution-ep.js)
+// exports.updateOrderItems = async (req, res) => {
+//     try {
+//         const { orderId } = req.params;
+//         const { packageItems = [], additionalItems = [] } = req.body;
+//         const officerId = req.user.id;
+
+//         // Validate input
+//         if (!orderId || isNaN(orderId)) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'Invalid order ID'
+//             });
+//         }
+
+//         // Update package items if any
+//         if (packageItems.length > 0) {
+//             await distributionDao.updatePackageItems(packageItems);
+//             console.log(`Updated ${packageItems.length} package items for order ${orderId}`);
+//         }
+
+//         // Update additional items if any
+//         if (additionalItems.length > 0) {
+//             await distributionDao.updateAdditionalItems(additionalItems);
+//             console.log(`Updated ${additionalItems.length} additional items for order ${orderId}`);
+//         }
+
+//         // Check if any updates were made
+//         if (packageItems.length === 0 && additionalItems.length === 0) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'No items provided for update'
+//             });
+//         }
+
+//         res.status(200).json({
+//             success: true,
+//             message: 'Order items updated successfully',
+//             updated: {
+//                 packageItems: packageItems.length,
+//                 additionalItems: additionalItems.length
+//             }
+//         });
+
+//     } catch (error) {
+//         console.error('Error updating order items:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Failed to update order items',
+//             error: error.message
+//         });
+//     }
+// };
+
 exports.updateOrderItems = async (req, res) => {
     try {
         const { orderId } = req.params;
-        const { packageItems = [], additionalItems = [] } = req.body;
+        const { packageItems = [], additionalItems = [], isComplete } = req.body;
         const officerId = req.user.id;
+
+        console.log("iscomplete======================", isComplete)
 
         // Validate input
         if (!orderId || isNaN(orderId)) {
@@ -170,12 +225,24 @@ exports.updateOrderItems = async (req, res) => {
             });
         }
 
+        // **NEW: Handle isComplete = 1 case**
+        if (isComplete === 1) {
+            try {
+                await distributionDao.updateDistributedTargetComplete(orderId);
+                console.log(`Updated distributedtargetitems for completed order ${orderId}`);
+            } catch (error) {
+                console.error('Error updating distributed target items:', error);
+                // Don't fail the entire request, but log the error
+            }
+        }
+
         res.status(200).json({
             success: true,
             message: 'Order items updated successfully',
             updated: {
                 packageItems: packageItems.length,
-                additionalItems: additionalItems.length
+                additionalItems: additionalItems.length,
+                isComplete: isComplete
             }
         });
 
