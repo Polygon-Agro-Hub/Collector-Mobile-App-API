@@ -169,7 +169,7 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    const users = await userAuthDao.getOfficerPasswordById(collectionOfficerId);
+    const users = await userAuthDao.getOfficerPasswordById(collectionOfficerId, jobRole);
 
     if (!users || users.length === 0) {
       return res.status(404).json({ status: "error", message: "User not found" });
@@ -198,14 +198,14 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-        let center;
+    let center;
     if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
       center = centerId;
-    } else if (jobRole === "Distribution Manager" || jobRole === "Distribution Officer") {
+    } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
       center = distributionCenterId;
 
     }
-                console.log("Centre Id", center)
+    console.log("Centre Id", center)
 
     // If password is valid, generate a JWT token
     const payload = {
@@ -263,63 +263,150 @@ exports.loginUser = async (req, res) => {
 };
 
 
+// exports.updatePassword = async (req, res) => {
+//   const { empId, currentPassword, newPassword } = req.body;
+//   console.log("Attempting to update password for empid:", empId);
+//   if (!empId || !currentPassword || !newPassword) {
+//     return res.status(400).json({ message: "All fields are required" });
+//   }
+//   const collectionOfficerIdResult = await userAuthDao.getOfficerByEmpId(
+//     empId
+//   );
+//   const collectionOfficerId = collectionOfficerIdResult[0]?.id;
+//   console.log("Collection Officer ID:", collectionOfficerId);
+
+//   const users = await userAuthDao.getOfficerPasswordById(
+//     collectionOfficerId
+//   );
+//   const officer = users[0];
+//   console.log("Stored Hashed Password (from DB):", officer.password);
+
+//   const isPasswordValid = await bcrypt.compare(currentPassword, officer.password);
+//   console.log("Password Match Result:", isPasswordValid);
+//   if (!isPasswordValid) {
+//     return res.status(401).json({
+//       status: "error",
+//       message: "Invalid password",
+//     });
+//   }
+//   const saltRounds = 10;
+//   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+//   console.log("Plain Password:", hashedPassword);
+//   try {
+//     try {
+//       await userAuthDao.updatePasswordInDatabase(
+//         collectionOfficerId,
+//         hashedPassword
+//       );
+
+//       res.status(200).json({ message: "Password updated successfully" });
+//     } catch (error) {
+//       if (error === "Database error") {
+//         return res.status(500).json({
+//           message: "Database error occurred while updating the password",
+//         });
+//       } else if (error === "Current password is incorrect") {
+//         return res
+//           .status(401)
+//           .json({ message: "Current password is incorrect" });
+//       } else {
+//         return res
+//           .status(500)
+//           .json({ message: "An error occurred while updating the password" });
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error updating password:", error);
+//     res
+//       .status(500)
+//       .json({ message: "An error occurred while updating the password" });
+//   }
+// };
+
+
 exports.updatePassword = async (req, res) => {
   const { empId, currentPassword, newPassword } = req.body;
   console.log("Attempting to update password for empid:", empId);
+
   if (!empId || !currentPassword || !newPassword) {
     return res.status(400).json({ message: "All fields are required" });
   }
-  const collectionOfficerIdResult = await userAuthDao.getOfficerByEmpId(
-    empId
-  );
-  const collectionOfficerId = collectionOfficerIdResult[0]?.id;
-  console.log("Collection Officer ID:", collectionOfficerId);
 
-  const users = await userAuthDao.getOfficerPasswordById(
-    collectionOfficerId
-  );
-  const officer = users[0];
-  console.log("Stored Hashed Password (from DB):", officer.password);
-
-  const isPasswordValid = await bcrypt.compare(currentPassword, officer.password);
-  console.log("Password Match Result:", isPasswordValid);
-  if (!isPasswordValid) {
-    return res.status(401).json({
-      status: "error",
-      message: "Invalid password",
-    });
-  }
-  const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-  console.log("Plain Password:", hashedPassword);
   try {
-    try {
-      await userAuthDao.updatePasswordInDatabase(
-        collectionOfficerId,
-        hashedPassword
-      );
+    // Get officer details by empId
+    const collectionOfficerResult = await userAuthDao.getOfficerByEmpId(empId);
 
-      res.status(200).json({ message: "Password updated successfully" });
-    } catch (error) {
-      if (error === "Database error") {
-        return res.status(500).json({
-          message: "Database error occurred while updating the password",
-        });
-      } else if (error === "Current password is incorrect") {
-        return res
-          .status(401)
-          .json({ message: "Current password is incorrect" });
-      } else {
-        return res
-          .status(500)
-          .json({ message: "An error occurred while updating the password" });
-      }
+    // Check if officer exists
+    if (!collectionOfficerResult || collectionOfficerResult.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Employee ID not found",
+      });
     }
+
+    const collectionOfficerId = collectionOfficerResult[0]?.id;
+    const jobRole = collectionOfficerResult[0]?.jobRole; // Get the job role
+    console.log("Collection Officer ID:", collectionOfficerId);
+    console.log("Job Role:", jobRole);
+
+    // Get officer password with job role
+    const users = await userAuthDao.getOfficerPasswordById(
+      collectionOfficerId,
+      jobRole // Pass the job role as second parameter
+    );
+
+    const officer = users[0];
+    console.log("Stored Hashed Password (from DB):", officer.password);
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, officer.password);
+    console.log("Password Match Result:", isPasswordValid);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        status: "error",
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    console.log("New Hashed Password:", hashedPassword);
+
+    // Update password in database
+    await userAuthDao.updatePasswordInDatabase(collectionOfficerId, hashedPassword);
+
+    res.status(200).json({
+      status: "success",
+      message: "Password updated successfully"
+    });
+
   } catch (error) {
     console.error("Error updating password:", error);
-    res
-      .status(500)
-      .json({ message: "An error occurred while updating the password" });
+
+    // Handle specific error types
+    if (error.message === "Database query failed. Please try again.") {
+      return res.status(500).json({
+        status: "error",
+        message: "Database error occurred while updating the password",
+      });
+    } else if (error.message === "Officer not found") {
+      return res.status(404).json({
+        status: "error",
+        message: "Officer details not found",
+      });
+    } else if (error === "Database error while updating password") {
+      return res.status(500).json({
+        status: "error",
+        message: "Database error occurred while updating the password",
+      });
+    } else {
+      return res.status(500).json({
+        status: "error",
+        message: "An error occurred while updating the password",
+      });
+    }
   }
 };
 
@@ -378,7 +465,7 @@ exports.getProfile = async (req, res) => {
       status: "success",
       data: officerDetails,
     });
-    
+
   } catch (error) {
     console.error("Error fetching officer details:", error.message);
 

@@ -312,13 +312,157 @@ exports.checkEmailExist = (email) => {
 // };
 
 
+// exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irmId, jobRole) => {
+//   return new Promise((resolve, reject) => {
+//     try {
+//       console.log("Center ID:", centerId, "Company ID:", companyId, "IRM ID:", irmId);
+
+//       // SQL query for inserting the officer data
+//       let sql  = `
+//         INSERT INTO collectionofficer (
+//           centerId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
+//           lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
+//           nic, email, houseNumber, streetName, city, district, province, country,
+//           languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+//                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+//                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
+//       `;
+//     if (jobRole === "Distribution Manager" || jobRole === "Distribution Officer") {
+//       sql = `
+//           INSERT INTO collectionofficer (
+//           distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
+//           lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
+//           nic, email, houseNumber, streetName, city, district, province, country,
+//           languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+//                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+//                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
+//       `;
+//     }
+//       // Use profileImageUrl instead of officerData.image
+//       db.collectionofficer.query(
+//         sql,
+//         [
+//           centerId,
+//           companyId,
+//           irmId,
+//           officerData.firstNameEnglish,
+//           officerData.firstNameSinhala || null,
+//           officerData.firstNameTamil || null,
+//           officerData.lastNameEnglish,
+//           officerData.lastNameSinhala || null,
+//           officerData.lastNameTamil || null,
+//           officerData.jobRole,
+//           officerData.empId, // Map userId from request body
+//           officerData.empType,
+//           officerData.phoneCode01,
+//           officerData.phoneNumber01,
+//           officerData.phoneCode02 || null,
+//           officerData.phoneNumber02 || null,
+//           officerData.nic,
+//           officerData.email,
+//           officerData.houseNumber,
+//           officerData.streetName,
+//           officerData.city,
+//           officerData.district,
+//           officerData.province,
+//           officerData.country,
+//           officerData.languages,
+//           officerData.accHolderName || null,
+//           officerData.accNumber || null,
+//           officerData.bankName || null,
+//           officerData.branchName || null,
+//           officerData.profileImageUrl || null, // Use profileImageUrl here
+//         ],
+//         (err, results) => {
+//           if (err) {
+//             console.error("Database query error:", err);
+//             return reject(new Error("Failed to insert collection officer into the database."));
+//           }
+//           resolve(results); // Return the query results on success
+//         }
+//       );
+//     } catch (error) {
+//       console.error("Unexpected error in createCollectionOfficerPersonal:", error);
+//       reject(error); // Handle unexpected errors
+//     }
+//   });
+// };
+
+
+exports.generateEmpId = (jobRole) => {
+  return new Promise((resolve, reject) => {
+    try {
+      let prefix = '';
+      let searchPattern = '';
+
+      // Determine prefix and search pattern based on job role
+      if (jobRole === "Collection Officer") {
+        prefix = 'COO';
+        searchPattern = 'COO%';
+      } else if (jobRole === "Distribution Officer" || jobRole === "Distribution Manager") {
+        prefix = 'DIO';
+        searchPattern = 'DIO%';
+      } else {
+        // Default fallback
+        prefix = 'EMP';
+        searchPattern = 'EMP%';
+      }
+
+      // Query to get the latest empId with the specific prefix
+      const sql = `
+        SELECT empId 
+        FROM collectionofficer 
+        WHERE empId LIKE ? 
+        ORDER BY CAST(SUBSTRING(empId, 4) AS UNSIGNED) DESC 
+        LIMIT 1
+      `;
+
+      db.collectionofficer.query(sql, [searchPattern], (err, results) => {
+        if (err) {
+          console.error("Database query error in generateEmpId:", err);
+          return reject(new Error("Failed to generate empId"));
+        }
+
+        let nextNumber = 1; // Default starting number
+
+        if (results && results.length > 0) {
+          const lastEmpId = results[0].empId;
+          console.log("Last empId found:", lastEmpId);
+
+          // Extract the numeric part from the empId (e.g., "COO00009" -> "00009")
+          const numericPart = lastEmpId.substring(3); // Remove prefix (COO, DIO, etc.)
+          const lastNumber = parseInt(numericPart, 10);
+
+          if (!isNaN(lastNumber)) {
+            nextNumber = lastNumber + 1;
+          }
+        }
+
+        // Format the number with leading zeros (5 digits)
+        const formattedNumber = nextNumber.toString().padStart(5, '0');
+        const newEmpId = `${prefix}${formattedNumber}`;
+
+        console.log(`Generated new empId: ${newEmpId} for role: ${jobRole}`);
+        resolve(newEmpId);
+      });
+    } catch (error) {
+      console.error("Unexpected error in generateEmpId:", error);
+      reject(error);
+    }
+  });
+};
+
+// Updated createCollectionOfficerPersonal function (no major changes needed)
 exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irmId, jobRole) => {
   return new Promise((resolve, reject) => {
     try {
       console.log("Center ID:", centerId, "Company ID:", companyId, "IRM ID:", irmId);
+      console.log("Using empId:", officerData.empId); // This will now be the generated empId
 
       // SQL query for inserting the officer data
-      let sql  = `
+      let sql = `
         INSERT INTO collectionofficer (
           centerId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
           lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
@@ -328,18 +472,20 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
       `;
-    if (jobRole === "Distribution Manager" || jobRole === "Distribution Officer") {
-      sql = `
+
+      if (jobRole === "Distribution Manager" || jobRole === "Distribution Officer") {
+        sql = `
           INSERT INTO collectionofficer (
-          distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
-          lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
-          nic, email, houseNumber, streetName, city, district, province, country,
-          languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
-      `;
-    }
+            distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
+            lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
+            nic, email, houseNumber, streetName, city, district, province, country,
+            languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
+        `;
+      }
+
       // Use profileImageUrl instead of officerData.image
       db.collectionofficer.query(
         sql,
@@ -354,7 +500,7 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
           officerData.lastNameSinhala || null,
           officerData.lastNameTamil || null,
           officerData.jobRole,
-          officerData.empId, // Map userId from request body
+          officerData.empId, // This is now the auto-generated empId
           officerData.empType,
           officerData.phoneCode01,
           officerData.phoneNumber01,
@@ -389,7 +535,6 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
     }
   });
 };
-
 
 
 // exports.getIrmDetails = async (irmId, jobRole) => {
@@ -646,8 +791,8 @@ exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
         id = ?
     `;
 
-    if(mangerJobRole === "Distribution Manager"){
-        sql = `
+    if (mangerJobRole === "Distribution Manager") {
+      sql = `
       UPDATE collectionofficer 
       SET 
         irmId = ?,

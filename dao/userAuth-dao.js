@@ -56,25 +56,164 @@ exports.getOfficerByEmpId = (empId) => {
 //     });
 //   });
 // };
-exports.getOfficerPasswordById = (id) => {
+// exports.getOfficerPasswordById = (id,jobRole) => {
+//   return new Promise((resolve, reject) => {
+//     const sql = `SELECT co.*, cod.companyNameEnglish AS companyNameEnglish, cod.companyNameSinhala AS companyNameSinhala, cod.companyNameTamil AS companyNameTamil,  ccen.id AS companycenterId
+//      FROM 
+//         collectionofficer co
+//       JOIN 
+//         company cod ON co.companyId = cod.id
+//       JOIN
+//         companycenter ccen ON co.centerId = ccen.centerId 
+//      WHERE co.id = ?`;
+//     db.collectionofficer.query(sql, [id], (err, results) => {
+//       if (err) {
+//         return reject(new Error("Database error"));
+//       }
+//       if (results.length === 0) {
+//         return reject(new Error("Invalid email or password"));
+//       }
+//       resolve(results);
+//       console.log("Results:", results);
+//     });
+//   });
+// };
+
+// exports.getOfficerPasswordById = (id, jobRole) => {
+//   return new Promise((resolve, reject) => {
+//     let sql;
+
+//     // Determine which center table to join based on job role
+//     if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
+//       // For Collection roles, join with collectioncenter table using centerId
+//       sql = `SELECT co.*, 
+//                     cod.companyNameEnglish AS companyNameEnglish, 
+//                     cod.companyNameSinhala AS companyNameSinhala, 
+//                     cod.companyNameTamil AS companyNameTamil,  
+//                     ccen.id AS companycenterId
+
+//              FROM 
+//                 collectionofficer co
+//              JOIN 
+//                 company cod ON co.companyId = cod.id
+//              JOIN
+//                 companycenter ccen ON co.centerId = ccen.centerId 
+//              LEFT JOIN
+//                 collectioncenter cc ON co.centerId = cc.id
+//              WHERE co.id = ?`;
+//     } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+//       // For Distribution roles, join with distributedcenter table using distributedCenterId
+//       sql = `SELECT co.*, 
+//                     cod.companyNameEnglish AS companyNameEnglish, 
+//                     cod.companyNameSinhala AS companyNameSinhala, 
+//                     cod.companyNameTamil AS companyNameTamil,  
+//                     ccen.id AS companycenterId
+
+//              FROM 
+//                 collectionofficer co
+//              JOIN 
+//                 company cod ON co.companyId = cod.id
+//              JOIN
+//                 companycenter ccen ON co.distributedCenterId = ccen.centerId 
+//              LEFT JOIN
+//                 distributedcenter dc ON co.distributedCenterId = dc.id
+//              WHERE co.id = ?`;
+//     } else {
+//       // For other roles or unknown roles, use the original query
+//       sql = `SELECT co.*, 
+//                     cod.companyNameEnglish AS companyNameEnglish, 
+//                     cod.companyNameSinhala AS companyNameSinhala, 
+//                     cod.companyNameTamil AS companyNameTamil,  
+//                     ccen.id AS companycenterId
+//              FROM 
+//                 collectionofficer co
+//              JOIN 
+//                 company cod ON co.companyId = cod.id
+//              JOIN
+//                 companycenter ccen ON co.centerId = ccen.centerId 
+//              WHERE co.id = ?`;
+//     }
+
+//     db.collectionofficer.query(sql, [id], (err, results) => {
+//       if (err) {
+//         console.error("Database query error:", err);
+//         return reject(new Error("Database error"));
+//       }
+//       if (results.length === 0) {
+//         return reject(new Error("Officer not found"));
+//       }
+
+//       console.log("Results:", results);
+//       resolve(results);
+//     });
+//   });
+// };
+
+exports.getOfficerPasswordById = (id, jobRole) => {
   return new Promise((resolve, reject) => {
-    const sql = `SELECT co.*, cod.companyNameEnglish AS companyNameEnglish, cod.companyNameSinhala AS companyNameSinhala, cod.companyNameTamil AS companyNameTamil,  ccen.id AS companycenterId
-     FROM 
-        collectionofficer co
-      JOIN 
-        company cod ON co.companyId = cod.id
-      JOIN
-        companycenter ccen ON co.centerId = ccen.centerId 
-     WHERE co.id = ?`;
+    let sql;
+
+    // Determine which center table to join based on job role
+    if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
+      // For Collection roles, join with collectioncenter table using centerId
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil,  
+                    ccen.id AS companycenterId
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             JOIN
+                companycenter ccen ON co.centerId = ccen.centerId 
+             LEFT JOIN
+                collectioncenter cc ON co.centerId = cc.id
+             WHERE co.id = ?`;
+    } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+      // For Distribution roles, join with distributedcenter table using distributedCenterId
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil,  
+                    ccen.id AS companycenterId
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             JOIN
+                companycenter ccen ON co.distributedCenterId = ccen.centerId 
+             LEFT JOIN
+                distributedcenter dc ON co.distributedCenterId = dc.id
+             WHERE co.id = ?`;
+    } else {
+      // For other roles or when jobRole is undefined/null, use a simpler query
+      // that should work for most cases
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             WHERE co.id = ?`;
+    }
+
+    console.log("Executing SQL for officer ID:", id, "with job role:", jobRole);
+
     db.collectionofficer.query(sql, [id], (err, results) => {
       if (err) {
+        console.error("Database query error:", err);
         return reject(new Error("Database error"));
       }
       if (results.length === 0) {
-        return reject(new Error("Invalid email or password"));
+        console.warn(`No officer found with ID: ${id} and job role: ${jobRole}`);
+        return reject(new Error("Officer not found"));
       }
+
+      console.log("Officer found:", results[0]);
       resolve(results);
-      console.log("Results:", results);
     });
   });
 };
@@ -210,7 +349,7 @@ exports.getQRCodeByOfficerId = (officerId) => {
 
 // ------------created below codes after the collection officer update ------------- 
 
-exports.getOfficerDetailsById = (officerId,jobRole) => {
+exports.getOfficerDetailsById = (officerId, jobRole) => {
   return new Promise((resolve, reject) => {
     let sql = `
       SELECT 
@@ -239,7 +378,7 @@ exports.getOfficerDetailsById = (officerId,jobRole) => {
       WHERE 
         co.id = ?;
     `;
-    if(jobRole==="Distribution Manager" || jobRole==="Distribution Officer"){
+    if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
       sql = `
        SELECT 
         co.*, 
