@@ -670,6 +670,54 @@ exports.updateAdditionalItems = (items) => {
     });
 };
 
+
+exports.updateDistributedTargetComplete = (frontendOrderId) => {
+    return new Promise((resolve, reject) => {
+        // First, get the processorders.id using the frontend orderId
+        const getProcessOrderIdSql = `
+            SELECT id FROM market_place.processorders 
+            WHERE orderId = ?
+        `;
+
+        db.collectionofficer.query(getProcessOrderIdSql, [frontendOrderId], (err, processOrderResult) => {
+            if (err) {
+                console.error(`Error getting process order ID for orderId ${frontendOrderId}:`, err);
+                return reject(err);
+            }
+
+            if (processOrderResult.length === 0) {
+                console.warn(`No process order found for orderId ${frontendOrderId}`);
+                return resolve({ affectedRows: 0 });
+            }
+
+            const processOrderId = processOrderResult[0].id;
+            console.log(`Found process order ID ${processOrderId} for frontend orderId ${frontendOrderId}`);
+
+            // Now update the distributedtargetitems using the processOrderId
+            const updateSql = `
+                UPDATE collection_officer.distributedtargetitems 
+                SET isComplete = 1, completeTime = NOW()
+                WHERE orderId = ?
+            `;
+
+            db.collectionofficer.query(updateSql, [processOrderId], (updateErr, updateResult) => {
+                if (updateErr) {
+                    console.error(`Error updating distributed target items for process order ID ${processOrderId}:`, updateErr);
+                    return reject(updateErr);
+                }
+
+                if (updateResult.affectedRows === 0) {
+                    console.warn(`No distributed target items found for process order ID ${processOrderId}`);
+                } else {
+                    console.log(`Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`);
+                }
+
+                resolve(updateResult);
+            });
+        });
+    });
+};
+
 ////get markte place itemssss
 // exports.getAllRetailItems = async () => {
 //     return new Promise((resolve, reject) => {
