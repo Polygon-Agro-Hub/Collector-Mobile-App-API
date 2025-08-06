@@ -171,18 +171,19 @@ exports.getOfficerPasswordById = (id, jobRole) => {
                 collectioncenter cc ON co.centerId = cc.id
              WHERE co.id = ?`;
     } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+      console.log("hit")
       // For Distribution roles, join with distributedcenter table using distributedCenterId
       sql = `SELECT co.*, 
                     cod.companyNameEnglish AS companyNameEnglish, 
                     cod.companyNameSinhala AS companyNameSinhala, 
                     cod.companyNameTamil AS companyNameTamil,  
-                    ccen.id AS companycenterId
+                    dcen.id AS companycenterId
              FROM 
                 collectionofficer co
              JOIN 
                 company cod ON co.companyId = cod.id
              JOIN
-                companycenter ccen ON co.distributedCenterId = ccen.centerId 
+                distributedcompanycenter dcen ON co.distributedCenterId = dcen.centerId 
              LEFT JOIN
                 distributedcenter dc ON co.distributedCenterId = dc.id
              WHERE co.id = ?`;
@@ -203,13 +204,14 @@ exports.getOfficerPasswordById = (id, jobRole) => {
     console.log("Executing SQL for officer ID:", id, "with job role:", jobRole);
 
     db.collectionofficer.query(sql, [id], (err, results) => {
+      console.log("hitt", results)
       if (err) {
         console.error("Database query error:", err);
         return reject(new Error("Database error"));
       }
       if (results.length === 0) {
         console.warn(`No officer found with ID: ${id} and job role: ${jobRole}`);
-        return reject(new Error("Officer not found"));
+        return reject(new Error("Officer not found", err));
       }
 
       console.log("Officer found:", results[0]);
