@@ -67,14 +67,36 @@ class EmailService {
     }
   }
 
-  async sendEmail(to, subject, templateName, context = {}, attachments = []) {
-    if (!this.templates[templateName]) {
-      throw new Error(`Template "${templateName}" not found. Available templates: ${Object.keys(this.templates).join(', ')}`);
-    }
+  // async sendEmail(to, subject, templateName, context = {}, attachments = []) {
+  //   if (!this.templates[templateName]) {
+  //     throw new Error(`Template "${templateName}" not found. Available templates: ${Object.keys(this.templates).join(', ')}`);
+  //   }
 
-    try {
-      const html = this.templates[templateName](context);
+  //   try {
+  //     const html = this.templates[templateName](context);
       
+  //     const mailOptions = {
+  //       from: process.env.EMAIL_FROM || 'no-reply@example.com',
+  //       to,
+  //       subject,
+  //       attachments
+  //     };
+
+  //     const info = await transporter.sendMail(mailOptions);
+  //     console.log(`Email sent to ${to} with subject "${subject}"`);
+  //     return info;
+  //   } catch (error) {
+  //     console.error('Error sending email:', {
+  //       to,
+  //       subject,
+  //       error: error.message
+  //     });
+  //     throw error;
+  //   }
+  // }
+
+   async sendEmail(to, subject, attachments = []) {
+    try {      
       const mailOptions = {
         from: process.env.EMAIL_FROM || 'no-reply@example.com',
         to,
@@ -204,31 +226,7 @@ class EmailService {
 //     throw error;
 //   }
 // }
-async sendEmailWithPdf(email, htmlContent) {
-  try {
-    const { base64Pdf } = await generatePdfBase64(htmlContent);
 
-    const response = await fetch(`${API_BASE_URL}/api/email/send-pdf-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        pdfBase64: base64Pdf,
-        fileName: `Invoice_${Date.now()}.pdf`
-      })
-    });
-
-    const result = await response.json();
-    if (result.success) {
-      alert('Email sent successfully');
-    } else {
-      alert('Failed to send email');
-    }
-  } catch (error) {
-    console.error(error);
-    alert('Error sending PDF email');
-  }
-}
 
 }
 
