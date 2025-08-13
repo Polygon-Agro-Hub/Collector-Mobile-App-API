@@ -614,3 +614,79 @@ exports.getDistributionTarget = async (req, res) => {
         });
     }
 };
+
+
+// Updated controller to handle orderIds array from frontend
+exports.updateoutForDelivery = async (req, res) => {
+    try {
+        const { orderIds } = req.body; // Get orderIds from request body
+        const userId = req.user.id;
+
+        console.log("orderIds======================", orderIds);
+        console.log("userId======================", userId);
+
+        // Validate input
+        if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or empty order IDs array'
+            });
+        }
+
+        // Validate each orderId
+        for (const orderId of orderIds) {
+            if (!orderId || isNaN(orderId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid order ID: ${orderId}`
+                });
+            }
+        }
+
+        // Update each order
+        const results = [];
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const orderId of orderIds) {
+            try {
+                const updateResult = await distributionDao.updateoutForDelivery(orderId, userId);
+                results.push({
+                    orderId: orderId,
+                    success: true,
+                    affectedRows: updateResult.affectedRows
+                });
+                successCount++;
+                console.log(`Successfully updated order ${orderId} to Out For Delivery by user ${userId}`);
+            } catch (error) {
+                console.error(`Failed to update order ${orderId}:`, error);
+                results.push({
+                    orderId: orderId,
+                    success: false,
+                    error: error.message
+                });
+                errorCount++;
+            }
+        }
+
+        // Send response
+        res.status(200).json({
+            success: true,
+            message: `Successfully updated ${successCount} orders to Out For Delivery${errorCount > 0 ? `, ${errorCount} failed` : ''}`,
+            results: results,
+            summary: {
+                total: orderIds.length,
+                successful: successCount,
+                failed: errorCount
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating order status:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update order status',
+            error: error.message
+        });
+    }
+};

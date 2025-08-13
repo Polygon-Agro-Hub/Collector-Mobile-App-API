@@ -29,6 +29,7 @@ exports.getDCenterTarget = (irmId = null) => {
                 po.isPaid,
                 po.amount,
                 po.status,
+                po.outDlvrDate,
                 po.createdAt AS orderCreatedAt,
                 po.reportStatus,
 

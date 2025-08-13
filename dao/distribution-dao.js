@@ -1498,3 +1498,67 @@ exports.getDistributionTargets = async (officerId) => {
         });
     });
 };
+
+
+
+// exports.updateoutForDelivery = (orderId, userId) => {
+//     return new Promise((resolve, reject) => {
+//         // SQL to update status to 'Out For Delivery' and set outBy to userId
+//         const sql = `
+//             UPDATE market_place.processorders 
+//             SET status = 'Out For Delivery', outBy = ?
+//             WHERE orderId = ?
+//         `;
+
+//         try {
+//             db.collectionofficer.query(sql, [userId, orderId], (err, result) => {
+//                 if (err) {
+//                     console.error(`Error updating order ${orderId}:`, err);
+//                     return reject(err);
+//                 }
+
+//                 if (result.affectedRows === 0) {
+//                     return reject(new Error(`No order found with orderId: ${orderId}`));
+//                 }
+
+//                 console.log(`Successfully updated order ${orderId} - affected rows: ${result.affectedRows}`);
+//                 resolve(result);
+//             });
+//         } catch (error) {
+//             console.error("Error in updateoutForDelivery:", error);
+//             reject(error);
+//         }
+//     });
+// };
+exports.updateoutForDelivery = (orderId, userId) => {
+    return new Promise((resolve, reject) => {
+        const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+        const sql = `
+            UPDATE market_place.processorders 
+            SET status = 'Out For Delivery', 
+                outBy = ?,
+                outDlvrDate = ?
+            WHERE orderId = ?
+        `;
+
+        try {
+            db.collectionofficer.query(sql, [userId, currentDate, orderId], (err, result) => {
+                if (err) {
+                    console.error(`Error updating order ${orderId}:`, err);
+                    return reject(err);
+                }
+
+                if (result.affectedRows === 0) {
+                    return reject(new Error(`No order found with orderId: ${orderId}`));
+                }
+
+                console.log(`Successfully updated order ${orderId} - affected rows: ${result.affectedRows}`);
+                resolve(result);
+            });
+        } catch (error) {
+            console.error("Error in updateoutForDelivery:", error);
+            reject(error);
+        }
+    });
+};

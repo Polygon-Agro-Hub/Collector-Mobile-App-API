@@ -17,6 +17,7 @@ router.post('/replace-order-package', auth, DistributionEp.replaceOrderPackage);
 
 router.get("/get-distribution-target", auth, DistributionEp.getDistributionTarget)
 
+router.put('/update-outForDelivery', auth, DistributionEp.updateoutForDelivery);
 
 // Add this route to your router file
 router.put('/update-distributed-target/:orderId', auth, DistributionEp.updateDistributedTarget);
