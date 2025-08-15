@@ -22,7 +22,7 @@ exports.getOfficerTarget = async (req, res) => {
         // Get targets from DAO
         const targets = await distributionDao.getTargetForOfficerDao(officerId);
 
-        console.log("nwxsjklowcd", targets)
+        // console.log("nwxsjklowcd", targets)
 
         res.status(200).json({
             success: true,
@@ -195,7 +195,9 @@ exports.updateOrderItems = async (req, res) => {
         const { packageItems = [], additionalItems = [], isComplete } = req.body;
         const officerId = req.user.id;
 
-        console.log("iscomplete======================", isComplete)
+        console.log("iscomplete======================", isComplete);
+        console.log("packageItems received:", JSON.stringify(packageItems, null, 2));
+        console.log("additionalItems received:", JSON.stringify(additionalItems, null, 2));
 
         // Validate input
         if (!orderId || isNaN(orderId)) {
@@ -205,10 +207,24 @@ exports.updateOrderItems = async (req, res) => {
             });
         }
 
-        // Update package items if any
+        // **FIX: Flatten package items structure**
+        let flattenedPackageItems = [];
         if (packageItems.length > 0) {
-            await distributionDao.updatePackageItems(packageItems);
-            console.log(`Updated ${packageItems.length} package items for order ${orderId}`);
+            // Check if packageItems is nested (has packageId and items) or flat
+            if (packageItems[0] && packageItems[0].packageId && packageItems[0].items) {
+                // Nested structure - flatten it
+                flattenedPackageItems = packageItems.reduce((acc, packageGroup) => {
+                    return acc.concat(packageGroup.items);
+                }, []);
+            } else {
+                // Already flat structure
+                flattenedPackageItems = packageItems;
+            }
+
+            console.log("Flattened package items:", JSON.stringify(flattenedPackageItems, null, 2));
+
+            await distributionDao.updatePackageItems(flattenedPackageItems);
+            console.log(`Updated ${flattenedPackageItems.length} package items for order ${orderId}`);
         }
 
         // Update additional items if any
@@ -218,17 +234,17 @@ exports.updateOrderItems = async (req, res) => {
         }
 
         // Check if any updates were made
-        if (packageItems.length === 0 && additionalItems.length === 0) {
+        if (flattenedPackageItems.length === 0 && additionalItems.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: 'No items provided for update'
             });
         }
 
-        // **NEW: Handle isComplete = 1 case**
+        // Handle isComplete = 1 case
         if (isComplete === 1) {
             try {
-                await distributionDao.updateDistributedTargetComplete(orderId);
+                await distributionDao.updateDistributedTargetComplete(orderId, officerId);
                 console.log(`Updated distributedtargetitems for completed order ${orderId}`);
             } catch (error) {
                 console.error('Error updating distributed target items:', error);
@@ -240,7 +256,7 @@ exports.updateOrderItems = async (req, res) => {
             success: true,
             message: 'Order items updated successfully',
             updated: {
-                packageItems: packageItems.length,
+                packageItems: flattenedPackageItems.length,
                 additionalItems: additionalItems.length,
                 isComplete: isComplete
             }
@@ -255,7 +271,6 @@ exports.updateOrderItems = async (req, res) => {
         });
     }
 };
-
 
 exports.getAllRetailItems = asyncHandler(async (req, res) => {
     console.log("Fetching Retail Items...");
@@ -457,20 +472,60 @@ exports.replaceOrderPackage = async (req, res) => {
 
     try {
         // Get user information
-        const userId = req.user.id;  // Changed from empId to id
+        const userId = req.user.id;
         const empId = req.user.empId;
         const userRole = req.user.role;
 
-        // Determine user permissions based on empId
-        const isDIO = empId && empId.startsWith('DIO');
-        const isDBM = empId && empId.startsWith('DBM');
+        console.log("Debug user permissions:", {
+            userId,
+            empId,
+            userRole,
+            empIdExists: !!empId,
+            empIdType: typeof empId
+        });
 
-        if (!isDIO && !isDBM) {
+        // Enhanced role validation
+        let isDIO = false;
+        let isDCM = false;
+
+        // Check empId format
+        if (empId && typeof empId === 'string') {
+            isDIO = empId.toUpperCase().startsWith('DIO');
+            isDCM = empId.toUpperCase().startsWith('DCM');
+        }
+
+        // Alternative: Check by userRole if empId format doesn't match
+        if (!isDIO && !isDCM && userRole) {
+            const roleUpper = userRole.toUpperCase();
+            isDIO = roleUpper.includes('DIO') || roleUpper === 'DISTRICT_OFFICER';
+            isDCM = roleUpper.includes('DCM') || roleUpper === 'DIVISIONAL_MANAGER';
+        }
+
+        // More flexible validation - you can customize this based on your needs
+        const hasPermission = isDIO || isDCM;
+
+        if (!hasPermission) {
+            console.error("Access denied for user:", {
+                userId,
+                empId,
+                userRole,
+                isDIO,
+                isDCM
+            });
+
             return res.status(403).json({
                 success: false,
-                message: 'Unauthorized: Invalid employee role'
+                message: `Unauthorized: User role '${userRole}' with empId '${empId}' does not have permission to create replacement requests`,
+                debug: process.env.NODE_ENV === 'development' ? {
+                    empId,
+                    userRole,
+                    isDIO,
+                    isDCM
+                } : undefined
             });
         }
+
+        // ... rest of your existing code remains the same
 
         // Validate request body using the schema
         const { error, value } = replaceOrderPackageSchema.validate(req.body, { abortEarly: false });
@@ -494,9 +549,9 @@ exports.replaceOrderPackage = async (req, res) => {
             qty,
             price,
             status,
-            requestedBy: userId,  // Changed from officerId to userId
+            requestedBy: userId,
             userRole: userRole,
-            permissions: isDIO ? 'Full access' : 'Limited access'
+            permissions: isDIO ? 'DIO - Full access' : 'DCM - Limited access'
         });
 
         // Call DAO to handle the replacement request with role information
@@ -508,11 +563,11 @@ exports.replaceOrderPackage = async (req, res) => {
             qty,
             price: parseFloat(price),
             status: status || 'Pending',
-            requestedBy: userId,  // Changed from officerId to userId
-            userId: userId,       // Added userId field
+            requestedBy: userId,
+            userId: userId,
             empId: empId,
             isDIO: isDIO,
-            isDBM: isDBM
+            isDCM: isDCM
         });
 
         console.log("Database insertion result:", result);
@@ -522,10 +577,10 @@ exports.replaceOrderPackage = async (req, res) => {
             message: 'Replacement request created successfully',
             data: result,
             requestedBy: {
-                userId: userId,   // Added userId to response
+                userId: userId,
                 empId: empId,
                 role: userRole,
-                permissions: isDIO ? 'Full access' : 'Limited access'
+                permissions: isDIO ? 'DIO - Full access' : 'DCM - Limited access'
             }
         });
     } catch (error) {

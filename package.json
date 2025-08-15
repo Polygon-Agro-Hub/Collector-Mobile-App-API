@@ -36,6 +36,7 @@
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "expo-print": "~13.0.1"
   }
 }

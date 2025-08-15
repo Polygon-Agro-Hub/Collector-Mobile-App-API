@@ -5,29 +5,29 @@ const handlebars = require('handlebars');
 
 // Register Handlebars helpers
 
-handlebars.registerHelper('isEqual', function(a, b, options) {
-    if (a === b) {
-        return options.fn(this);
-    }
-       return options.inverse ? options.inverse(this) : '';
+handlebars.registerHelper('isEqual', function (a, b, options) {
+  if (a === b) {
+    return options.fn(this);
+  }
+  return options.inverse ? options.inverse(this) : '';
 });
 
-handlebars.registerHelper('safe', function(obj, prop) {
+handlebars.registerHelper('safe', function (obj, prop) {
   return obj && obj[prop] ? obj[prop] : '';
 });
 
-handlebars.registerHelper('formatCurrency', function(value) {
+handlebars.registerHelper('formatCurrency', function (value) {
   if (!value) return '0.00';
   return parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 });
 
-handlebars.registerHelper('formatDate', function(dateString) {
+handlebars.registerHelper('formatDate', function (dateString) {
   if (!dateString) return '';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', { 
-    day: '2-digit', 
-    month: 'short', 
-    year: 'numeric' 
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
   }).replace(/ /g, '-');
 });
 
@@ -40,7 +40,7 @@ class EmailService {
   loadTemplates() {
     try {
       const templatesDir = path.join(__dirname, '../email-templates');
-      
+
       if (!fs.existsSync(templatesDir)) {
         throw new Error(`Templates directory not found: ${templatesDir}`);
       }
@@ -57,7 +57,7 @@ class EmailService {
           }
         }
       });
-      
+
       if (Object.keys(this.templates).length === 0) {
         console.warn('No templates loaded from directory:', templatesDir);
       }
@@ -74,7 +74,7 @@ class EmailService {
 
   //   try {
   //     const html = this.templates[templateName](context);
-      
+
   //     const mailOptions = {
   //       from: process.env.EMAIL_FROM || 'no-reply@example.com',
   //       to,
@@ -95,8 +95,14 @@ class EmailService {
   //   }
   // }
 
-   async sendEmail(to, subject, attachments = []) {
-    try {      
+  async sendEmail(to, subject, templateName, context = {}, attachments = []) {
+    // if (!this.templates[templateName]) {
+    //   throw new Error(Template "${templateName}" not found. Available templates: ${Object.keys(this.templates).join(', ')});
+    // }
+
+    try {
+      const html = this.templates[templateName](context);
+
       const mailOptions = {
         from: process.env.EMAIL_FROM || 'no-reply@example.com',
         to,
@@ -105,7 +111,7 @@ class EmailService {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log(`Email sent to ${to} with subject "${subject}"`);
+
       return info;
     } catch (error) {
       console.error('Error sending email:', {
@@ -171,61 +177,61 @@ class EmailService {
   //   }
   // }
 
-//   async sendEmailWithPdf(to, subject, templateName, context = {}, pdfOptions = {}) {
-//   if (!this.templates[templateName]) {
-//     throw new Error(`Template "${templateName}" not found`);
-//   }
+  //   async sendEmailWithPdf(to, subject, templateName, context = {}, pdfOptions = {}) {
+  //   if (!this.templates[templateName]) {
+  //     throw new Error(`Template "${templateName}" not found`);
+  //   }
 
-//   try {
-//     const html = this.templates[templateName](context);
-//     const pdf = require('html-pdf');
+  //   try {
+  //     const html = this.templates[templateName](context);
+  //     const pdf = require('html-pdf');
 
-//     const defaultPdfOptions = {
-//       format: 'A4',
-//       border: '0',
-//       timeout: 30000,
-//       phantomArgs: ["--ignore-ssl-errors=yes"],
-//       type: "pdf",
-//       quality: "100",
-//       ...pdfOptions
-//     };
+  //     const defaultPdfOptions = {
+  //       format: 'A4',
+  //       border: '0',
+  //       timeout: 30000,
+  //       phantomArgs: ["--ignore-ssl-errors=yes"],
+  //       type: "pdf",
+  //       quality: "100",
+  //       ...pdfOptions
+  //     };
 
-//     // Generate PDF buffer
-//     const buffer = await new Promise((resolve, reject) => {
-//       pdf.create(html, defaultPdfOptions).toBuffer((err, buffer) => {
-//         if (err) return reject(err);
-//         resolve(buffer);
-//       });
-//     });
+  //     // Generate PDF buffer
+  //     const buffer = await new Promise((resolve, reject) => {
+  //       pdf.create(html, defaultPdfOptions).toBuffer((err, buffer) => {
+  //         if (err) return reject(err);
+  //         resolve(buffer);
+  //       });
+  //     });
 
-//     // Send only the PDF (no HTML body)
-//     const mailOptions = {
-//       from: process.env.EMAIL_FROM || 'no-reply@example.com',
-//       to,
-//       subject,
-//       text: 'Please find the attached PDF document.',
-//       attachments: [
-//         {
-//           filename: 'document.pdf',
-//           content: buffer,
-//           contentType: 'application/pdf'
-//         }
-//       ]
-//     };
+  //     // Send only the PDF (no HTML body)
+  //     const mailOptions = {
+  //       from: process.env.EMAIL_FROM || 'no-reply@example.com',
+  //       to,
+  //       subject,
+  //       text: 'Please find the attached PDF document.',
+  //       attachments: [
+  //         {
+  //           filename: 'document.pdf',
+  //           content: buffer,
+  //           contentType: 'application/pdf'
+  //         }
+  //       ]
+  //     };
 
-//     const info = await transporter.sendMail(mailOptions);
-//     console.log(`PDF email sent to ${to} with subject "${subject}"`);
-//     return info;
+  //     const info = await transporter.sendMail(mailOptions);
+  //     console.log(`PDF email sent to ${to} with subject "${subject}"`);
+  //     return info;
 
-//   } catch (error) {
-//     console.error('Error in sendEmailWithPdf:', {
-//       to,
-//       subject,
-//       error: error.message
-//     });
-//     throw error;
-//   }
-// }
+  //   } catch (error) {
+  //     console.error('Error in sendEmailWithPdf:', {
+  //       to,
+  //       subject,
+  //       error: error.message
+  //     });
+  //     throw error;
+  //   }
+  // }
 
 
 }
