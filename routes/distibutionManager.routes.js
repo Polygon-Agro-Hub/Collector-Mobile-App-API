@@ -38,4 +38,13 @@ router.get("/officer-task-summary/:collectionOfficerId", dmanagerEp.getOfficerTa
 // router.get('/collection-officers', authenticate, dmanagerEp.getCollectionOfficers);
 router.get('/user-profile', auth, dmanagerEp.getProfile);
 
+router.get('/get-order/:orderId', dmanagerEp.getOrderById)
+
+router.get('/get-customer-data/:id', dmanagerEp.getCustomerDetailsCustomerId)
+
+router.get("/get-city", dmanagerEp.getAllPCity);
+
+router.get('/get-order-marketplace-ordash/:orderId', dmanagerEp.getOrderMarketplaceOrdash);
+
+
 module.exports = router;

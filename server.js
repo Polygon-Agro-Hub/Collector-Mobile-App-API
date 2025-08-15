@@ -429,4 +429,10 @@ mainApp.listen(PORT, () => console.log(`Main API server running on port ${PORT} 
 // });
 
 
+// Add this with your other route imports
+const emailRoutes = require('./routes/email.routes');
+
+// Add this with your other route middlewares
+mainApp.use(`${basePathMain}/api/email`, emailRoutes);
+
 module.exports = mainApp
