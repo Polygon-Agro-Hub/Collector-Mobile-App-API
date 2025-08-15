@@ -2,8 +2,6 @@ const db = require("../startup/database");
 
 
 
-
-
 exports.getTargetForOfficerDao = (officerId) => {
     console.log("Getting targets for officer ID:", officerId);
 
@@ -61,17 +59,13 @@ exports.getTargetForOfficerDao = (officerId) => {
                     ELSE NULL
                 END AS additionalItemStatus,
 
-                -- Package item counts (only for packages)
+                -- Package item counts (aggregated for ALL packages of this order)
                 COALESCE(package_item_counts.total_items, 0) AS totalPackageItems,
                 COALESCE(package_item_counts.packed_items, 0) AS packedPackageItems,
                 COALESCE(package_item_counts.pending_items, 0) AS pendingPackageItems,
+                COALESCE(package_item_counts.total_packages, 0) AS totalPackages,
 
-                -- Package details
-                package_item_counts.isLock AS packageIsLock,
-                package_item_counts.packingStatus AS packagePackingStatus,
-                package_item_counts.packageId AS packageId,
-
-                -- Package item status
+                -- Package item status (considering all packages)
                 CASE 
                     WHEN o.isPackage = 0 THEN NULL
                     WHEN COALESCE(package_item_counts.total_items, 0) = 0 THEN 'Pending'
@@ -82,7 +76,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                     ELSE NULL
                 END AS packageItemStatus,
 
-                -- Overall status - FIXED to require BOTH additional and package items to be completed when they exist
+                -- Overall status - considering all items across all packages
                 CASE 
                     -- For non-package orders (only check additional items)
                     WHEN o.isPackage = 0 THEN
@@ -95,7 +89,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                             ELSE 'Pending'
                         END
                     
-                    -- For package orders (check both additional and package items)
+                    -- For package orders (check both additional and package items - ALL packages combined)
                     WHEN o.isPackage = 1 THEN
                         CASE 
                             -- When both additional and package items exist
@@ -119,7 +113,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                                     ELSE 'Pending'
                                 END
                             
-                            -- When only package items exist
+                            -- When only package items exist (across all packages)
                             WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
                                 CASE 
                                     WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
@@ -156,22 +150,30 @@ exports.getTargetForOfficerDao = (officerId) => {
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - correctly joined to processorders.id
+                -- Package items subquery - FIXED: Aggregate ALL packages for each processorder
                 SELECT 
                     op.orderId,  -- This references processorders.id
-                    op.isLock,
-                    op.packingStatus,
-                    op.packageId,
-                    COUNT(opi.id) as total_items,
-                    SUM(CASE WHEN opi.isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
-                    SUM(CASE WHEN opi.isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+                    COUNT(DISTINCT op.id) as total_packages,  -- Count total packages
+                    SUM(COALESCE(package_items.total_items, 0)) as total_items,
+                    SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
+                    SUM(COALESCE(package_items.pending_items, 0)) as pending_items
                 FROM 
                     market_place.orderpackage op
-                LEFT JOIN 
-                    market_place.orderpackageitems opi ON op.id = opi.orderPackageId
+                LEFT JOIN (
+                    -- Get item counts for each package
+                    SELECT 
+                        orderPackageId,
+                        COUNT(id) as total_items,
+                        SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+                        SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+                    FROM 
+                        market_place.orderpackageitems
+                    GROUP BY 
+                        orderPackageId
+                ) package_items ON op.id = package_items.orderPackageId
                 GROUP BY 
-                    op.orderId, op.isLock, op.packingStatus, op.packageId
-            ) package_item_counts ON po.id = package_item_counts.orderId  -- Correct join to processorders
+                    op.orderId  -- Group by processorders.id to get one row per order
+            ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 dt.userId = ?
                 AND DATE(dt.createdAt) = CURDATE()
@@ -202,8 +204,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                         orderId: row.orderId,
                         isPackage: row.isPackage,
                         packageData: {
-                            packageId: row.packageId,
-                            isLock: row.packageIsLock,
+                            totalPackages: row.totalPackages,
                             items: {
                                 total: row.totalPackageItems,
                                 packed: row.packedPackageItems,
@@ -246,6 +247,78 @@ exports.getTargetForOfficerDao = (officerId) => {
 // Corrected version with proper table relationships
 // orders -> processorders -> orderpackage -> orderpackageitems
 
+// ENDPOINT - Updated to handle multiple packages
+exports.getOrderData = async (req, res) => {
+    console.log("getOrderData called");
+    try {
+        const { orderId } = req.params;
+        const officerId = req.user.id; // For authorization check if needed
+
+        console.log("Order ID:", orderId);
+
+        // Validate orderId
+        if (!orderId || isNaN(orderId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid order ID provided'
+            });
+        }
+
+        // Get order data from DAO
+        const orderData = await distributionDao.getOrderDataDao(orderId);
+
+        console.log("Order Data:", JSON.stringify(orderData, null, 2));
+
+        // Extract and display different item arrays
+        const additionalItems = orderData.additionalItems || [];
+        const packages = orderData.packageData || [];
+
+        console.log("Additional Items:", additionalItems);
+        console.log("Packages:", packages.length);
+
+        // Combine all package items if needed
+        let allPackageItems = [];
+        packages.forEach(pkg => {
+            if (pkg.items && pkg.items.length > 0) {
+                allPackageItems = [...allPackageItems, ...pkg.items];
+            }
+        });
+
+        // Combine all items (additional + all package items)
+        const allItems = [...additionalItems, ...allPackageItems];
+        console.log("All Items Combined:", allItems.length);
+
+        // Structure the response to include separate item arrays
+        const responseData = {
+            ...orderData,
+            itemsSummary: {
+                additionalItems: additionalItems,
+                packages: packages,
+                allPackageItems: allPackageItems,
+                allItems: allItems,
+                totalAdditionalItems: additionalItems.length,
+                totalPackages: packages.length,
+                totalPackageItems: allPackageItems.length,
+                totalItems: allItems.length
+            }
+        };
+
+        res.status(200).json({
+            success: true,
+            message: 'Order data retrieved successfully',
+            data: responseData
+        });
+    } catch (error) {
+        console.error('Error getting order data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve order data',
+            error: error.message
+        });
+    }
+};
+
+// DAO - Updated to handle multiple packages per order
 exports.getOrderDataDao = (orderId) => {
     console.log("Getting order data for order ID:", orderId);
 
@@ -281,7 +354,7 @@ exports.getOrderDataDao = (orderId) => {
                 mi_additional.category AS additionalProductCategory,
                 mi_additional.normalPrice AS additionalNormalPrice,
 
-                -- Package Details (linked through processorders)
+                -- Package Details (linked through processorders) - Multiple packages support
                 op.id AS orderPackageId,
                 op.packageId,
                 op.packingStatus,
@@ -322,7 +395,7 @@ exports.getOrderDataDao = (orderId) => {
             LEFT JOIN 
                 market_place.marketplaceitems mi_additional ON oai.productId = mi_additional.id
 
-            -- Left join for package data (through processorders)
+            -- Left join for package data (through processorders) - Multiple packages
             LEFT JOIN 
                 market_place.orderpackage op ON po.id = op.orderId
             
@@ -363,7 +436,7 @@ exports.getOrderDataDao = (orderId) => {
                 return resolve({
                     orderInfo: null,
                     additionalItems: [],
-                    packageData: null,
+                    packageData: [],
                     warnings: []
                 });
             }
@@ -383,8 +456,7 @@ exports.getOrderDataDao = (orderId) => {
             };
 
             const additionalItemsMap = new Map();
-            const packageItemsMap = new Map();
-            let packageInfo = null;
+            const packagesMap = new Map(); // Changed to support multiple packages
             const warnings = [];
 
             results.forEach(row => {
@@ -404,10 +476,11 @@ exports.getOrderDataDao = (orderId) => {
                     });
                 }
 
-                // Process package data (only if we have processOrder and orderPackage)
+                // Process package data (multiple packages support)
                 if (orderInfo.isPackage === 1 && orderInfo.processOrderId && row.orderPackageId) {
-                    if (!packageInfo) {
-                        packageInfo = {
+                    // Initialize package if not exists
+                    if (!packagesMap.has(row.orderPackageId)) {
+                        packagesMap.set(row.orderPackageId, {
                             id: row.orderPackageId,
                             packageId: row.packageId,
                             packingStatus: row.packingStatus,
@@ -417,25 +490,28 @@ exports.getOrderDataDao = (orderId) => {
                             packageStatus: row.packageStatus,
                             packagePrice: row.packagePrice,
                             packagePackingFee: row.packagePackingFee,
-                            items: []
-                        };
+                            items: new Map() // Use Map to avoid duplicate items
+                        });
                     }
 
-                    // Process package items
-                    if (row.packageItemId && !packageItemsMap.has(row.packageItemId)) {
-                        packageItemsMap.set(row.packageItemId, {
-                            id: row.packageItemId,
-                            productType: row.packageProductType,
-                            productId: row.packageProductId,
-                            qty: row.packageQty,
-                            price: row.packageItemPrice,
-                            isPacked: row.packageIsPacked,
-                            productName: row.packageProductName,
-                            category: row.packageProductCategory,
-                            normalPrice: row.packageNormalPrice,
-                            productTypeId: row.productTypeId,
-                            productTypeName: row.productTypeName
-                        });
+                    // Add package items to the specific package
+                    if (row.packageItemId) {
+                        const currentPackage = packagesMap.get(row.orderPackageId);
+                        if (!currentPackage.items.has(row.packageItemId)) {
+                            currentPackage.items.set(row.packageItemId, {
+                                id: row.packageItemId,
+                                productType: row.packageProductType,
+                                productId: row.packageProductId,
+                                qty: row.packageQty,
+                                price: row.packageItemPrice,
+                                isPacked: row.packageIsPacked,
+                                productName: row.packageProductName,
+                                category: row.packageProductCategory,
+                                normalPrice: row.packageNormalPrice,
+                                productTypeId: row.productTypeId,
+                                productTypeName: row.productTypeName
+                            });
+                        }
                     }
                 }
             });
@@ -448,31 +524,32 @@ exports.getOrderDataDao = (orderId) => {
                 });
             }
 
-            if (orderInfo.isPackage === 1 && orderInfo.processOrderId && !packageInfo) {
+            if (orderInfo.isPackage === 1 && orderInfo.processOrderId && packagesMap.size === 0) {
                 warnings.push({
-                    type: 'MISSING_PACKAGE_RECORD',
-                    message: `Order ${orderId} has processorder but missing orderpackage record`
+                    type: 'MISSING_PACKAGE_RECORDS',
+                    message: `Order ${orderId} has processorder but missing orderpackage records`
                 });
             }
 
-            // Convert maps to arrays
+            // Convert maps to arrays and process package items
             const additionalItems = Array.from(additionalItemsMap.values());
-            const packageItems = Array.from(packageItemsMap.values());
-
-            // Add package items to package info
-            if (packageInfo && packageItems.length > 0) {
-                packageInfo.items = packageItems;
-            }
+            const packages = Array.from(packagesMap.values()).map(pkg => ({
+                ...pkg,
+                items: Array.from(pkg.items.values()) // Convert items Map to Array
+            }));
 
             const structuredData = {
                 orderInfo: orderInfo,
                 additionalItems: additionalItems,
-                packageData: packageInfo,
+                packageData: packages, // Now an array of packages
                 warnings: warnings,
                 meta: {
                     hasDataInconsistency: warnings.length > 0,
                     hasProcessOrder: !!orderInfo.processOrderId,
-                    hasPackageData: !!packageInfo
+                    hasPackageData: packages.length > 0,
+                    totalPackages: packages.length,
+                    totalAdditionalItems: additionalItems.length,
+                    totalPackageItems: packages.reduce((total, pkg) => total + pkg.items.length, 0)
                 }
             };
 
@@ -481,9 +558,12 @@ exports.getOrderDataDao = (orderId) => {
                 isPackage: orderInfo.isPackage,
                 hasProcessOrder: !!orderInfo.processOrderId,
                 additionalItemsCount: additionalItems.length,
-                packageItemsCount: packageItems.length,
-                hasPackageData: !!packageInfo,
-                packageName: packageInfo ? packageInfo.packageName : null,
+                packagesCount: packages.length,
+                packagesInfo: packages.map(pkg => ({
+                    packageId: pkg.packageId,
+                    packageName: pkg.packageName,
+                    itemsCount: pkg.items.length
+                })),
                 warningsCount: warnings.length
             });
 
@@ -671,7 +751,53 @@ exports.updateAdditionalItems = (items) => {
 };
 
 
-exports.updateDistributedTargetComplete = (frontendOrderId) => {
+// exports.updateDistributedTargetComplete = (frontendOrderId,officerId) => {
+//     return new Promise((resolve, reject) => {
+//         // First, get the processorders.id using the frontend orderId
+//         const getProcessOrderIdSql = `
+//             SELECT id FROM market_place.processorders 
+//             WHERE orderId = ?
+//         `;
+
+//         db.collectionofficer.query(getProcessOrderIdSql, [frontendOrderId], (err, processOrderResult) => {
+//             if (err) {
+//                 console.error(`Error getting process order ID for orderId ${frontendOrderId}:`, err);
+//                 return reject(err);
+//             }
+
+//             if (processOrderResult.length === 0) {
+//                 console.warn(`No process order found for orderId ${frontendOrderId}`);
+//                 return resolve({ affectedRows: 0 });
+//             }
+
+//             const processOrderId = processOrderResult[0].id;
+//             console.log(`Found process order ID ${processOrderId} for frontend orderId ${frontendOrderId}`);
+
+//             // Now update the distributedtargetitems using the processOrderId
+//             const updateSql = `
+//                 UPDATE collection_officer.distributedtargetitems 
+//                 SET isComplete = 1, completeTime = NOW()
+//                 WHERE orderId = ?
+//             `;
+
+//             db.collectionofficer.query(updateSql, [processOrderId], (updateErr, updateResult) => {
+//                 if (updateErr) {
+//                     console.error(`Error updating distributed target items for process order ID ${processOrderId}:`, updateErr);
+//                     return reject(updateErr);
+//                 }
+
+//                 if (updateResult.affectedRows === 0) {
+//                     console.warn(`No distributed target items found for process order ID ${processOrderId}`);
+//                 } else {
+//                     console.log(`Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`);
+//                 }
+
+//                 resolve(updateResult);
+//             });
+//         });
+//     });
+// };
+exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
     return new Promise((resolve, reject) => {
         // First, get the processorders.id using the frontend orderId
         const getProcessOrderIdSql = `
@@ -693,26 +819,45 @@ exports.updateDistributedTargetComplete = (frontendOrderId) => {
             const processOrderId = processOrderResult[0].id;
             console.log(`Found process order ID ${processOrderId} for frontend orderId ${frontendOrderId}`);
 
-            // Now update the distributedtargetitems using the processOrderId
-            const updateSql = `
-                UPDATE collection_officer.distributedtargetitems 
-                SET isComplete = 1, completeTime = NOW()
-                WHERE orderId = ?
+            // Update the processorders table with packBy = officerId
+            const updateProcessOrderSql = `
+                UPDATE market_place.processorders 
+                SET packBy = ?
+                WHERE id = ?
             `;
 
-            db.collectionofficer.query(updateSql, [processOrderId], (updateErr, updateResult) => {
-                if (updateErr) {
-                    console.error(`Error updating distributed target items for process order ID ${processOrderId}:`, updateErr);
-                    return reject(updateErr);
+            db.collectionofficer.query(updateProcessOrderSql, [officerId, processOrderId], (processOrderErr, processOrderResult) => {
+                if (processOrderErr) {
+                    console.error(`Error updating processorders packBy for ID ${processOrderId}:`, processOrderErr);
+                    return reject(processOrderErr);
                 }
 
-                if (updateResult.affectedRows === 0) {
-                    console.warn(`No distributed target items found for process order ID ${processOrderId}`);
-                } else {
-                    console.log(`Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`);
-                }
+                console.log(`Updated packBy to ${officerId} for processorders ID ${processOrderId}`);
 
-                resolve(updateResult);
+                // Now update the distributedtargetitems using the processOrderId
+                const updateDistributedSql = `
+                    UPDATE collection_officer.distributedtargetitems 
+                    SET isComplete = 1, completeTime = NOW()
+                    WHERE orderId = ?
+                `;
+
+                db.collectionofficer.query(updateDistributedSql, [processOrderId], (updateErr, updateResult) => {
+                    if (updateErr) {
+                        console.error(`Error updating distributed target items for process order ID ${processOrderId}:`, updateErr);
+                        return reject(updateErr);
+                    }
+
+                    if (updateResult.affectedRows === 0) {
+                        console.warn(`No distributed target items found for process order ID ${processOrderId}`);
+                    } else {
+                        console.log(`Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`);
+                    }
+
+                    resolve({
+                        processOrderUpdated: processOrderResult.affectedRows,
+                        distributedTargetUpdated: updateResult.affectedRows
+                    });
+                });
             });
         });
     });
@@ -1023,9 +1168,9 @@ exports.createReplaceRequestDao = (replaceData) => {
                         }
 
                         // Handle different roles
-                        if (replaceData.isDBM) {
-                            // DBM: Only update orderpackageitems table
-                            handleDBMUpdates(connection, replaceData, resolve, reject);
+                        if (replaceData.isDCM) {
+                            // DCM: Only update orderpackageitems table
+                            handleDCMUpdates(connection, replaceData, resolve, reject);
                         } else if (replaceData.isDIO) {
                             // DIO: Update orderpackage (set isLock=1) and insert into replacerequest
                             handleDIOUpdates(connection, replaceData, resolve, reject);
@@ -1044,11 +1189,11 @@ exports.createReplaceRequestDao = (replaceData) => {
     });
 };
 
-// Handle DBM updates - only update orderpackageitems table
-function handleDBMUpdates(connection, replaceData, resolve, reject) {
-    console.log("Processing DBM updates");
+// Handle DCM updates - only update orderpackageitems table
+function handleDCMUpdates(connection, replaceData, resolve, reject) {
+    console.log("Processing DCM updates");
 
-    // DBM can only update productType, productId, qty, price (NOT isPacked)
+    // DCM can only update productType, productId, qty, price (NOT isPacked)
     const updateItemsSql = `
         UPDATE market_place.orderpackageitems 
         SET productType = ?, productId = ?, qty = ?, price = ?
@@ -1064,7 +1209,7 @@ function handleDBMUpdates(connection, replaceData, resolve, reject) {
         replaceData.orderPackageId
     ];
 
-    console.log("DBM updating specific orderpackageitem (limited fields):", updateItemsValues);
+    console.log("DCM updating specific orderpackageitem (limited fields):", updateItemsValues);
 
     connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
         if (err) {
@@ -1075,7 +1220,7 @@ function handleDBMUpdates(connection, replaceData, resolve, reject) {
             });
         }
 
-        console.log("OrderPackageItems updated (DBM):", itemsResult.affectedRows);
+        console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
 
         if (itemsResult.affectedRows === 0) {
             console.warn("No orderpackageitem was updated - item might not exist");
@@ -1085,25 +1230,25 @@ function handleDBMUpdates(connection, replaceData, resolve, reject) {
             });
         }
 
-        // Commit transaction for DBM
+        // Commit transaction for DCM
         connection.commit((err) => {
             if (err) {
-                console.error("Error committing DBM transaction:", err);
+                console.error("Error committing DCM transaction:", err);
                 return connection.rollback(() => {
                     connection.release();
                     reject(err);
                 });
             }
 
-            console.log("DBM transaction completed successfully");
+            console.log("DCM transaction completed successfully");
             connection.release();
 
             resolve({
                 orderPackageId: replaceData.orderPackageId,
                 replaceItemId: replaceData.replaceId,
-                message: "Order package item updated successfully by DBM",
+                message: "Order package item updated successfully by DCM",
                 updatedBy: replaceData.userId,
-                permissions: 'DBM - Limited access (orderpackageitems only)'
+                permissions: 'DCM - Limited access (orderpackageitems only)'
             });
         });
     });
@@ -1496,5 +1641,69 @@ exports.getDistributionTargets = async (officerId) => {
                 }
             );
         });
+    });
+};
+
+
+
+// exports.updateoutForDelivery = (orderId, userId) => {
+//     return new Promise((resolve, reject) => {
+//         // SQL to update status to 'Out For Delivery' and set outBy to userId
+//         const sql = `
+//             UPDATE market_place.processorders 
+//             SET status = 'Out For Delivery', outBy = ?
+//             WHERE orderId = ?
+//         `;
+
+//         try {
+//             db.collectionofficer.query(sql, [userId, orderId], (err, result) => {
+//                 if (err) {
+//                     console.error(`Error updating order ${orderId}:`, err);
+//                     return reject(err);
+//                 }
+
+//                 if (result.affectedRows === 0) {
+//                     return reject(new Error(`No order found with orderId: ${orderId}`));
+//                 }
+
+//                 console.log(`Successfully updated order ${orderId} - affected rows: ${result.affectedRows}`);
+//                 resolve(result);
+//             });
+//         } catch (error) {
+//             console.error("Error in updateoutForDelivery:", error);
+//             reject(error);
+//         }
+//     });
+// };
+exports.updateoutForDelivery = (orderId, userId) => {
+    return new Promise((resolve, reject) => {
+        const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+        const sql = `
+            UPDATE market_place.processorders 
+            SET status = 'Out For Delivery', 
+                outBy = ?,
+                outDlvrDate = ?
+            WHERE orderId = ?
+        `;
+
+        try {
+            db.collectionofficer.query(sql, [userId, currentDate, orderId], (err, result) => {
+                if (err) {
+                    console.error(`Error updating order ${orderId}:`, err);
+                    return reject(err);
+                }
+
+                if (result.affectedRows === 0) {
+                    return reject(new Error(`No order found with orderId: ${orderId}`));
+                }
+
+                console.log(`Successfully updated order ${orderId} - affected rows: ${result.affectedRows}`);
+                resolve(result);
+            });
+        } catch (error) {
+            console.error("Error in updateoutForDelivery:", error);
+            reject(error);
+        }
     });
 };

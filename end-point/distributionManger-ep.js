@@ -2,6 +2,8 @@ const targetDDao = require('../dao/distributionManager-dao');
 const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const distributionofficerDao = require('../dao/distributionManager-dao')
+const asyncHandler = require('express-async-handler');
+
 
 
 exports.getDCenterTarget = async (req, res) => {
@@ -23,7 +25,7 @@ exports.getDCenterTarget = async (req, res) => {
     // Get targets from DAO
     const targets = await targetDDao.getDCenterTarget(officerId);
 
-    console.log("nwxsjklowcd", targets)
+    //  console.log("nwxsjklowcd", targets)
 
     res.status(200).json({
       success: true,
@@ -703,3 +705,139 @@ exports.getOfficerTaskSummaryManagerView = async (req, res) => {
     });
   }
 };
+
+
+exports.getOrderById = async (req, res) => {
+
+  console.log(",,,,,")
+  try {
+    const orderId = req.params.orderId;
+
+    // Validate orderId
+    if (!orderId || isNaN(parseInt(orderId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order ID'
+      });
+    }
+
+    const order = await targetDDao.getOrderById(orderId);
+
+    console.log("data order hhhhhhhhhhhh", order)
+
+    if (order.message) {
+      return res.status(404).json({
+        success: false,
+        message: order.message
+      });
+    }
+
+
+    res.status(200).json({
+      success: true,
+      data: order
+
+    });
+  } catch (error) {
+    console.error('Error fetching order by ID:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch order details',
+      error: error.message
+    });
+  }
+};
+
+exports.getCustomerDetailsCustomerId = async (req, res) => {
+  try {
+    const customerId = req.params.id;
+
+    // Validate customerId
+    if (!customerId || isNaN(parseInt(customerId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid customer ID'
+      });
+    }
+
+    // Make sure to import orderDao correctly
+    const customerData = await targetDDao.getDataCustomerId(customerId);
+
+    console.log("customerDataaaaaaaaaaaaaaaa", customerData)
+
+    if (customerData.message) {
+      return res.status(404).json({
+        success: false,
+        message: customerData.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: customerData
+    });
+  } catch (error) {
+    console.error('Error fetching customer details by ID:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch customer details',
+      error: error.message
+    });
+  }
+};
+
+
+exports.getAllPCity = asyncHandler(async (req, res) => {
+  console.log("hitt")
+  try {
+    const packages = await targetDDao.getAllCity();
+
+    if (!packages || packages.length === 0) {
+      return res.status(404).json({ message: "No City found" });
+    }
+
+    res.status(200).json({ message: "City fetched successfully", data: packages });
+  } catch (error) {
+    console.error("Error fetching city:", error);
+    res.status(500).json({ message: "Failed to fetch city" });
+  }
+});
+
+
+exports.getOrderMarketplaceOrdash = async (req, res) => {
+  console.log("Getting order details...");
+  try {
+    const orderId = req.params.orderId;
+
+    // Validate orderId
+    if (!orderId || isNaN(parseInt(orderId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order ID'
+      });
+    }
+
+    const orderData = await targetDDao.getOrderMarketplaceOrdash(orderId);
+
+    if (orderData.error) {
+      return res.status(404).json({
+        success: false,
+        message: orderData.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: orderData
+    });
+
+  } catch (error) {
+    console.error('Error fetching order by ID:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch order details',
+      error: error.message
+    });
+  }
+};
+

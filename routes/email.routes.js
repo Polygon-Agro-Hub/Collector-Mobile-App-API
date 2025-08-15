@@ -7,7 +7,7 @@ router.post('/send-test-email', async (req, res) => {
   try {
     const { email } = req.body;
     console.log(email)
-    
+
     await emailService.sendEmail(
       email,
       'Welcome to AgroWorld',
@@ -19,7 +19,7 @@ router.post('/send-test-email', async (req, res) => {
         title: 'Welcome Email'
       }
     );
-    
+
     res.json({ success: true, message: 'Email sent successfully' });
   } catch (error) {
     console.error('Error sending email:', error);
@@ -59,7 +59,7 @@ router.post('/send-test-email', async (req, res) => {
 //             year: new Date().getFullYear(),
 //             title: 'Purchase Invoice'
 //         };
-    
+
 //     await emailService.sendEmailWithPdf(
 //       email,
 //       'Your AgroWorld Report',
@@ -70,7 +70,7 @@ router.post('/send-test-email', async (req, res) => {
 //         border: '10mm'
 //       }
 //     );
-    
+
 //     res.json({ success: true, message: 'Email with PDF sent successfully' });
 //   } catch (error) {
 //     console.error('Error sending PDF email:', error);
@@ -129,6 +129,7 @@ router.post('/send-pdf-email', async (req, res) => {
       await emailService.sendEmail(
         email,
         'Your AgroWorld Invoice',
+        'welcom',
         { message: 'Thank you for your order!' },
         [{
           filename: fileName || 'invoice.pdf',
@@ -144,6 +145,5 @@ router.post('/send-pdf-email', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to send emails' });
   }
 });
-
 
 module.exports = router;
