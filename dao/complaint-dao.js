@@ -43,57 +43,7 @@ exports.createOfficerComplaint = (coId, setlanguage, complain, category, status,
         });
     });
 };
-// exports.createOfficerComplaint = (
-//     coId,
-//     setlanguage,
-//     complain,
-//     category,
-//     referenceNumber,
-//     officerRole
-// ) => {
-//     return new Promise((resolve, reject) => {
-//         let CCMStatus, COOStatus, CCHStatus, complainAssign;
 
-//         if (officerRole === 'Collection Center Manager' || officerRole === 'Driver') {
-//             CCMStatus = 'Opened';
-//             CCHStatus = 'Assigned';
-//             COOStatus = null;
-//             complainAssign = 'CCH';
-//         } else if (officerRole === 'Collection Officer') {
-//             CCMStatus = 'Assigned';
-//             CCHStatus = null;
-//             COOStatus = 'Opened';
-//             complainAssign = 'CCM';
-//         } else {
-//             return reject(new Error('Invalid officer role'));
-//         }
-
-//         const sql = `
-//             INSERT INTO officercomplains 
-//             (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign) 
-//             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-//         `;
-
-//         const values = [
-//             coId,
-//             setlanguage,
-//             complain,
-//             category,
-//             CCMStatus,
-//             COOStatus,
-//             CCHStatus,
-//             referenceNumber,
-//             complainAssign
-//         ];
-
-//         db.collectionofficer.query(sql, values, (err, result) => {
-//             if (err) {
-//                 return reject(err);
-//             }
-//             resolve(result.insertId); // Return the inserted ID
-//         });
-//     });
-// };
 
 exports.createOfficerComplaint = (
     coId,
@@ -151,97 +101,7 @@ exports.createOfficerComplaint = (
     });
 };
 
-// exports.createOfficerComplaint = (
-//     coId,
-//     setlanguage,
-//     complain,
-//     category,
-//     referenceNumber,
-//     officerRole
-// ) => {
-//     return new Promise((resolve, reject) => {
-//         let CCMStatus, COOStatus, CCHStatus, DCMStatus, DIOStatus, complainAssign;
 
-//         if (officerRole === 'Collection Center Manager' || officerRole === 'Driver') {
-//             CCMStatus = 'Opened';
-//             CCHStatus = 'Assigned';
-//             COOStatus = null;
-//             DCMStatus = null;
-//             DIOStatus = null;
-//             complainAssign = 'CCH';
-//         } else if (officerRole === 'Collection Officer') {
-//             CCMStatus = 'Assigned';
-//             CCHStatus = null;
-//             COOStatus = 'Opened';
-//             DCMStatus = null;
-//             DIOStatus = null;
-//             complainAssign = 'CCM';
-//         } else if (officerRole === 'Distribution Center Manager') {
-//             CCMStatus = null;
-//             CCHStatus = null;
-//             COOStatus = null;
-//             DCMStatus = 'Opened';
-//             DIOStatus = null;
-//             complainAssign = 'DCH'; // Assuming Distribution Center Head handles DCM complaints
-//         } else if (officerRole === 'Distribution Officer') {
-//             CCMStatus = null;
-//             CCHStatus = null;
-//             COOStatus = null;
-//             DCMStatus = 'Assigned';
-//             DIOStatus = 'Opened';
-//             complainAssign = 'DCM';
-//         } else {
-//             return reject(new Error('Invalid officer role'));
-//         }
-
-//         const sql = `
-//             INSERT INTO officercomplains 
-//             (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, DCMStatus, DIOStatus, refNo, complainAssign) 
-//             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-//         `;
-
-//         const values = [
-//             coId,
-//             setlanguage,
-//             complain,
-//             category,
-//             CCMStatus,
-//             COOStatus,
-//             CCHStatus,
-//             DCMStatus,
-//             DIOStatus,
-//             referenceNumber,
-//             complainAssign
-//         ];
-
-//         db.collectionofficer.query(sql, values, (err, result) => {
-//             if (err) {
-//                 return reject(err);
-//             }
-//             resolve(result.insertId); // Return the inserted ID
-//         });
-//     });
-// };
-
-
-// exports.getAllComplaintsByUserId = async(userId) => {
-//     return new Promise((resolve, reject) => {
-//         const query = `
-//         SELECT id, language, complain, status, createdAt, complainCategory , reply, refNo
-//         FROM officercomplains 
-//         WHERE officerId = ?
-//         ORDER BY createdAt DESC
-//       `;
-//         db.collectionofficer.query(query, [userId], (error, results) => {
-//             if (error) {
-//                 console.error("Error fetching complaints:", error);
-//                 reject(error);
-//             } else {
-//                 resolve(results);
-//             }
-//         });
-//     });
-// };
 exports.getAllComplaintsByUserId = async (userId, officerRole) => {
     return new Promise((resolve, reject) => {
         // Choose status column based on role
