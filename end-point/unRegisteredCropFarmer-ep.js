@@ -1,121 +1,3 @@
-
-// const jwt = require("jsonwebtoken");
-// const cropDetailsDao = require('../dao/unRegisteredCropFarmer-dao');
-// const db = require('../startup/database');
-
-// exports.addCropDetails = async (req, res) => {
-//     console.log("Request body:", req.body);
-//     const { crops, farmerId } = req.body;
-//     const userId = req.user.id;
-
-//     if (!Array.isArray(crops) || crops.length === 0) {
-//         return res.status(400).json({ error: 'Crops data is required and must be an array' });
-//     }
-
-//     try {
-//         // Start a transaction
-//         await new Promise((resolve, reject) => db.beginTransaction(err => (err ? reject(err) : resolve())));
-
-//         // Insert registered farmer payment
-//         const registeredFarmerId = await cropDetailsDao.insertFarmerPayment(farmerId, userId);
-
-//         // Insert crop details
-//         const cropPromises = crops.map(crop => cropDetailsDao.insertCropDetails(registeredFarmerId, crop));
-//         await Promise.all(cropPromises);
-
-//         // Commit the transaction
-//         await new Promise((resolve, reject) => db.commit(err => (err ? reject(err) : resolve())));
-
-//         res.status(201).json({
-//             message: 'Crop payment records added successfully',
-//             registeredFarmerId
-//         });
-//     } catch (err) {
-//         console.error('Error processing request:', err);
-//         await new Promise((resolve) => db.rollback(() => resolve())); // Rollback transaction
-//         res.status(500).json({ error: 'Internal Server Error' });
-//     }
-// };
-
-// exports.addCropDetails2 = async (req, res) => {
-//     console.log("Request body:", req.body.crops);
-//     const { crops, farmerId } = req.body;
-//     const userId = req.user.id;
-
-//     if (!crops || typeof crops !== 'object') {
-//         return res.status(400).json({ error: 'Crops data is required and must be an object' });
-//     }
-
-//     try {
-//         const registeredFarmerId = await cropDetailsDao.insertFarmerPayment(farmerId, userId);
-//         await cropDetailsDao.insertCropDetails(registeredFarmerId, crops);
-
-//         res.status(201).json({
-//             message: 'Crop payment records added successfully',
-//             registeredFarmerId
-//         });
-//     } catch (err) {
-//         console.error('Error processing request:', err);
-//         res.status(500).json({ error: 'Internal Server Error' });
-//     }
-// };
-
-
-// exports.getCropDetailsByUserId = async (req, res) => {
-//     const { userId } = req.params;
-
-//     try {
-//         const cropDetails = await cropDetailsDao.getCropDetailsByUserId(userId);
-//         res.status(200).json(cropDetails);
-//     } catch (error) {
-//         console.error('Error fetching crop details:', error);
-//         res.status(500).json({ error: 'An error occurred while fetching crop details' });
-//     }
-// };
-
-// exports.getAllCropNames = async (req, res) => {
-//     try {
-//         const cropNames = await cropDetailsDao.getAllCropNames();
-//         res.status(200).json(cropNames);  // Sending the response as JSON
-//     } catch (error) {
-//         console.error('Error fetching crop names:', error);
-//         res.status(500).json({ error: 'Failed to retrieve crop names' });
-//     }
-// };
-
-// exports.getVarietiesByCropId = async (req, res) => {
-//     const cropId = req.params.id;  // Extract cropId from request parameters
-
-//     try {
-//         const varieties = await cropDetailsDao.getVarietiesByCropId(cropId);
-//         res.status(200).json(varieties);  // Return the varieties as JSON
-//     } catch (error) {
-//         console.error('Error fetching crop varieties:', error);  // Log the error for debugging
-//         res.status(500).json({ error: 'Failed to retrieve crop varieties' });
-//     }
-// };
-
-// exports.getUnitPricesByCropId = async (req, res) => {
-//     const { cropId } = req.params; // Extract cropId from the URL parameters
-
-//     try {
-//         console.log("Received cropId:", cropId); // Log for debugging, consider replacing in production with a proper logger
-
-//         // Fetch market prices by varietyId (cropId)
-//         const prices = await cropDetailsDao.getMarketPricesByVarietyId(cropId);
-
-//         if (prices.length === 0) {
-//             return res.status(404).json({ message: 'No market prices found for the specified cropId' });
-//         }
-
-//         // Return the market prices as a JSON response
-//         res.status(200).json(prices);
-//     } catch (error) {
-//         console.error("Error retrieving market prices:", error);  // Log the error
-//         res.status(500).json({ error: 'Failed to retrieve market prices' });
-//     }
-// };
-
 const jwt = require("jsonwebtoken");
 const cropDetailsDao = require('../dao/unRegisteredCropFarmer-dao');
 const { collectionofficer } = require('../startup/database');
@@ -124,85 +6,7 @@ const s3middleware = require('../Middlewares/s3upload');
 const asyncHandler = require('express-async-handler');
 
 
-// exports.addCropDetails = async (req, res) => {
-//   console.log("Request body:", req.body);
-//   const { crops, farmerId, invoiceNumber } = req.body;
-//   console.log('invoiceNumber:', invoiceNumber);
-//   const userId = req.user.id;
 
-//   // Step 1: Validate the request body using Joi
-//   const { error } = cropDetailsSchema.validate(req.body);
-
-//   if (error) {
-//     // Log the full Joi error details for debugging
-//     console.error('Joi Validation Error:', error.details);
-
-//     // Send a detailed error response with the first validation error message
-//     return res.status(400).json({
-//       status: 'error',
-//       message: error.details[0].message,  // Send only the first error message
-//       details: error.details              // Optionally include all error details in the response
-//     });
-//   }
-
-//   // Get a connection from the pool
-//   const connection = await collectionofficer.promise().getConnection();
-
-//   try {
-//     // Step 2: Start a transaction
-//     await connection.beginTransaction();
-
-//     // Step 3: Insert registered farmer payment
-//     const registeredFarmerId = await cropDetailsDao.insertFarmerPayment(farmerId, userId, invoiceNumber);
-
-//     // Step 4: Process and insert crop details with S3 image uploads
-//     const cropPromises = crops.map(async (crop) => {
-//       // Process image if provided in base64 format
-//       let imageUrl = null;
-//       if (crop.image) {
-//         try {
-//           // Convert base64 to buffer
-//           const fileBuffer = Buffer.from(crop.image, 'base64');
-//           // Generate a unique filename
-//           const fileName = `crop_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
-//           // Upload to S3 and get the URL
-//           imageUrl = await s3middleware(fileBuffer, fileName, "crops-collection/images");
-//         } catch (uploadError) {
-//           console.error('Error uploading image to S3:', uploadError);
-//           throw uploadError;
-//         }
-//       }
-
-//       // Update the crop object with the S3 image URL
-//       const cropWithImageUrl = { ...crop, imageUrl };
-//       const officerId = userId;
-//       const centerId = req.user.centerId;
-//       return cropDetailsDao.insertCropDetails(registeredFarmerId, cropWithImageUrl,officerId ,centerId);
-//     });
-
-//     await Promise.all(cropPromises);
-
-//     // Step 5: Commit the transaction
-//     await connection.commit();
-
-//     // Return success response
-//     res.status(201).json({
-//       message: 'Crop payment records added successfully',
-//       registeredFarmerId
-//     });
-//   } catch (err) {
-//     console.error('Error processing request:', err);
-
-//     // Rollback the transaction if an error occurs
-//     await connection.rollback();
-
-//     // Return error response
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   } finally {
-//     // Release the connection back to the pool
-//     connection.release();
-//   }
-// };
 exports.addCropDetails = async (req, res) => {
   console.log("Request body:", req.body);
   const { crops, farmerId, invoiceNumber } = req.body;
@@ -311,56 +115,7 @@ exports.addCropDetails = async (req, res) => {
 };
 
 
-// // Simplified version
-// exports.addCropDetails2 = async (req, res) => {
-//   console.log("Request body:", req.body.crops);
-//   const { crops, farmerId, invoiceNumber } = req.body;
-//   console.log('invoiceNumber:', invoiceNumber);
-//   const userId = req.user.id;
 
-//   if (!crops || typeof crops !== 'object') {
-//     return res.status(400).json({ error: 'Crops data is required and must be an object' });
-//   }
-
-//   try {
-//     // Process image if provided
-//     let imageUrl = null;
-//     if (crops.image) {
-//       try {
-//         // Convert base64 to buffer
-//         const fileBuffer = Buffer.from(crops.image, 'base64');
-//         // Generate a unique filename
-//         const fileName = `crop_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
-//         // Upload to S3 and get the URL
-//         imageUrl = await uploadFileToS3(fileBuffer, fileName, "crops-collection/images");
-//       } catch (uploadError) {
-//         console.error('Error uploading image to S3:', uploadError);
-//         throw uploadError;
-//       }
-//     }
-
-//     // Update the crop object with the S3 image URL
-//     const cropsWithImageUrl = { ...crops, imageUrl };
-
-//     const registeredFarmerId = await cropDetailsDao.insertFarmerPayment(farmerId, userId, invoiceNumber);
-//     const officerId = userId;
-//     const centerId = req.user.centerId;
-//     await cropDetailsDao.insertCropDetails(registeredFarmerId, cropsWithImageUrl,officerId,centerId);
-
-//     res.status(201).json({
-//       message: 'Crop payment records added successfully',
-//       registeredFarmerId
-//     });
-//   } catch (err) {
-//     console.error('Error processing request:', err);
-
-//     if (err.message === "Validation error") {
-//       return res.status(400).json({ error: err.message });
-//     }
-
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// };
 
 exports.addCropDetails2 = async (req, res) => {
   console.log("Request body:", req.body.crops);
@@ -441,17 +196,7 @@ exports.addCropDetails2 = async (req, res) => {
 };
 
 
-// exports.getCropDetailsByUserId= async (req, res) => {
-//     const { userId, registeredFarmerId } = req.params;
 
-//     try {
-//         const cropDetails = await cropDetailsDao.getCropDetailsByUserAndFarmerId(userId, registeredFarmerId);
-//         res.status(200).json(cropDetails);
-//     } catch (error) {
-//         console.error('Error fetching crop details:', error);
-//         res.status(500).json({ error: 'An error occurred while fetching crop details' });
-//     }
-// };
 
 exports.getCropDetailsByUserId = async (req, res) => {
   try {
@@ -488,17 +233,7 @@ exports.getCropDetailsByUserId = async (req, res) => {
   }
 };
 
-// exports.getAllCropNames = async (req, res) => {
-//   console.log('Fetching all crop names');
-//   try {
-//     const officerId = req.user.id;
-//     const cropNames = await cropDetailsDao.getAllCropNames(officerId);
-//     res.status(200).json(cropNames);  // Sending the response as JSON
-//   } catch (error) {
-//     console.error('Error fetching crop names:', error);
-//     res.status(500).json({ error: 'Failed to retrieve crop names' });
-//   }
-// };
+
 
 exports.getAllCropNames = async (req, res) => {
   console.log('Fetching crop names for today');
@@ -577,22 +312,7 @@ exports.getUnitPricesByCropId = async (req, res) => {
   }
 };
 
-// exports.getLatestInvoiceNumber = async (req, res) => {
-//     try {
-//       const { empId, currentDate } = req.params;
-//       console.log(empId, currentDate);
-//       const latestInvoice = await cropDetailsDao.getLatestInvoiceNumberDao(empId, currentDate);
 
-//       if (latestInvoice) {
-//         res.status(200).json({ invoiceNumber: latestInvoice.invoiceNumber });
-//       } else {
-//         res.status(200).json({ invoiceNumber: null });
-//       }
-//     } catch (error) {
-//       console.error('Error fetching latest invoice number:', error);
-//       res.status(500).json({ error: 'Internal Server Error' });
-//     }
-//   };
 
 
 exports.getLatestInvoiceNumber = async (req, res) => {
@@ -753,31 +473,7 @@ exports.getVarietiesByCropIdCollection = async (req, res) => {
 
 
 
-// exports.getAllUsers = async (req, res) => {
-//   try {
-//     // Extract officerId from authenticated user
-//     const officerId = req.user.id;
 
-//     // Log the request for debugging
-//     console.log('Fetching all farmers for officer ID:', officerId);
-
-//     // Fetch users with optional filtering by officer
-//     const users = await cropDetailsDao.getAllUsers(officerId);
-
-//     if (!users || users.length === 0) {
-//       return res.status(404).json({ message: 'No farmers found' });
-//     }
-
-//     // Send successful response
-//     res.status(200).json(users);
-//   } catch (error) {
-//     console.error('Error fetching farmers:', error);
-//     res.status(500).json({
-//       error: 'Failed to retrieve farmers',
-//       details: error.message
-//     });
-//   }
-// };
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -811,21 +507,7 @@ exports.getAllUsers = async (req, res) => {
 
 
 
-// exports.updateUserAddress = async (req, res) => {
-//   const { userId } = req.params;
-//   const { routeNumber, buildingNo, streetName, city } = req.body;
 
-//   if (!routeNumber || !buildingNo || !streetName || !city) {
-//     return res.status(400).json({ error: 'All fields are required' });
-//   }
-
-//   try {
-//     await cropDetailsDao.updateUserAddress(userId, routeNumber, buildingNo, streetName, city);
-//     res.status(200).json({ message: 'User address updated successfully' });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
 
 exports.updateUserAddress = async (req, res) => {
   const { userId } = req.params;
@@ -846,185 +528,7 @@ exports.updateUserAddress = async (req, res) => {
 };
 
 
-// exports.submitCollectionRequest = async (req, res) => {
-//   const { farmerId, crop, variety, loadIn } = req.body;
 
-
-
-//   if (!farmerId || !crop || !variety || !loadIn) {
-//     return res.status(400).json({ error: 'All fields are required' });
-//   }
-
-//   try {
-//     const centerId = req.user.centerId; // Should be set from the authentication middleware
-//     const companyId = req.user.companyId; // Should also be set from authentication middleware
-//     const cmId = req.user.id
-
-//     const collectionRequestResult = await cropDetailsDao.createCollectionRequest(
-//       farmerId, cmId, crop, variety, loadIn, centerId, companyId
-//     );
-
-//     res.status(200).json({
-//       message: 'Collection request submitted successfully',
-//       requestId: collectionRequestResult.insertId, // Assuming the insertId is returned from DAO
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// exports.submitCollectionRequest = async (req, res) => {
-//   const { farmerId, crop, variety, loadIn } = req.body;
-
-//   if (!farmerId || !crop || !variety || !loadIn) {
-//     return res.status(400).json({ error: 'All fields are required' });
-//   }
-
-//   try {
-//     const centerId = req.user.centerId; // Should be set from authentication middleware
-//     const companyId = req.user.companyId;
-//     const cmId = req.user.id;
-
-//     const collectionRequestResult = await cropDetailsDao.createCollectionRequest(
-//       farmerId, cmId, crop, variety, loadIn, centerId, companyId
-//     );
-
-//     res.status(200).json({
-//       message: 'Collection request submitted successfully',
-//       requestId: collectionRequestResult.insertId, // Assuming the insertId is returned from DAO
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// exports.submitCollectionRequest = async (req, res) => {
-//   const { requests } = req.body;
-
-//   // Validate that requests array is provided and not empty
-//   if (!requests || !Array.isArray(requests) || requests.length === 0) {
-//     return res.status(400).json({ error: 'No collection requests provided' });
-//   }
-
-//   try {
-//     // Validate each request has required fields
-//     const invalidRequests = requests.filter(
-//       request => !request.farmerId || !request.crop ||
-//         !request.variety || !request.loadIn
-//     );
-
-//     if (invalidRequests.length > 0) {
-//       return res.status(400).json({
-//         error: 'Some requests are missing required fields',
-//         invalidRequests
-//       });
-//     }
-
-//     const centerId = req.user.centerId;
-//     const companyId = req.user.companyId;
-//     const cmId = req.user.id;
-
-//     // Array to store all inserted request IDs
-//     const insertedRequestDetails = [];
-
-//     // Process each request
-//     for (const request of requests) {
-//       // 1. Insert into collectionrequest table
-//       const collectionRequestResult = await cropDetailsDao.createCollectionRequest(
-//         request.farmerId,
-//         cmId,
-//         request.crop,
-//         request.variety,
-//         request.loadIn,
-//         centerId,
-//         companyId,
-//         request.scheduleDate
-//       );
-
-//       const requestId = collectionRequestResult.insertId;
-
-//       // 2. Insert into collectionrequestitems table
-//       const collectionRequestItemResult = await cropDetailsDao.createCollectionRequestItems(
-//         requestId,
-//         request.crop,
-//         request.variety,
-//         request.loadIn
-//       );
-
-//       insertedRequestDetails.push({
-//         requestId,
-//         farmerId: request.farmerId,
-//         crop: request.crop
-//       });
-//     }
-
-//     res.status(200).json({
-//       message: 'Collection requests submitted successfully',
-//       requestDetails: insertedRequestDetails
-//     });
-
-//   } catch (error) {
-//     console.error('Error submitting collection requests:', error);
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// exports.submitCollectionRequest = async (req, res) => {
-//   const { requests } = req.body;
-
-//   if (!requests || !Array.isArray(requests) || requests.length === 0) {
-//     return res.status(400).json({ error: 'No collection requests provided' });
-//   }
-
-//   try {
-//     const invalidRequests = requests.filter(
-//       request => !request.farmerId || !request.crop ||
-//         !request.variety || !request.loadIn
-//     );
-
-//     if (invalidRequests.length > 0) {
-//       return res.status(400).json({
-//         error: 'Some requests are missing required fields',
-//         invalidRequests
-//       });
-//     }
-
-//     const centerId = req.user.centerId;
-//     const companyId = req.user.companyId;
-//     const cmId = req.user.id;
-//     const insertedRequestDetails = [];
-
-//     for (const request of requests) {
-//       // Ensure we get an existing or new request ID
-//       const collectionRequestResult = await cropDetailsDao.createCollectionRequest(
-//         request.farmerId, cmId, request.crop, request.variety,
-//         request.loadIn, centerId, companyId, request.scheduleDate
-//       );
-
-//       const requestId = collectionRequestResult.insertId;
-
-//       // Insert items using the obtained requestId
-//       await cropDetailsDao.createCollectionRequestItems(
-//         requestId, request.crop, request.variety, request.loadIn
-//       );
-
-//       insertedRequestDetails.push({
-//         requestId,
-//         farmerId: request.farmerId,
-//         crop: request.crop
-//       });
-//     }
-
-//     res.status(200).json({
-//       message: 'Collection requests submitted successfully',
-//       requestDetails: insertedRequestDetails
-//     });
-
-//   } catch (error) {
-//     console.error('Error submitting collection requests:', error);
-//     res.status(500).json({ error: error.message });
-//   }
-// };
 
 exports.submitCollectionRequest = async (req, res) => {
   const { requests } = req.body;

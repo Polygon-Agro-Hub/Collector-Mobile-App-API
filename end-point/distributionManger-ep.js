@@ -43,57 +43,7 @@ exports.getDCenterTarget = async (req, res) => {
 };
 
 
-/**
- * Alternative endpoint that returns separate arrays instead of nested structure
- */
-// exports.getDCenterTargetSeparate = async (req, res) => {
-//     console.log("getDCenterTargetSeparate endpoint called");
 
-//     try {
-//         const officerId = req.user.id;
-//         console.log("Officer ID from token:", officerId);
-
-//         // Validate officerId
-//         if (!officerId || isNaN(officerId)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Invalid officer ID provided'
-//             });
-//         }
-
-//         // Get targets from DAO (separate method)
-//         const result = await targetDDao.getCenterTargetSeparate(officerId);
-//         console.log("Separate DAO result counts:", {
-//             officers: result.officers.length,
-//             targets: result.targets.length,
-//             targetItems: result.targetItems.length
-//         });
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Distribution center targets retrieved successfully',
-//             data: {
-//                 officers: result.officers,
-//                 targets: result.targets,
-//                 targetItems: result.targetItems,
-//                 summary: {
-//                     totalOfficers: result.officers.length,
-//                     totalTargets: result.targets.length,
-//                     totalTargetItems: result.targetItems.length
-//                 }
-//             },
-//             timestamp: new Date().toISOString()
-//         });
-
-//     } catch (error) {
-//         console.error('Error in getDCenterTargetSeparate endpoint:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to retrieve distribution center targets',
-//             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-//         });
-//     }
-// };
 exports.getProfile = async (req, res) => {
   try {
     const officerId = req.user.id; // Assuming req.user.id is set after authentication
@@ -489,59 +439,7 @@ exports.getOfficerDetailsForReport = async (req, res) => {
 };
 
 
-// exports.getDistributionPaymentsSummary = async (req, res) => {
-//   const schema = Joi.object({
-//     collectionOfficerId: Joi.number().integer().required(),
-//     fromDate: Joi.date().iso().required(),
-//     toDate: Joi.date().iso().required().min(Joi.ref('fromDate')).messages({
-//       'date.min': '"toDate" must be the same as or after "fromDate".',
-//     }),
-//   });
 
-//   try {
-//     const { collectionOfficerId, fromDate, toDate } = req.query;
-//     const { error } = schema.validate({ collectionOfficerId, fromDate, toDate });
-
-//     if (error) {
-//       return res.status(400).json({
-//         status: 'error',
-//         message: error.details[0].message,
-//       });
-//     }
-
-//     const [rows] = await targetDDao.getDistributionPaymentsSummary({
-//       collectionOfficerId,
-//       fromDate,
-//       toDate,
-//     });
-
-//     console.log("//////////////", rows)
-
-//     const reportData = rows.map(row => ({
-//       date: new Date(row.date).toLocaleDateString('en-US', { timeZone: 'Asia/Colombo' }),
-//       completedOrders: row.completedOrders,
-//       totalAmount: row.totalAmount ? parseFloat(row.totalAmount) : 0,
-//       orderDetails: row.orderDetails || [],
-//       invNo: row.invNo,
-//       orderId: row.orderId,
-//       sheduleDate: new Date(row.sheduleDate).toLocaleDateString('en-US', { timeZone: 'Asia/Colombo' }),
-//       sheduleTime: row.sheduleTime
-//     }));
-
-//     console.log('Distribution Officer Payment Summary:', reportData);
-
-//     res.status(200).json({
-//       status: 'success',
-//       data: reportData,
-//     });
-//   } catch (error) {
-//     console.error('Error fetching distribution officer payment summary:', error);
-//     res.status(500).json({
-//       status: 'error',
-//       message: 'An error occurred while fetching the report.',
-//     });
-//   }
-// };
 
 exports.getDistributionPaymentsSummary = async (req, res) => {
   const schema = Joi.object({
@@ -604,39 +502,7 @@ exports.getDistributionPaymentsSummary = async (req, res) => {
   }
 };
 
-// exports.getOfficerTaskSummaryManagerView = async (req, res) => {
-//   try {
-//     const { collectionOfficerId } = req.params; // Extract officer ID from authenticated session
-//     console.log('officerId', collectionOfficerId);
 
-//     if (!collectionOfficerId) {
-//       return res.status(400).json({ error: "Officer ID is required" });
-//     }
-
-//     console.log("Fetching task summary for Officer ID:", collectionOfficerId);
-
-//     // Fetch summary data from DAO
-//     const taskSummary = await targetDDao.getOfficerSummaryDaoManager(collectionOfficerId);
-
-//     if (!taskSummary) {
-//       return res.status(404).json({ message: "No tasks found for this officer." });
-//     }
-
-//     const { totalTasks, completedTasks } = taskSummary;
-//     const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-//     res.status(200).json({
-//       success: true,
-//       collectionOfficerId,
-//       totalTasks,
-//       completedTasks,
-//       completionPercentage: `${percentage}%`
-//     });
-//   } catch (error) {
-//     console.error("Error fetching task summary:", error);
-//     res.status(500).json({ error: "Failed to fetch task summary." });
-//   }
-// };
 
 exports.getOfficerTaskSummaryManagerView = async (req, res) => {
   try {

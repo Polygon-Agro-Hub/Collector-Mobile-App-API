@@ -5,120 +5,24 @@ const farmerDao = require('../dao/farmar-dao');
 const asyncHandler = require('express-async-handler');
 const uploadFileToS3 = require('../Middlewares/s3upload');
 const axios = require('axios');
-const  userSchema  = require('../Validations/farmer-validation'); 
-// Controller to handle user and payment details and QR code generation
-// exports.addUserAndPaymentDetails = asyncHandler(async (req, res) => {
-//     const {
-//         firstName,
-//         lastName,
-//         NICnumber,
-//         phoneNumber,
-//         address,
-//         accNumber,
-//         accHolderName,
-//         bankName,
-//         branchName
-//     } = req.body;
+const userSchema = require('../Validations/farmer-validation');
 
-//     // Validation: Check if all fields are filled
-//     if (!firstName || !lastName || !NICnumber || !phoneNumber || !address || !accNumber || !accHolderName || !bankName || !branchName) {
-//         return res.status(400).json({ error: "All fields are required" });
-//     }
-
-//     try {
-//         // Start a transaction
-//         await new Promise((resolve, reject) => {
-//             db.beginTransaction(err => {
-//                 if (err) return reject(err);
-//                 resolve();
-//             });
-//         });
-
-//         // Insert into the 'users' table
-//         const userResult = await farmerDao.createUser(firstName, lastName, NICnumber, phoneNumber);
-//         const userId = userResult.insertId;
-
-//         // Insert into the 'userbankdetails' table
-//         const paymentResult = await farmerDao.createPaymentDetails(userId, address, accNumber, accHolderName, bankName, branchName);
-//         const paymentId = paymentResult.insertId;
-
-//         // Define the JSON structure for QR code data
-//         const qrData = {
-//             userInfo: {
-//                 id: userId,
-//                 name: `${firstName} ${lastName}`,
-//                 NIC: NICnumber,
-//                 phone: phoneNumber
-//             },
-//             bankInfo: {
-//                 accountHolder: accHolderName,
-//                 accountNumber: accNumber,
-//                 bank: bankName,
-//                 branch: branchName
-//             }
-//         };
-
-//         // Define the directory path for QR codes
-//         const qrDirPath = path.join(__dirname, `../public/qrcodes`);
-
-//         // Ensure the directory exists
-//         if (!fs.existsSync(qrDirPath)) {
-//             fs.mkdirSync(qrDirPath, { recursive: true }); // Create directory if it doesn't exist
-//         }
-
-//         // Generate QR Code as PNG and save it
-//         const qrFilePath = path.join(qrDirPath, `user_${userId}.png`);
-//         await QRCode.toFile(qrFilePath, JSON.stringify(qrData), { type: 'png' });
-
-//         // Update the 'users' table with the QR code file path
-//         await farmerDao.updateQrCodePath(userId, qrFilePath);
-
-//         // Commit the transaction
-//         await new Promise((resolve, reject) => {
-//             db.commit(err => {
-//                 if (err) return reject(err);
-//                 resolve();
-//             });
-//         });
-
-//         // Success response
-//         res.status(201).json({
-//             message: "User, bank details, and QR code added successfully",
-//             userId: userId,
-//             paymentId: paymentId,
-//             qrCodePath: qrFilePath
-//         });
-
-//     } catch (error) {
-//         // Rollback the transaction in case of any error
-//         try {
-//             await new Promise((resolve) => {
-//                 db.rollback(() => {
-//                     resolve();
-//                 });
-//             });
-//         } catch (rollbackError) {
-//             console.error("Rollback failed:", rollbackError);
-//         }
-//         res.status(500).json({ error: "Transaction failed: " + error.message });
-//     }
-// });
 
 exports.addUserAndPaymentDetails = asyncHandler(async (req, res) => {
     try {
-        
-        console.log("addUserAndPaymentDetails",req.body);
+
+        console.log("addUserAndPaymentDetails", req.body);
         // Validate request body using Joi
         const { error, value } = userSchema.userSchema.validate(req.body, { abortEarly: false });
-        
+
         if (error) {
             const validationErrors = error.details.map(detail => detail.message);
-            return res.status(400).json({ 
-                error: "Validation failed", 
-                details: validationErrors 
+            return res.status(400).json({
+                error: "Validation failed",
+                details: validationErrors
             });
         }
-        
+
         const {
             firstName,
             lastName,
@@ -135,33 +39,33 @@ exports.addUserAndPaymentDetails = asyncHandler(async (req, res) => {
         // Format phone number (removing + if present, then adding it back)
         const formattedPhoneNumber = `+${String(phoneNumber).replace(/^\+/, "")}`;
         console.log('Formatted Phone Number:', formattedPhoneNumber);
-        
+
         // Create user record
         const userResult = await farmerDao.createUser(
-            firstName, 
-            lastName, 
-            NICnumber, 
-            formattedPhoneNumber, 
-            district, 
+            firstName,
+            lastName,
+            NICnumber,
+            formattedPhoneNumber,
+            district,
             PreferdLanguage
         );
-        
+
         const userId = userResult.insertId;
-        
+
         // Insert into the 'userbankdetails' table
         const paymentResult = await farmerDao.createPaymentDetails(
-            userId, 
-            accNumber, 
-            accHolderName, 
-            bankName, 
+            userId,
+            accNumber,
+            accHolderName,
+            bankName,
             branchName
         );
-        
+
         const paymentId = paymentResult.insertId;
-        
+
         // Generate and update QR code for the user
         const qrUrl = await exports.createQrCode(userId);
-        
+
         // Success response
         res.status(200).json({
             message: "User, bank details, and QR code added successfully",
@@ -174,34 +78,34 @@ exports.addUserAndPaymentDetails = asyncHandler(async (req, res) => {
         // Check for specific errors
         if (error.code === 'ER_DUP_ENTRY') {
             // Handle duplicate entry error from database
-            return res.status(409).json({ 
+            return res.status(409).json({
                 error: "A user with this information already exists",
-                details: error.message 
+                details: error.message
             });
         }
-        
+
         // Generic error response
         console.error("Error during user creation:", error);
-        res.status(500).json({ 
-            error: "An unexpected error occurred", 
-            details: error.message 
+        res.status(500).json({
+            error: "An unexpected error occurred",
+            details: error.message
         });
     }
 });
 
 exports.addFarmerBankDetails = async (req, res) => {
     console.log("addFarmerBankDetails", req.body);
-    
+
     const { error, value } = userSchema.bankDetailsSchema.validate(req.body, { abortEarly: false });
-        
+
     if (error) {
         const validationErrors = error.details.map(detail => detail.message);
-        return res.status(400).json({ 
-            error: "Validation failed", 
-            details: validationErrors 
+        return res.status(400).json({
+            error: "Validation failed",
+            details: validationErrors
         });
     }
-    
+
     const { userId, NICnumber, accNumber, accHolderName, bankName, branchName } = req.body;
     console.log("userId", userId, "NICnumber", NICnumber, "accNumber", accNumber, "accHolderName", accHolderName, "bankName", bankName, "branchName", branchName);
 
@@ -267,62 +171,7 @@ exports.createQrCode = async (userId, callback) => {
 };
 
 
-// exports.getRegisteredFarmerDetails = async (req, res) => {
-//     const { userId } = req.params;
 
-//     if (!userId) {
-//         return res.status(400).json({ error: "User ID is required" });
-//     }
-
-//     try {
-//         // Fetch the raw farmer data from the DAO layer
-//         const rows = await farmerDao.getFarmerDetailsById(userId);
-//         console.log('rows', rows);
-//         // If no user found, return a 404 response
-//         if (rows.length === 0) {
-//             return res.status(404).json({ error: "User not found" });
-//         }
-
-//         const user = rows[0];
-//         console.log('user', user);
-
-//         // Convert QR code file path to Base64 if it exists
-//         let qrCodeBase64 = '';
-//         if (user.farmerQr) {
-//             const qrCodePath = user.farmerQr.toString();
-//             console.log('QR Code Path:', qrCodePath);
-
-//             try {
-//                 if (fs.existsSync(qrCodePath)) {
-//                     const qrCodeData = fs.readFileSync(qrCodePath);
-//                     qrCodeBase64 = `data:image/png;base64,${qrCodeData.toString('base64')}`;
-//                     console.log('QR Code Base64:', qrCodeBase64);
-//                 } else {
-//                     console.warn('QR code file not found at:', qrCodePath);
-//                 }
-//             } catch (err) {
-//                 console.error('Error processing QR code file:', err.message);
-//             }
-//         }
-
-
-
-//         // Prepare the response data
-//         const response = {
-//             firstName: user.firstName,
-//             lastName: user.lastName,
-//             NICnumber: user.NICnumber,
-//             qrCode: qrCodeBase64,
-//             phoneNumber: user.phoneNumber
-//         };
-//         console.log(response);
-
-//         // Send the response
-//         res.status(200).json(response);
-//     } catch (error) {
-//         res.status(500).json({ error: "Failed to fetch farmer details: " + error.message });
-//     }
-// };
 
 exports.getRegisteredFarmerDetails = async (req, res) => {
     const { userId } = req.params;
@@ -367,95 +216,35 @@ exports.getRegisteredFarmerDetails = async (req, res) => {
 };
 
 
-// exports.getUserWithBankDetails = async (req, res) => {
-//     const userId = req.params.id;
 
-//     if (!userId) {
-//         return res.status(400).json({ error: "User ID is required" });
-//     }
-
-//     try {
-//         // Fetch the raw user data with bank details from the DAO layer
-//         const rows = await farmerDao.getUserWithBankDetailsById(userId);
-
-//         // If no user found, return a 404 response
-//         if (rows.length === 0) {
-//             return res.status(404).json({ message: 'User not found' });
-//         }
-
-//         const user = rows[0];
-
-//         // Convert QR code file path to Base64 if it exists
-//         let qrCodeBase64 = '';
-//         if (user.farmerQr) {
-//             const qrCodePath = user.farmerQr.toString();
-//             console.log('QR Code Path:', qrCodePath);
-
-//             try {
-//                 if (fs.existsSync(qrCodePath)) {
-//                     const qrCodeData = fs.readFileSync(qrCodePath);
-//                     qrCodeBase64 = `data:image/png;base64,${qrCodeData.toString('base64')}`;
-//                     console.log('QR Code Base64:', qrCodeBase64);
-//                 } else {
-//                     console.warn('QR code file not found at:', qrCodePath);
-//                 }
-//             } catch (err) {
-//                 console.error('Error processing QR code file:', err.message);
-//             }
-//         }
-
-
-//         // Prepare the response data
-//         const response = {
-//             userId: user.userId,
-//             firstName: user.firstName,
-//             lastName: user.lastName,
-//             phoneNumber: user.phoneNumber,
-//             NICnumber: user.NICnumber,
-//             profileImage: user.profileImage,
-//             qrCode: qrCodeBase64,
-//             address: user.address,
-//             accNumber: user.accNumber,
-//             accHolderName: user.accHolderName,
-//             bankName: user.bankName,
-//             branchName: user.branchName,
-//             createdAt: user.createdAt
-//         };
-
-//         // Send the response
-//         res.status(200).json(response);
-//     } catch (error) {
-//         res.status(500).json({ error: "Failed to fetch user with bank details: " + error.message });
-//     }
-// };
 
 exports.getUserWithBankDetails = async (req, res) => {
-    
+
     console.log('route: /report-user-details/:id');
     const userId = req.params.id;
     const centerId = req.user.centerId;
     const companyId = req.user.companyId;
-    
-    console.log('userId:', userId); 
+
+    console.log('userId:', userId);
     console.log('centerId:', centerId);
     console.log('companyId:', companyId);
-    
+
     if (!userId) {
         return res.status(400).json({ error: "User ID is required" });
     }
-    
+
     try {
         // Fetch the raw user data with bank details from the DAO layer
         const rows = await farmerDao.getUserWithBankDetailsById(userId, centerId, companyId);
         console.log('rows:', rows);
-        
+
         // If no user found, return a 404 response
         if (rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
-        
+
         const user = rows[0];
-        
+
         // Convert the QR code from binary data (BLOB) to Base64
         let qrCodeBase64 = '';
         if (user.farmerQr) {
@@ -463,7 +252,7 @@ exports.getUserWithBankDetails = async (req, res) => {
             qrCodeBase64 = `data:image/png;base64,${user.farmerQr.toString('base64')}`;
             const qrCodePath = user.farmerQr.toString();
             console.log('QR Code Path:', qrCodePath);
-       
+
             try {
                 if (fs.existsSync(qrCodePath)) {
                     const qrCodeData = fs.readFileSync(qrCodePath);
@@ -476,7 +265,7 @@ exports.getUserWithBankDetails = async (req, res) => {
                 console.error('Error processing QR code file:', err.message);
             }
         }
-       
+
         // Prepare the response data with company and center details
         const response = {
             userId: user.userId,
@@ -495,7 +284,7 @@ exports.getUserWithBankDetails = async (req, res) => {
             centerName: user.centerName,
             createdAt: user.createdAt
         };
-        
+
         console.log('response:', response);
         // Send the response
         res.status(200).json(response);
@@ -599,53 +388,52 @@ exports.addFarmer = asyncHandler(async (req, res) => {
 exports.sendSMSToFarmers = asyncHandler(async (req, res) => {
     console.log("sendSMSToFarmers");
     try {
-      // Fetch farmers from the database
-      const farmers = await farmerDao.getFarmersForSms(); // A method in the DAO that fetches farmer details
-  
-      // Loop over each farmer and send SMS
-      for (const farmer of farmers) {
-        const message = generateSmsMessage(farmer.language); // Generate message based on the farmer's language
-        const formattedPhone = farmer.phoneNumber;
-  
-        const apiUrl = "https://api.getshoutout.com/coreservice/messages";
-        const headers = {
-          Authorization: `Apikey ${process.env.SHOUTOUT_API_KEY}`,
-          "Content-Type": "application/json",
-        };
-  
-        const body = {
-          source: "AgroWorld",
-          destinations: [formattedPhone],
-          content: { sms: message },
-          transports: ["sms"],
-        };
-  
-        // Send SMS
-        const response = await axios.post(apiUrl, body, { headers });
-  
-        // Check if the API response is valid and log success
-        if (response && response.status === 200) {
-          console.log(`SMS sent to: ${formattedPhone}`);
-        } else {
-          console.log(`Error sending SMS to ${formattedPhone}:`, response);
+        // Fetch farmers from the database
+        const farmers = await farmerDao.getFarmersForSms(); // A method in the DAO that fetches farmer details
+
+        // Loop over each farmer and send SMS
+        for (const farmer of farmers) {
+            const message = generateSmsMessage(farmer.language); // Generate message based on the farmer's language
+            const formattedPhone = farmer.phoneNumber;
+
+            const apiUrl = "https://api.getshoutout.com/coreservice/messages";
+            const headers = {
+                Authorization: `Apikey ${process.env.SHOUTOUT_API_KEY}`,
+                "Content-Type": "application/json",
+            };
+
+            const body = {
+                source: "AgroWorld",
+                destinations: [formattedPhone],
+                content: { sms: message },
+                transports: ["sms"],
+            };
+
+            // Send SMS
+            const response = await axios.post(apiUrl, body, { headers });
+
+            // Check if the API response is valid and log success
+            if (response && response.status === 200) {
+                console.log(`SMS sent to: ${formattedPhone}`);
+            } else {
+                console.log(`Error sending SMS to ${formattedPhone}:`, response);
+            }
         }
-      }
-  
-      res.status(200).json({ message: 'SMS notifications sent successfully!' });
+
+        res.status(200).json({ message: 'SMS notifications sent successfully!' });
     } catch (error) {
     }
-  });
-  
-  // Helper function to generate SMS message based on language
-  const generateSmsMessage = (language) => {
+});
+
+// Helper function to generate SMS message based on language
+const generateSmsMessage = (language) => {
     let message = '';
     if (language === 'English') {
-      message = "As per your order, we will send a vehicle tomorrow for your produce collection. Driver will contact you.";
+        message = "As per your order, we will send a vehicle tomorrow for your produce collection. Driver will contact you.";
     } else if (language === 'Sinhala') {
-      message = "ඇණවුම පරිදි, ඔබගේ නිෂ්පාදන එකතු කිරීම සඳහා අපි හෙට දින වාහනයක් එවන්නෙමු. රියදුරු ඔබව සම්බන්ධ කර ගනු ඇත.";
+        message = "ඇණවුම පරිදි, ඔබගේ නිෂ්පාදන එකතු කිරීම සඳහා අපි හෙට දින වාහනයක් එවන්නෙමු. රියදුරු ඔබව සම්බන්ධ කර ගනු ඇත.";
     } else if (language === 'Tamil') {
-      message = "உங்கள் உத்தரவின்படி, உங்கள் விளைபொருட்களை சேகரிப்பதற்காக நாளை வாகனத்தை அனுப்புவோம். ஓட்டுநர் உங்களைத் தொடர்புகொள்வார்.";
+        message = "உங்கள் உத்தரவின்படி, உங்கள் விளைபொருட்களை சேகரிப்பதற்காக நாளை வாகனத்தை அனுப்புவோம். ஓட்டுநர் உங்களைத் தொடர்புகொள்வார்.";
     }
     return message;
-  };
-  
+};
