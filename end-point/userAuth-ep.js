@@ -263,65 +263,7 @@ exports.loginUser = async (req, res) => {
 };
 
 
-// exports.updatePassword = async (req, res) => {
-//   const { empId, currentPassword, newPassword } = req.body;
-//   console.log("Attempting to update password for empid:", empId);
-//   if (!empId || !currentPassword || !newPassword) {
-//     return res.status(400).json({ message: "All fields are required" });
-//   }
-//   const collectionOfficerIdResult = await userAuthDao.getOfficerByEmpId(
-//     empId
-//   );
-//   const collectionOfficerId = collectionOfficerIdResult[0]?.id;
-//   console.log("Collection Officer ID:", collectionOfficerId);
 
-//   const users = await userAuthDao.getOfficerPasswordById(
-//     collectionOfficerId
-//   );
-//   const officer = users[0];
-//   console.log("Stored Hashed Password (from DB):", officer.password);
-
-//   const isPasswordValid = await bcrypt.compare(currentPassword, officer.password);
-//   console.log("Password Match Result:", isPasswordValid);
-//   if (!isPasswordValid) {
-//     return res.status(401).json({
-//       status: "error",
-//       message: "Invalid password",
-//     });
-//   }
-//   const saltRounds = 10;
-//   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-//   console.log("Plain Password:", hashedPassword);
-//   try {
-//     try {
-//       await userAuthDao.updatePasswordInDatabase(
-//         collectionOfficerId,
-//         hashedPassword
-//       );
-
-//       res.status(200).json({ message: "Password updated successfully" });
-//     } catch (error) {
-//       if (error === "Database error") {
-//         return res.status(500).json({
-//           message: "Database error occurred while updating the password",
-//         });
-//       } else if (error === "Current password is incorrect") {
-//         return res
-//           .status(401)
-//           .json({ message: "Current password is incorrect" });
-//       } else {
-//         return res
-//           .status(500)
-//           .json({ message: "An error occurred while updating the password" });
-//       }
-//     }
-//   } catch (error) {
-//     console.error("Error updating password:", error);
-//     res
-//       .status(500)
-//       .json({ message: "An error occurred while updating the password" });
-//   }
-// };
 
 
 exports.updatePassword = async (req, res) => {
@@ -410,44 +352,7 @@ exports.updatePassword = async (req, res) => {
   }
 };
 
-// exports.getProfile = async (req, res) => {
-//   const userId = req.user.id;
 
-//   try {
-//     const user = await userAuthDao.getProfileById(userId);
-
-//     res.status(200).json({
-//       status: "success",
-//       user: {
-//         firstNameEnglish: user.firstNameEnglish,
-//         firstNameSinhala: user.firstNameSinhala,
-//         firstNameTamil: user.firstNameTamil,
-//         lastNameEnglish: user.lastNameEnglish,
-//         lastNameSinhala: user.lastNameSinhala,
-//         lastNameTamil: user.lastNameTamil,
-//         phoneNumber01: user.phoneNumber01,
-//         phoneNumber02: user.phoneNumber02,
-//         image: user.image,
-//         nic: user.nic,
-//         email: user.email,
-//         address: {
-//           houseNumber: user.houseNumber,
-//           streetName: user.streetName,
-//           city: user.city,
-//           district: user.district,
-//           province: user.province,
-//           country: user.country,
-//         },
-//         languages: user.languages,
-//       },
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       status: "error",
-//       message: error.message,
-//     });
-//   }
-// };
 
 exports.getProfile = async (req, res) => {
   try {
@@ -614,36 +519,7 @@ exports.updateOnlineStatus = async (req, res) => {
 };
 
 
-// exports.updateOnlineStatusTest = async (req, res) => {
-//   const { status } = req.body;  // Get the status from the request body
 
-//   console.log('Status:', status);
-
-//   if (typeof status !== 'boolean') {
-//     return res.status(400).json({ error: 'Status must be a boolean value.' });
-//   }
-
-//   // Assuming req.user contains the user data after successful authentication
-//   const userId = req.user.id;  // Get userId from req.user (authenticated user)
-
-//   if (!userId) {
-//     return res.status(401).json({ error: 'User not authenticated' });
-//   }
-
-//   try {
-//     // Update the online status in the database
-//     const result = await userAuthDao.updateOnlineStatus(status, userId);
-
-//     if (result.affectedRows > 0) {
-//       return res.status(200).json({ message: 'User status updated successfully.' });
-//     } else {
-//       return res.status(404).json({ error: 'User not found' });
-//     }
-//   } catch (error) {
-//     console.error('Error updating online status:', error);
-//     return res.status(500).json({ error: 'Failed to update online status' });
-//   }
-// };
 
 exports.uploadProfileImage = async (req, res) => {
   console.log("hitttt")

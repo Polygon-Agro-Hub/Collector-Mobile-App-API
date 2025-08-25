@@ -1,22 +1,6 @@
 const db = require("../startup/database");
 
-// DAO for fetching officer details by empId
-// exports.getOfficerByEmpId = (empId) => {
-//   return new Promise((resolve, reject) => {
-//     const sql =
-//       "SELECT id, jobRole ,empId FROM collectionofficer WHERE empId = ?";
-//     db.collectionofficer.query(sql, [empId], (err, results) => {
-//       if (err) {
-//         return reject(new Error("Database error"));
-//       }
-//       if (results.length === 0) {
-//         return reject(new Error("Invalid Employee ID"));
-//       }
-//       resolve(results);
-//       console.log("Results:", results);
-//     });
-//   });
-// };
+
 exports.getOfficerByEmpId = (empId) => {
   return new Promise((resolve, reject) => {
     const sql =
@@ -40,114 +24,7 @@ exports.getOfficerByEmpId = (empId) => {
 };
 
 
-// DAO for fetching officer details by ID
-// exports.getOfficerPasswordById = (id) => {
-//   return new Promise((resolve, reject) => {
-//     const sql = "SELECT * FROM collectionofficer WHERE id = ?";
-//     db.collectionofficer.query(sql, [id], (err, results) => {
-//       if (err) {
-//         return reject(new Error("Database error"));
-//       }
-//       if (results.length === 0) {
-//         return reject(new Error("Invalid email or password"));
-//       }
-//       resolve(results);
-//       console.log("Results:", results);
-//     });
-//   });
-// };
-// exports.getOfficerPasswordById = (id,jobRole) => {
-//   return new Promise((resolve, reject) => {
-//     const sql = `SELECT co.*, cod.companyNameEnglish AS companyNameEnglish, cod.companyNameSinhala AS companyNameSinhala, cod.companyNameTamil AS companyNameTamil,  ccen.id AS companycenterId
-//      FROM 
-//         collectionofficer co
-//       JOIN 
-//         company cod ON co.companyId = cod.id
-//       JOIN
-//         companycenter ccen ON co.centerId = ccen.centerId 
-//      WHERE co.id = ?`;
-//     db.collectionofficer.query(sql, [id], (err, results) => {
-//       if (err) {
-//         return reject(new Error("Database error"));
-//       }
-//       if (results.length === 0) {
-//         return reject(new Error("Invalid email or password"));
-//       }
-//       resolve(results);
-//       console.log("Results:", results);
-//     });
-//   });
-// };
 
-// exports.getOfficerPasswordById = (id, jobRole) => {
-//   return new Promise((resolve, reject) => {
-//     let sql;
-
-//     // Determine which center table to join based on job role
-//     if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
-//       // For Collection roles, join with collectioncenter table using centerId
-//       sql = `SELECT co.*, 
-//                     cod.companyNameEnglish AS companyNameEnglish, 
-//                     cod.companyNameSinhala AS companyNameSinhala, 
-//                     cod.companyNameTamil AS companyNameTamil,  
-//                     ccen.id AS companycenterId
-
-//              FROM 
-//                 collectionofficer co
-//              JOIN 
-//                 company cod ON co.companyId = cod.id
-//              JOIN
-//                 companycenter ccen ON co.centerId = ccen.centerId 
-//              LEFT JOIN
-//                 collectioncenter cc ON co.centerId = cc.id
-//              WHERE co.id = ?`;
-//     } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
-//       // For Distribution roles, join with distributedcenter table using distributedCenterId
-//       sql = `SELECT co.*, 
-//                     cod.companyNameEnglish AS companyNameEnglish, 
-//                     cod.companyNameSinhala AS companyNameSinhala, 
-//                     cod.companyNameTamil AS companyNameTamil,  
-//                     ccen.id AS companycenterId
-
-//              FROM 
-//                 collectionofficer co
-//              JOIN 
-//                 company cod ON co.companyId = cod.id
-//              JOIN
-//                 companycenter ccen ON co.distributedCenterId = ccen.centerId 
-//              LEFT JOIN
-//                 distributedcenter dc ON co.distributedCenterId = dc.id
-//              WHERE co.id = ?`;
-//     } else {
-//       // For other roles or unknown roles, use the original query
-//       sql = `SELECT co.*, 
-//                     cod.companyNameEnglish AS companyNameEnglish, 
-//                     cod.companyNameSinhala AS companyNameSinhala, 
-//                     cod.companyNameTamil AS companyNameTamil,  
-//                     ccen.id AS companycenterId
-//              FROM 
-//                 collectionofficer co
-//              JOIN 
-//                 company cod ON co.companyId = cod.id
-//              JOIN
-//                 companycenter ccen ON co.centerId = ccen.centerId 
-//              WHERE co.id = ?`;
-//     }
-
-//     db.collectionofficer.query(sql, [id], (err, results) => {
-//       if (err) {
-//         console.error("Database query error:", err);
-//         return reject(new Error("Database error"));
-//       }
-//       if (results.length === 0) {
-//         return reject(new Error("Officer not found"));
-//       }
-
-//       console.log("Results:", results);
-//       resolve(results);
-//     });
-//   });
-// };
 
 exports.getOfficerPasswordById = (id, jobRole) => {
   return new Promise((resolve, reject) => {
@@ -425,25 +302,7 @@ exports.getOfficerDetailsById = (officerId, jobRole) => {
 
 
 
-//claim status
-// exports.getClaimStatusByUserId = (userId) => {
-//   return new Promise((resolve, reject) => {
-//     const sql = `SELECT claimStatus FROM collectionofficer WHERE id = ?`;
-//     db.collectionofficer.query(sql, [userId], (err, results) => {
-//       if (err) {
-//         console.error('Error fetching claim status:', err);
-//         reject(new Error('Database query failed'));
-//         return;
-//       }
 
-//       if (results.length > 0) {
-//         resolve(results[0].claimStatus);
-//       } else {
-//         resolve(null);
-//       }
-//     });
-//   });
-// };
 exports.getClaimStatusByUserId = (userId) => {
   return new Promise((resolve, reject) => {
     const sql = `SELECT claimStatus FROM collectionofficer WHERE id = ?`;
@@ -480,17 +339,7 @@ exports.updateOnlineStatusWithSocket = async (empId, status) => {
 }
 
 
-// exports.updateOnlineStatusWithSocket = async (empId, status) => {
-//   try {
-//     await collectionofficer.promise().query(
-//       "UPDATE collectionofficer SET onlineStatus = ? WHERE empId = ?",
-//       [status, empId]
-//     );
-//   } catch (error) {
-//     console.error(`Error updating online status for ${empId}:`, error);
-//     throw new Error("Failed to update status");
-//   }
-// };
+
 
 exports.getUserProfileImage = async (userId) => {
   return new Promise((resolve, reject) => {

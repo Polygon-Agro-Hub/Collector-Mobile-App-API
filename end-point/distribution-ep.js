@@ -39,43 +39,8 @@ exports.getOfficerTarget = async (req, res) => {
     }
 };
 
-// exports.getOrderData = async (req, res) => {
-//     console.log("getOrderData called");
-//     try {
-//         const { orderId } = req.params;
-//         const officerId = req.user.id; // For authorization check if needed
 
-//         console.log("Order ID:", orderId);
 
-//         // Validate orderId
-//         if (!orderId || isNaN(orderId)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Invalid order ID provided'
-//             });
-//         }
-
-//         // Get order data from DAO
-//         const orderData = await distributionDao.getOrderDataDao(orderId);
-
-//         console.log("///////////////////", orderData)
-
-//         console.log("nlcdksja", orderData.items)
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Order data retrieved successfully',
-//             data: orderData
-//         });
-//     } catch (error) {
-//         console.error('Error getting order data:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to retrieve order data',
-//             error: error.message
-//         });
-//     }
-// };
 exports.getOrderData = async (req, res) => {
     console.log("getOrderData called");
     try {
@@ -134,60 +99,7 @@ exports.getOrderData = async (req, res) => {
     }
 };
 
-// In your distribution endpoint file (distribution-ep.js)
-// In your distribution endpoint file (distribution-ep.js)
-// exports.updateOrderItems = async (req, res) => {
-//     try {
-//         const { orderId } = req.params;
-//         const { packageItems = [], additionalItems = [] } = req.body;
-//         const officerId = req.user.id;
 
-//         // Validate input
-//         if (!orderId || isNaN(orderId)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Invalid order ID'
-//             });
-//         }
-
-//         // Update package items if any
-//         if (packageItems.length > 0) {
-//             await distributionDao.updatePackageItems(packageItems);
-//             console.log(`Updated ${packageItems.length} package items for order ${orderId}`);
-//         }
-
-//         // Update additional items if any
-//         if (additionalItems.length > 0) {
-//             await distributionDao.updateAdditionalItems(additionalItems);
-//             console.log(`Updated ${additionalItems.length} additional items for order ${orderId}`);
-//         }
-
-//         // Check if any updates were made
-//         if (packageItems.length === 0 && additionalItems.length === 0) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'No items provided for update'
-//             });
-//         }
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Order items updated successfully',
-//             updated: {
-//                 packageItems: packageItems.length,
-//                 additionalItems: additionalItems.length
-//             }
-//         });
-
-//     } catch (error) {
-//         console.error('Error updating order items:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to update order items',
-//             error: error.message
-//         });
-//     }
-// };
 
 exports.updateOrderItems = async (req, res) => {
     try {
@@ -276,7 +188,6 @@ exports.getAllRetailItems = asyncHandler(async (req, res) => {
     console.log("Fetching Retail Items...");
     try {
         const { orderId } = req.params;
-
         if (!orderId) {
             return res.status(400).json({ message: "Order ID is required" });
         }
@@ -287,182 +198,20 @@ exports.getAllRetailItems = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: "No Retail Items found" });
         }
 
-        res.status(200).json(items);
-        console.log("Retail Items fetched successfully", items.length, "items");
-        console.log("Filtered retail items:", items);
+        // Additional filter to ensure only Retail items (double-check)
+        const retailItems = items.filter(item => item.category === 'Retail');
 
+        res.status(200).json(retailItems);
+        console.log("Retail Items fetched successfully:", retailItems.length, "items");
+        console.log("Filtered retail items:", retailItems);
     } catch (error) {
         console.error("Error fetching Retail Items:", error);
         res.status(500).json({ message: "Failed to fetch Retail Items" });
     }
 });
-
 /////////////////replace modal data update 
 
-// exports.replaceOrderPackage = async (req, res) => {
-//     console.log("replaceOrderPackage called");
-//     try {
-//         const { orderPackageId, productType, productId, qty, price, status } = req.body;
-//         const officerId = req.user.id; // From auth middleware
 
-//         console.log("Replace request data:", { orderPackageId, productType, productId, qty, price, status });
-
-//         // Validate required fields
-//         if (!orderPackageId || !productType || !productId || !qty || !price) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Missing required fields: orderPackageId, productType, productId, qty, price'
-//             });
-//         }
-
-//         // Validate numeric fields
-//         if (isNaN(orderPackageId) || isNaN(productId) || isNaN(qty) || isNaN(price)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Invalid numeric values provided'
-//             });
-//         }
-
-//         // Call DAO to handle the replacement request
-//         const result = await distributionDao.createReplaceRequestDao({
-//             orderPackageId: parseInt(orderPackageId),
-//             productType,
-//             productId: parseInt(productId),
-//             qty: parseInt(qty),
-//             price: parseFloat(price),
-//             status: status || 'Pending',
-//             requestedBy: officerId
-//         });
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Replacement request created successfully',
-//             data: result
-//         });
-
-//     } catch (error) {
-//         console.error('Error creating replacement request:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to create replacement request',
-//             error: error.message
-//         });
-//     }
-// };
-
-// exports.replaceOrderPackage = async (req, res) => {
-//     console.log("replaceOrderPackage called");
-//     try {
-//         const { orderPackageId, productType, replaceId, productId, qty, price, status } = req.body;
-//         const officerId = req.user.id; // From auth middleware
-//         console.log("Replace request data:", { orderPackageId, replaceId, productType, productId, qty, price, status });
-
-//         // Validate required fields (productId can be null for some product types)
-//         if (!orderPackageId || !productType || qty === undefined || price === undefined) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Missing required fields: orderPackageId, productType, qty, price'
-//             });
-//         }
-
-//         // Validate numeric fields (allow null for productId)
-//         if (isNaN(orderPackageId) ||
-//             (productId !== null && isNaN(productId)) ||
-//             isNaN(qty) ||
-//             isNaN(price)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Invalid numeric values provided'
-//             });
-//         }
-
-//         // Call DAO to handle the replacement request
-//         const result = await distributionDao.createReplaceRequestDao({
-//             orderPackageId: parseInt(orderPackageId),
-//             productType,
-//             replaceId,
-//             productId: productId !== null ? parseInt(productId) : null,
-//             qty: parseInt(qty),
-//             price: parseFloat(price * 1000),
-//             status: status || 'Pending',
-//             requestedBy: officerId
-//         });
-
-//         console.log("Database insertion result:", result); // Add this for debugging
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Replacement request created successfully',
-//             data: result
-//         });
-
-//     } catch (error) {
-//         console.error('Error creating replacement request:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to create replacement request',
-//             error: error.message
-//         });
-//     }
-// };
-
-// exports.replaceOrderPackage = async (req, res) => {
-//     console.log("kanjf,lvmgnla", req.data)
-//     console.log("replaceOrderPackage called");
-//     try {
-//         // Validate request body using the schema directly
-//         const { error, value } = replaceOrderPackageSchema.validate(req.body, { abortEarly: false });
-
-//         if (error) {
-//             const errorMessages = error.details.map(detail => detail.message);
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Validation failed',
-//                 errors: errorMessages
-//             });
-//         }
-
-//         const { orderPackageId, productType, replaceId, productId, qty, price, status } = value;
-//         const officerId = req.user.id; // From auth middleware
-
-//         console.log("Validated replace request data:", {
-//             orderPackageId,
-//             replaceId,
-//             productType,
-//             productId,
-//             qty,
-//             price,
-//             status
-//         });
-
-//         // Call DAO to handle the replacement request
-//         const result = await distributionDao.createReplaceRequestDao({
-//             orderPackageId,
-//             productType,
-//             replaceId,
-//             productId: productId !== null ? productId : null,
-//             qty,
-//             price: parseFloat(price), // Your existing conversion
-//             status: status || 'Pending',
-//             requestedBy: officerId
-//         });
-
-//         console.log("Database insertion result:", result);
-
-//         res.status(200).json({
-//             success: true,
-//             message: 'Replacement request created successfully',
-//             data: result
-//         });
-//     } catch (error) {
-//         console.error('Error creating replacement request:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Failed to create replacement request',
-//             error: error.message
-//         });
-//     }
-// };
 
 
 
@@ -562,7 +311,7 @@ exports.replaceOrderPackage = async (req, res) => {
             productId: productId !== null ? productId : null,
             qty,
             price: parseFloat(price),
-            status: status || 'Pending',
+            status: 'Not Approved',
             requestedBy: userId,
             userId: userId,
             empId: empId,
@@ -633,17 +382,24 @@ exports.updateDistributedTarget = async (req, res) => {
 };
 
 ////////////
-// distributionEp.js
+
+
 exports.getDistributionTarget = async (req, res) => {
     try {
         const officerId = req.user.id;
+        console.log("Officer ID from token:", officerId);
 
-        // Get distribution targets with completion percentage
         const targets = await distributionDao.getDistributionTargets(officerId);
+        console.log("Distribution targets found:", targets.length);
 
-        console.log("distribution target", targets)
+        if (targets.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                message: 'No targets found for this user'
+            });
+        }
 
-        // Format the response
         const formattedTargets = targets.map(target => ({
             id: target.id,
             companyCenterId: target.companycenterId,
@@ -651,15 +407,13 @@ exports.getDistributionTarget = async (req, res) => {
             target: target.target,
             completed: target.complete,
             completionPercentage: parseFloat(target.completionPercentage).toFixed(2) + '%',
-            createdAt: target.createdAt,
-            updatedAt: target.updatedAt
+            createdAt: target.createdAt
         }));
 
         res.status(200).json({
             success: true,
             data: formattedTargets
         });
-
     } catch (error) {
         console.error('Error getting distribution targets:', error);
         res.status(500).json({
