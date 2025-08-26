@@ -564,8 +564,8 @@ exports.uploadProfileImage = async (req, res) => {
 
 
 exports.getPassword = async (req, res) => {
+  
   const id = req.user.id;
-
   try {
     const user = await userAuthDao.getPassword(id);
     return res.status(200).json({
