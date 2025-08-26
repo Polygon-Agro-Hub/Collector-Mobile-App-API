@@ -677,7 +677,7 @@ exports.getAllReplaceRequests = (managerId) => {
                 collection_officer.collectionofficer co ON rr.userId = co.id
             WHERE 
                 co.irmId = ?
-                AND rr.status = 'Pending'
+                AND rr.status = 'Not Approved'
             ORDER BY 
                 rr.createdAt DESC,
                 rr.id ASC
