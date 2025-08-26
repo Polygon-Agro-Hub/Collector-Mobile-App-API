@@ -376,16 +376,13 @@ exports.getPassword = (id) => {
   return new Promise((resolve, reject) => {
     const sql = `       
       SELECT 
-        id,         
-       
-        empId,          
-       passwordUpdated,
-        createdAt
-      FROM salesagent        
+        id,                
+       passwordUpdated
+      FROM collectionofficer
       WHERE id = ?     
     `;
 
-    db.marketPlace.query(sql, [id], (err, results) => {
+    db.collectionofficer.query(sql, [id], (err, results) => {
       if (err) {
         console.error("Database error:", err);
         return reject(new Error('Database error'));
