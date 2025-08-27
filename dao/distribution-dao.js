@@ -1711,13 +1711,61 @@ exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
 
 
 
+// exports.getDistributionTargets = async (officerId) => {
+//     return new Promise((resolve, reject) => {
+//         db.collectionofficer.getConnection((err, connection) => {
+//             if (err) return reject(err);
+
+//             console.log("Searching for targets with officerId:", officerId);
+
+//             connection.query(
+//                 `SELECT 
+//                     userId,
+//                     companycenterId,
+//                     SUM(target) as total_target,
+//                     SUM(complete) as total_complete,
+//                     CASE 
+//                         WHEN SUM(target) > 0 THEN (SUM(complete) / SUM(target) * 100)
+//                         ELSE 0 
+//                     END AS completionPercentage,
+//                     MIN(createdAt) as createdAt,
+//                     MAX(createdAt) as updatedAt
+//                 FROM distributedtarget 
+//                 WHERE userId = ? 
+//                 GROUP BY userId, companycenterId
+//                 ORDER BY MAX(createdAt) DESC
+//                 LIMIT 1`,
+//                 [officerId],
+//                 (err, results) => {
+//                     connection.release();
+//                     if (err) return reject(err);
+
+//                     console.log("Query results:", results);
+
+//                     // Transform the results to match expected format
+//                     const transformedResults = results.map(row => ({
+//                         id: `${row.userId}_${row.companycenterId}`, // Create a composite ID
+//                         companycenterId: row.companycenterId,
+//                         userId: row.userId,
+//                         target: row.total_target,
+//                         complete: row.total_complete,
+//                         completionPercentage: row.completionPercentage,
+//                         createdAt: row.createdAt,
+//                         updatedAt: row.updatedAt
+//                     }));
+
+//                     resolve(transformedResults);
+//                 }
+//             );
+//         });
+//     });
+// };
+
 exports.getDistributionTargets = async (officerId) => {
     return new Promise((resolve, reject) => {
         db.collectionofficer.getConnection((err, connection) => {
             if (err) return reject(err);
-
             console.log("Searching for targets with officerId:", officerId);
-
             connection.query(
                 `SELECT 
                     userId,
@@ -1732,19 +1780,18 @@ exports.getDistributionTargets = async (officerId) => {
                     MAX(createdAt) as updatedAt
                 FROM distributedtarget 
                 WHERE userId = ? 
-                GROUP BY userId, companycenterId
-                ORDER BY MAX(createdAt) DESC
-                LIMIT 1`,
+                AND DATE(createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                AND DATE(createdAt) <= CURDATE()
+                GROUP BY userId, companycenterId, DATE(createdAt)
+                ORDER BY MAX(createdAt) DESC`,
                 [officerId],
                 (err, results) => {
                     connection.release();
                     if (err) return reject(err);
-
                     console.log("Query results:", results);
-
                     // Transform the results to match expected format
                     const transformedResults = results.map(row => ({
-                        id: `${row.userId}_${row.companycenterId}`, // Create a composite ID
+                        id: `${row.userId}_${row.companycenterId}_${row.createdAt.toISOString().split('T')[0]}`, // Create a composite ID with date
                         companycenterId: row.companycenterId,
                         userId: row.userId,
                         target: row.total_target,
@@ -1753,7 +1800,6 @@ exports.getDistributionTargets = async (officerId) => {
                         createdAt: row.createdAt,
                         updatedAt: row.updatedAt
                     }));
-
                     resolve(transformedResults);
                 }
             );
