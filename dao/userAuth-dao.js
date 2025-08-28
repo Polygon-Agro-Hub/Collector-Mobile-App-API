@@ -1,12 +1,37 @@
 const db = require("../startup/database");
 
 
+// exports.getOfficerByEmpId = (empId) => {
+//   return new Promise((resolve, reject) => {
+//     const sql =
+//       "SELECT id, jobRole, empId FROM collectionofficer WHERE empId = ?";
+
+//     db.collectionofficer.query(sql, [empId], (err, results) => {
+//       if (err) {
+//         console.error("Database Query Error:", err.message);
+//         return reject(new Error("Database query failed. Please try again."));
+//       }
+
+//       if (results.length === 0) {
+//         console.warn(`No officer found for Employee ID: ${empId}`);
+//         return resolve(null);  // Return null instead of rejecting
+//       }
+
+//       console.log("Results:", results);
+//       resolve(results);
+//     });
+//   });
+// };
 exports.getOfficerByEmpId = (empId) => {
   return new Promise((resolve, reject) => {
-    const sql =
-      "SELECT id, jobRole, empId FROM collectionofficer WHERE empId = ?";
+    // Convert empId to uppercase before querying
+    const normalizedEmpId = empId.toUpperCase();
 
-    db.collectionofficer.query(sql, [empId], (err, results) => {
+    // Query with case-insensitive comparison
+    const sql =
+      "SELECT id, jobRole, empId FROM collectionofficer WHERE UPPER(empId) = ?";
+
+    db.collectionofficer.query(sql, [normalizedEmpId], (err, results) => {
       if (err) {
         console.error("Database Query Error:", err.message);
         return reject(new Error("Database query failed. Please try again."));
@@ -14,7 +39,7 @@ exports.getOfficerByEmpId = (empId) => {
 
       if (results.length === 0) {
         console.warn(`No officer found for Employee ID: ${empId}`);
-        return resolve(null);  // Return null instead of rejecting
+        return resolve(null);
       }
 
       console.log("Results:", results);
@@ -22,7 +47,6 @@ exports.getOfficerByEmpId = (empId) => {
     });
   });
 };
-
 
 
 

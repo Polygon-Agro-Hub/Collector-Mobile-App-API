@@ -36,8 +36,10 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //       });
 //     }
 
+
 //     const collectionOfficerId = collectionOfficerResult[0]?.id;
 //     const jobRole = collectionOfficerResult[0]?.jobRole;
+
 
 //     if (!collectionOfficerId) {
 //       return res.status(404).json({
@@ -46,7 +48,7 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //       });
 //     }
 
-//     const users = await userAuthDao.getOfficerPasswordById(collectionOfficerId);
+//     const users = await userAuthDao.getOfficerPasswordById(collectionOfficerId, jobRole);
 
 //     if (!users || users.length === 0) {
 //       return res.status(404).json({ status: "error", message: "User not found" });
@@ -62,7 +64,8 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //     //     message: `Access denied.No collection center found. Please contact the admin for assistance.`,
 //     //   });
 //     // }
-
+//     const centerId = officer.centerId;
+//     const distributionCenterId = officer.distributedCenterId;
 //     // Compare the provided password with the hashed password in the database
 //     const isPasswordValid = await bcrypt.compare(password, officer.password);
 //     console.log("Password Match Result:", isPasswordValid);
@@ -74,6 +77,15 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //       });
 //     }
 
+//     let center;
+//     if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
+//       center = centerId;
+//     } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+//       center = distributionCenterId;
+
+//     }
+//     console.log("Centre Id", center)
+
 //     // If password is valid, generate a JWT token
 //     const payload = {
 //       id: officer.id,
@@ -81,10 +93,13 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //       firstNameEnglish: officer.firstNameEnglish,
 //       lastNameEnglish: officer.lastNameEnglish,
 //       phoneNumber01: officer.phoneNumber01,
-//       centerId: officer.centerId,
+//       centerId: center,
 //       companyId: officer.companyId,
 //       empId: officer.empId,
+//       role: officer.jobRole,
+//       companycenterId: officer.companycenterId
 //     };
+//     console.log("payload", payload)
 
 //     const token = jwt.sign(payload, process.env.JWT_SECRET || "T1", {
 //       expiresIn: "10h",
@@ -103,13 +118,10 @@ const delectfilesOnS3 = require('../Middlewares/s3delete')
 //       userId: officer.id,
 //       jobRole: jobRole,
 //       empId: officer.empId,
+//       companyNameEnglish: officer.companyNameEnglish,
+//       companyNameSinhala: officer.companyNameSinhala,
+//       companyNameTamil: officer.companyNameTamil
 //     };
-
-//     const status = 1
-
-//     console.log(collectionOfficerId)
-//     const resds = await userAuthDao.updateLoginStatus(collectionOfficerId, status );
-//     console.log(resds)
 
 //     res.status(200).json(response);
 //   } catch (err) {
@@ -141,9 +153,11 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    const { empId, password } = req.body;
+    // Normalize empId to uppercase for consistency
+    let { empId, password } = req.body;
+    empId = empId.trim().toUpperCase(); // Normalize and trim
 
-    console.log("Employee ID:", empId);
+    console.log("Employee ID (normalized):", empId);
     console.log("Password Provided:", password);
 
     let collectionOfficerResult;
@@ -157,10 +171,8 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-
-    const collectionOfficerId = collectionOfficerResult[0]?.id;
-    const jobRole = collectionOfficerResult[0]?.jobRole;
-
+    const collectionOfficerId = collectionOfficerResult?.[0]?.id;
+    const jobRole = collectionOfficerResult?.[0]?.jobRole;
 
     if (!collectionOfficerId) {
       return res.status(404).json({
@@ -178,15 +190,9 @@ exports.loginUser = async (req, res) => {
     const officer = users[0];
     console.log("Hashed Password from Database:", officer.password);
 
-    // // Check if the officer's status is "Approved"
-    // if (officer.status !== "Approved") {	
-    //   return res.status(403).json({
-    //     status: "error",
-    //     message: `Access denied.No collection center found. Please contact the admin for assistance.`,
-    //   });
-    // }
     const centerId = officer.centerId;
     const distributionCenterId = officer.distributedCenterId;
+
     // Compare the provided password with the hashed password in the database
     const isPasswordValid = await bcrypt.compare(password, officer.password);
     console.log("Password Match Result:", isPasswordValid);
@@ -199,13 +205,15 @@ exports.loginUser = async (req, res) => {
     }
 
     let center;
-    if (jobRole === "Collection Officer" || jobRole === "Collection Center Manager") {
+    // Case-insensitive job role comparison
+    const normalizedJobRole = jobRole.toLowerCase();
+    if (normalizedJobRole === "collection officer" || normalizedJobRole === "collection center manager") {
       center = centerId;
-    } else if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+    } else if (normalizedJobRole === "distribution center manager" || normalizedJobRole === "distribution officer") {
       center = distributionCenterId;
-
     }
-    console.log("Centre Id", center)
+
+    console.log("Centre Id", center);
 
     // If password is valid, generate a JWT token
     const payload = {
@@ -220,7 +228,7 @@ exports.loginUser = async (req, res) => {
       role: officer.jobRole,
       companycenterId: officer.companycenterId
     };
-    console.log("payload", payload)
+    console.log("payload", payload);
 
     const token = jwt.sign(payload, process.env.JWT_SECRET || "T1", {
       expiresIn: "10h",
@@ -564,7 +572,7 @@ exports.uploadProfileImage = async (req, res) => {
 
 
 exports.getPassword = async (req, res) => {
-  
+
   const id = req.user.id;
   try {
     const user = await userAuthDao.getPassword(id);
