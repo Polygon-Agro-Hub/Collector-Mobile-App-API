@@ -77,8 +77,6 @@ exports.checkEmailExist = (email) => {
 };
 
 
-
-
 exports.generateEmpId = (jobRole) => {
   return new Promise((resolve, reject) => {
     try {
@@ -225,8 +223,6 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
 };
 
 
-
-
 exports.getIrmDetails = async (irmId, jobRole) => {
   return new Promise((resolve, reject) => {
     let sql = `
@@ -279,9 +275,6 @@ exports.getForCreateId = (role) => {
 };
 
 
-
-//////////////////////
-
 exports.getFarmerListByCollectionOfficerAndDate = (collectionOfficerId, date) => {
   // console.log('DAO: getFarmerListByCollectionOfficerAndDate', collectionOfficerId, date);
   return new Promise((resolve, reject) => {
@@ -325,12 +318,6 @@ exports.getFarmerListByCollectionOfficerAndDate = (collectionOfficerId, date) =>
     });
   });
 };
-
-///////////////
-
-
-
-
 
 
 exports.getClaimOfficer = (empID, jobRole) => {
@@ -424,10 +411,6 @@ exports.disclaimOfficer = (collectionOfficerId, jobRole) => {
     });
   });
 }
-
-
-
-
 
 exports.GetFarmerReportDetailsDao = async (userId, createdAtDate, registeredFarmerId) => {
   const query = `

@@ -209,11 +209,6 @@ exports.getAllRetailItems = asyncHandler(async (req, res) => {
         res.status(500).json({ message: "Failed to fetch Retail Items" });
     }
 });
-/////////////////replace modal data update 
-
-
-
-
 
 exports.replaceOrderPackage = async (req, res) => {
     console.log("Replace order package request data:", req.body);

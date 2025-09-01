@@ -1,5 +1,4 @@
 const express = require('express');
-const { addCropDetails, getAllCropNames, getVarietiesByCropId, getUnitPricesByCropId, getCropDetailsByUserId, getaddCollection } = require('../Controllers/unregisteredcropfarmer.controllers'); // Path to your controller
 const auth = require('../Middlewares/auth.middleware');
 const router = express.Router();
 const unRegisterdcropfamerEp = require('../end-point/unRegisteredCropFarmer-ep');
