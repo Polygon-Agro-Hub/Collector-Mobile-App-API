@@ -19,8 +19,6 @@ exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {
   });
 };
 
-
-
 exports.insertCropDetails = (registeredFarmerId, crop, officerId, centerId) => {
   return new Promise((resolve, reject) => {
     const {
@@ -181,9 +179,6 @@ AND EXISTS (
     });
   });
 };
-
-
-
 
 
 exports.getCropDetailsByUserAndFarmerId = async (userId, registeredFarmerId) => {
@@ -581,8 +576,6 @@ exports.getAllUsers = (officerId, nicNumber = null) => {
   });
 };
 
-
-// DAO method to update user address in the plant_care database
 // DAO method to update user address in the plant_care.users table
 exports.updateUserAddress = (userId, routeNumber, buildingNo, streetName, city) => {
   console.log(city)

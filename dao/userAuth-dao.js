@@ -1,27 +1,5 @@
 const db = require("../startup/database");
 
-
-// exports.getOfficerByEmpId = (empId) => {
-//   return new Promise((resolve, reject) => {
-//     const sql =
-//       "SELECT id, jobRole, empId FROM collectionofficer WHERE empId = ?";
-
-//     db.collectionofficer.query(sql, [empId], (err, results) => {
-//       if (err) {
-//         console.error("Database Query Error:", err.message);
-//         return reject(new Error("Database query failed. Please try again."));
-//       }
-
-//       if (results.length === 0) {
-//         console.warn(`No officer found for Employee ID: ${empId}`);
-//         return resolve(null);  // Return null instead of rejecting
-//       }
-
-//       console.log("Results:", results);
-//       resolve(results);
-//     });
-//   });
-// };
 exports.getOfficerByEmpId = (empId) => {
   return new Promise((resolve, reject) => {
     // Convert empId to uppercase before querying
@@ -250,8 +228,6 @@ exports.getQRCodeByOfficerId = (officerId) => {
 };
 
 
-// ------------created below codes after the collection officer update ------------- 
-
 exports.getOfficerDetailsById = (officerId, jobRole) => {
   return new Promise((resolve, reject) => {
     let sql = `
@@ -361,8 +337,6 @@ exports.updateOnlineStatusWithSocket = async (empId, status) => {
     });
   });
 }
-
-
 
 
 exports.getUserProfileImage = async (userId) => {
