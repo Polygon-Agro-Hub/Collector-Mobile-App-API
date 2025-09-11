@@ -67,6 +67,7 @@ exports.createOfficerComplain = asyncHandler(async (req, res) => {
 
         const complaintsOnDate = await ComplaintDao.countOfiicerComplaintsByDate(today);
         const referenceNumber = `${datePrefix}${String(complaintsOnDate + 1).padStart(3, '0')}`;
+        console.log("hit 3")
 
         const newComplainId = await ComplaintDao.createOfficerComplaint(
             coId,
