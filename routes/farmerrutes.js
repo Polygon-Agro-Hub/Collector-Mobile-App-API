@@ -1,5 +1,4 @@
 const express = require('express');
-const { addUserAndPaymentDetails, getRegisteredFarmerDetails, getUserWithBankDetails } = require('../Controllers/farmer.controllers'); // Path to your controller
 const auth = require('../Middlewares/auth.middleware');
 const router = express.Router();
 

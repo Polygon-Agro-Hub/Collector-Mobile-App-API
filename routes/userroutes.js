@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { getOfficerQRCode } = require('../Controllers/users.controller');
 const auth = require('../Middlewares/auth.middleware');
 const upload = require('../Middlewares/multer.middleware');
 

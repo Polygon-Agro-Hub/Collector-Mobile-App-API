@@ -323,10 +323,6 @@ exports.countComplaintsByDate = async (date) => {
 
 exports.countOfiicerComplaintsByDate = async (date) => {
     const formattedDate = date.toISOString().split('T')[0]; // Convert date to YYYY-MM-DD
-
-    console.log("data dao", date)
-
-    // Return a promise that resolves the count
     return new Promise((resolve, reject) => {
         const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
         db.collectionofficer.query(query, [formattedDate], (error, results) => {
