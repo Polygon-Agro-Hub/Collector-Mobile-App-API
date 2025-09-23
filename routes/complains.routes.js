@@ -1,5 +1,4 @@
 const express = require('express');
-const { createFarmerComplaint } = require('../Controllers/complains.controller');
 const router = express.Router();
 
 const ComplaintEp = require('../end-point/complaint-ep')

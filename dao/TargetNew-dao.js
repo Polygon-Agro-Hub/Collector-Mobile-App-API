@@ -1,7 +1,5 @@
 const { plantcare, collectionofficer, marketPlace, dash } = require('../startup/database');
 
-//test
-
 exports.getOfficerDailyTargets = (officerId) => {
   return new Promise((resolve, reject) => {
       if (!officerId) {

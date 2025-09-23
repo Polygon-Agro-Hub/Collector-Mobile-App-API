@@ -47,26 +47,27 @@ exports.createOfficerComplain = asyncHandler(async (req, res) => {
 
         const { language, complain, category } = req.body;
         let setlanguage;
-            if (language === 'en') {
-                setlanguage = 'English';
-            } else if (language === 'si') {
-                setlanguage = 'Sinhala';
-            } else if (language === 'ta') {
-                setlanguage = 'Tamil';
-            } 
+        if (language === 'en') {
+            setlanguage = 'English';
+        } else if (language === 'si') {
+            setlanguage = 'Sinhala';
+        } else if (language === 'ta') {
+            setlanguage = 'Tamil';
+        }
 
         const officerRole = req.user.role;
 
         console.log("Officer Role:", officerRole);
-     
 
-        console.log("Creating complain:", { coId, language, complain, category,  officerRole });
+
+        console.log("Creating complain:", { coId, language, complain, category, officerRole });
         const today = new Date();
         const YYMMDD = today.toISOString().slice(2, 10).replace(/-/g, '');
         const datePrefix = `${empId}${YYMMDD}`;
 
         const complaintsOnDate = await ComplaintDao.countOfiicerComplaintsByDate(today);
         const referenceNumber = `${datePrefix}${String(complaintsOnDate + 1).padStart(3, '0')}`;
+        console.log("hit 3")
 
         const newComplainId = await ComplaintDao.createOfficerComplaint(
             coId,
@@ -111,21 +112,7 @@ exports.getComplains = asyncHandler(async (req, res) => {
     }
 });
 
-// exports.getComplainReplyByid = asyncHandler(async(req, res) => {
-//     try {
-//         const reply = await ComplaintDao.getAllComplaintsByUserId(id);
 
-//         if (!complains || complains.length === 0) {
-//             return res.status(404).json({ message: "No complaints found" });
-//         }
-
-//         res.status(200).json(reply);
-//         console.log("reply fetched successfully", reply);
-//     } catch (error) {
-//         console.error("Error fetching complaints:", error);
-//         res.status(500).json({ message: "Failed to fetch complaints" });
-//     }
-// });
 
 exports.getComplainCategory = asyncHandler(async (req, res) => {
     try {
