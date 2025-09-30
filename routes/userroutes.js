@@ -7,7 +7,7 @@ const userAuthEp = require('../end-point/userAuth-ep');
 
 router.post('/login', userAuthEp.loginUser);
 router.post('/online-status', userAuthEp.updateOnlineStatus);
-router.post('/change-password', userAuthEp.updatePassword);
+router.post('/change-password',auth, userAuthEp.updatePassword);
 
 router.get('/user-profile', auth, userAuthEp.getProfile);
 

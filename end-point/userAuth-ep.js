@@ -140,35 +140,17 @@ exports.loginUser = async (req, res) => {
 
 
 exports.updatePassword = async (req, res) => {
-  const { empId, currentPassword, newPassword } = req.body;
-  console.log("Attempting to update password for empid:", empId);
+  const officerId = req.user.id;
+  const {  currentPassword, newPassword } = req.body;
+  console.log("Attempting to update password for empid:", officerId);
 
-  if (!empId || !currentPassword || !newPassword) {
+  if (!currentPassword || !newPassword) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
     // Get officer details by empId
-    const collectionOfficerResult = await userAuthDao.getOfficerByEmpId(empId);
-
-    // Check if officer exists
-    if (!collectionOfficerResult || collectionOfficerResult.length === 0) {
-      return res.status(404).json({
-        status: "error",
-        message: "Employee ID not found",
-      });
-    }
-
-    const collectionOfficerId = collectionOfficerResult[0]?.id;
-    const jobRole = collectionOfficerResult[0]?.jobRole; // Get the job role
-    console.log("Collection Officer ID:", collectionOfficerId);
-    console.log("Job Role:", jobRole);
-
-    // Get officer password with job role
-    const users = await userAuthDao.getOfficerPasswordById(
-      collectionOfficerId,
-      jobRole // Pass the job role as second parameter
-    );
+    const users = await userAuthDao.getOfficerByEmpIdChangePass(officerId);
 
     const officer = users[0];
     console.log("Stored Hashed Password (from DB):", officer.password);
@@ -190,7 +172,7 @@ exports.updatePassword = async (req, res) => {
     console.log("New Hashed Password:", hashedPassword);
 
     // Update password in database
-    await userAuthDao.updatePasswordInDatabase(collectionOfficerId, hashedPassword);
+    await userAuthDao.updatePasswordInDatabase(officerId, hashedPassword);
 
     res.status(200).json({
       status: "success",

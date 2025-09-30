@@ -26,6 +26,26 @@ exports.getOfficerByEmpId = (empId) => {
   });
 };
 
+exports.getOfficerByEmpIdChangePass = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = "SELECT id, empId, password FROM collectionofficer WHERE id = ?";
+
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Database Query Error:", err.message);
+        return reject(new Error("Database query failed. Please try again."));
+      }
+
+      if (results.length === 0) {
+        console.warn(`No officer found for Officer ID: ${officerId}`);
+        return resolve([]);
+      }
+
+      console.log("Results:", results);
+      resolve(results);
+    });
+  });
+};
 
 
 exports.getOfficerPasswordById = (id, jobRole) => {
@@ -114,7 +134,7 @@ exports.updateLoginStatus = (collectionOfficerId, status) => {
 }
 
 
-exports.updatePasswordInDatabase = (collectionOfficerId, hashedPassword) => {
+exports.updatePasswordInDatabase = (officerId, hashedPassword) => {
   return new Promise((resolve, reject) => {
     const updatePasswordSql = `
             UPDATE collectionofficer
@@ -123,7 +143,7 @@ exports.updatePasswordInDatabase = (collectionOfficerId, hashedPassword) => {
         `;
     db.collectionofficer.query(
       updatePasswordSql,
-      [hashedPassword, collectionOfficerId],
+      [hashedPassword, officerId],
       (err, result) => {
         if (err) {
           return reject("Database error while updating password");
