@@ -87,7 +87,7 @@ exports.generateEmpId = (jobRole) => {
       if (jobRole === "Collection Officer") {
         prefix = 'COO';
         searchPattern = 'COO%';
-      } else if (jobRole === "Distribution Officer" || jobRole === "Distribution Center Manager") {
+      } else if (jobRole === "Distribution Officer" || jobRole === "Distribution Centre Manager") {
         prefix = 'DIO';
         searchPattern = 'DIO%';
       } else {
@@ -159,7 +159,7 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
       `;
 
-      if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+      if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
         sql = `
           INSERT INTO collectionofficer (
             distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
@@ -231,7 +231,7 @@ exports.getIrmDetails = async (irmId, jobRole) => {
       WHERE id = ?;
     `;
 
-    if (jobRole === "Distribution Center Manager" || jobRole === "Distribution Officer") {
+    if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
       sql = `
         SELECT companyId, distributedCenterId AS centerId
         FROM collectionofficer
@@ -362,7 +362,7 @@ exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
         id = ?
     `;
 
-    if (mangerJobRole === "Distribution Center Manager") {
+    if (mangerJobRole === "Distribution Centre Manager") {
       sql = `
       UPDATE collectionofficer 
       SET 
