@@ -72,9 +72,9 @@ exports.loginUser = async (req, res) => {
     let center;
     // Case-insensitive job role comparison
     const normalizedJobRole = jobRole.toLowerCase();
-    if (normalizedJobRole === "collection officer" || normalizedJobRole === "collection center manager") {
+    if (normalizedJobRole === "collection officer" || normalizedJobRole === "collection centre manager") {
       center = centerId;
-    } else if (normalizedJobRole === "distribution center manager" || normalizedJobRole === "distribution officer") {
+    } else if (normalizedJobRole === "distribution centre manager" || normalizedJobRole === "distribution officer") {
       center = distributionCenterId;
     }
 
