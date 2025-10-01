@@ -403,7 +403,7 @@ exports.sendSMSToFarmers = asyncHandler(async (req, res) => {
             };
 
             const body = {
-                source: "AgroWorld",
+                source: "PolygonAgro",
                 destinations: [formattedPhone],
                 content: { sms: message },
                 transports: ["sms"],

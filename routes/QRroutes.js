@@ -1,5 +1,4 @@
 const express = require('express');
-const {getUserData} = require('../Controllers/QRcontroller');
 const router = express.Router();
 
 const qrGenerateEp = require('../end-point/qrGenerate-ep')

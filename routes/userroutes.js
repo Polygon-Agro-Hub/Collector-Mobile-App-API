@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { getOfficerQRCode } = require('../Controllers/users.controller');
 const auth = require('../Middlewares/auth.middleware');
 const upload = require('../Middlewares/multer.middleware');
 
@@ -8,7 +7,7 @@ const userAuthEp = require('../end-point/userAuth-ep');
 
 router.post('/login', userAuthEp.loginUser);
 router.post('/online-status', userAuthEp.updateOnlineStatus);
-router.post('/change-password', userAuthEp.updatePassword);
+router.post('/change-password',auth, userAuthEp.updatePassword);
 
 router.get('/user-profile', auth, userAuthEp.getProfile);
 

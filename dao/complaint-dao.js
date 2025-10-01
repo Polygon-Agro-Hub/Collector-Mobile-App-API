@@ -46,62 +46,62 @@ exports.checkIfUserExists = (userId) => {
 // };
 
 
-exports.createOfficerComplaint = (
-    coId,
-    setlanguage,
-    complain,
-    category,
-    referenceNumber,
-    officerRole
-) => {
-    console.log("hit 4")
-    return new Promise((resolve, reject) => {
-        let sql, values;
+// exports.createOfficerComplaint = (
+//     coId,
+//     setlanguage,
+//     complain,
+//     category,
+//     referenceNumber,
+//     officerRole
+// ) => {
+//     console.log("hit 4")
+//     return new Promise((resolve, reject) => {
+//         let sql, values;
 
-        if (officerRole === 'Collection Center Manager' || officerRole === 'Driver') {
-            sql = `
-                INSERT INTO officercomplains 
-                (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            values = [coId, setlanguage, complain, category, 'Opened', null, 'Assigned', referenceNumber, 'CCH'];
+//         if (officerRole === 'Collection Centre Manager' || officerRole === 'Driver') {
+//             sql = `
+//                 INSERT INTO officercomplains 
+//                 (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign)
+//                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//             `;
+//             values = [coId, setlanguage, complain, category, 'Opened', null, 'Assigned', referenceNumber, 'CCH'];
 
-        } else if (officerRole === 'Collection Officer') {
-            sql = `
-                INSERT INTO officercomplains 
-                (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            values = [coId, setlanguage, complain, category, 'Assigned', 'Opened', null, referenceNumber, 'CCM'];
+//         } else if (officerRole === 'Collection Officer') {
+//             sql = `
+//                 INSERT INTO officercomplains 
+//                 (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign)
+//                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//             `;
+//             values = [coId, setlanguage, complain, category, 'Assigned', 'Opened', null, referenceNumber, 'CCM'];
 
-        } else if (officerRole === 'Distribution Center Manager') {
-            sql = `
-                INSERT INTO distributedcomplains 
-                (officerId, language, complain, complainCategory, DIOStatus, DCMStatus, DCHstatus, refNo, complainAssign)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            values = [coId, setlanguage, complain, category, null, 'Opened', 'Assigned', referenceNumber, 'DCH'];
+//         } else if (officerRole === 'Distribution Centre Manager') {
+//             sql = `
+//                 INSERT INTO distributedcomplains 
+//                 (officerId, language, complain, complainCategory, DIOStatus, DCMStatus, DCHstatus, refNo, complainAssign)
+//                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//             `;
+//             values = [coId, setlanguage, complain, category, null, 'Opened', 'Assigned', referenceNumber, 'DCH'];
 
-        } else if (officerRole === 'Distribution Officer') {
-            sql = `
-                INSERT INTO distributedcomplains 
-                (officerId, language, complain, complainCategory, DIOStatus, DCMStatus, DCHstatus, refNo, complainAssign)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            values = [coId, setlanguage, complain, category, 'Opened', 'Assigned', null, referenceNumber, 'DCM'];
+//         } else if (officerRole === 'Distribution Officer') {
+//             sql = `
+//                 INSERT INTO distributedcomplains 
+//                 (officerId, language, complain, complainCategory, DIOStatus, DCMStatus, DCHstatus, refNo, complainAssign)
+//                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//             `;
+//             values = [coId, setlanguage, complain, category, 'Opened', 'Assigned', null, referenceNumber, 'DCM'];
 
-        } else {
-            return reject(new Error('Invalid officer role'));
-        }
+//         } else {
+//             return reject(new Error('Invalid officer role'));
+//         }
 
-        db.collectionofficer.query(sql, values, (err, result) => {
-            if (err) {
-                return reject(err);
-            }
-            resolve(result.insertId); // Return the inserted ID
-        });
-    });
-};
+//         db.collectionofficer.query(sql, values, (err, result) => {
+//             if (err) {
+//                 return reject(err);
+//             }
+//             resolve(result.insertId); // Return the inserted ID
+//         });
+//     });
+// };
 
 
 // exports.getAllComplaintsByUserId = async (userId, officerRole) => {
@@ -155,7 +155,7 @@ exports.createOfficerComplaint = (
     return new Promise((resolve, reject) => {
         let sql, values;
 
-        if (officerRole === 'Collection Center Manager' || officerRole === 'Driver') {
+        if (officerRole === 'Collection Centre Manager' || officerRole === 'Driver') {
             sql = `
                 INSERT INTO officercomplains 
                 (officerId, language, complain, complainCategory, CCMStatus, COOStatus, CCHStatus, refNo, complainAssign)
@@ -171,7 +171,7 @@ exports.createOfficerComplaint = (
             `;
             values = [coId, setlanguage, complain, category, 'Assigned', 'Opened', null, referenceNumber, 'CCM'];
 
-        } else if (officerRole === 'Distribution Center Manager') {
+        } else if (officerRole === 'Distribution Centre Manager') {
             sql = `
                 INSERT INTO distributedcomplains 
                 (officerId, language, complain, complainCategory, DIOStatus, DCMStatus, DCHstatus, refNo, complainAssign)
@@ -220,7 +220,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                 WHERE officerId = ?
                 ORDER BY createdAt DESC
             `;
-        } else if (officerRole === 'Collection Center Manager' || officerRole === 'Driver') {
+        } else if (officerRole === 'Collection Centre Manager' || officerRole === 'Driver') {
             statusColumn = 'CCMStatus';
             query = `
                 SELECT 
@@ -236,7 +236,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                 WHERE officerId = ?
                 ORDER BY createdAt DESC
             `;
-        } else if (officerRole === 'Distribution Center Manager') {
+        } else if (officerRole === 'Distribution Centre Manager') {
             statusColumn = 'DCMStatus';
             query = `
                 SELECT 
@@ -323,10 +323,6 @@ exports.countComplaintsByDate = async (date) => {
 
 exports.countOfiicerComplaintsByDate = async (date) => {
     const formattedDate = date.toISOString().split('T')[0]; // Convert date to YYYY-MM-DD
-
-    console.log("data dao", date)
-
-    // Return a promise that resolves the count
     return new Promise((resolve, reject) => {
         const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
         db.collectionofficer.query(query, [formattedDate], (error, results) => {
