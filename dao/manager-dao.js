@@ -551,6 +551,28 @@ exports.getCollectionOfficers = async (managerId) => {
 };
 
 
+exports.getCollectionOfficersList = async (managerId) => {
+  console.log("manager id", managerId)
+  const sql = `
+    SELECT 
+      empId, 
+      CONCAT(firstNameEnglish, ' ', lastNameEnglish) AS fullNameEnglish,
+      CONCAT(firstNameSinhala, ' ', lastNameSinhala) AS fullNameSinhala,
+      CONCAT(firstNameTamil, ' ', lastNameTamil) AS fullNameTamil,
+      phoneNumber01 AS phoneNumber1,
+      phoneNumber02 AS phoneNumber2,
+      id AS collectionOfficerId,
+      jobRole,
+      status,
+      image
+    FROM collectionofficer
+    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ?
+  `;
+  return db.collectionofficer.promise().query(sql, [managerId]);
+};
+
+
+
 
 exports.getOfficerDetails = async (empId) => {
   const sql = `

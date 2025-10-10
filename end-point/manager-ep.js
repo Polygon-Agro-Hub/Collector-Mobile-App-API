@@ -336,6 +336,33 @@ exports.getCollectionOfficers = async (req, res) => {
   }
 };
 
+
+exports.getCollectionOfficersList = async (req, res) => {
+  try {
+    const managerId = req.user.id;
+    const [rows] = await collectionofficerDao.getCollectionOfficersList(managerId);
+    console.log(rows)
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No collection officers found for the given manager ID.',
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: rows,
+    });
+  } catch (error) {
+    console.error('Error fetching collection officers:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while fetching collection officers.',
+    });
+  }
+};
+
 exports.getFarmerPaymentsSummary = async (req, res) => {
   const schema = Joi.object({
     collectionOfficerId: Joi.number().integer().required(),
