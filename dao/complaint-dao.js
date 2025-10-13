@@ -200,6 +200,89 @@ exports.createOfficerComplaint = (
     });
 };
 
+// exports.getAllComplaintsByUserId = async (userId, officerRole) => {
+//     return new Promise((resolve, reject) => {
+//         let query, statusColumn;
+
+//         if (officerRole === 'Collection Officer') {
+//             statusColumn = 'COOStatus';
+//             query = `
+//                 SELECT 
+//                     id,
+//                     language,
+//                     complain,
+//                     ${statusColumn} AS status,
+//                     createdAt,
+//                     complainCategory,
+//                     reply,
+//                     refNo
+//                 FROM officercomplains 
+//                 WHERE officerId = ?
+//                 ORDER BY createdAt DESC
+//             `;
+//         } else if (officerRole === 'Collection Centre Manager' || officerRole === 'Driver') {
+//             statusColumn = 'CCMStatus';
+//             query = `
+//                 SELECT 
+//                     id,
+//                     language,
+//                     complain,
+//                     ${statusColumn} AS status,
+//                     createdAt,
+//                     complainCategory,
+//                     reply,
+//                     refNo
+//                 FROM officercomplains 
+//                 WHERE officerId = ?
+//                 ORDER BY createdAt DESC
+//             `;
+//         } else if (officerRole === 'Distribution Centre Manager') {
+//             statusColumn = 'DCMStatus';
+//             query = `
+//                 SELECT 
+//                     id,
+//                     language,
+//                     complain,
+//                     ${statusColumn} AS status,
+//                     createdAt,
+//                     complainCategory,
+//                     reply,
+//                     refNo
+//                 FROM distributedcomplains 
+//                 WHERE officerId = ?
+//                 ORDER BY createdAt DESC
+//             `;
+//         } else if (officerRole === 'Distribution Officer') {
+//             statusColumn = 'DIOStatus';
+//             query = `
+//                 SELECT 
+//                     id,
+//                     language,
+//                     complain,
+//                     ${statusColumn} AS status,
+//                     createdAt,
+//                     complainCategory,
+//                     reply,
+//                     refNo
+//                 FROM distributedcomplains 
+//                 WHERE officerId = ?
+//                 ORDER BY createdAt DESC
+//             `;
+//         } else {
+//             return reject(new Error('Invalid officer role'));
+//         }
+
+//         db.collectionofficer.query(query, [userId], (error, results) => {
+//             if (error) {
+//                 console.error("Error fetching complaints:", error);
+//                 reject(error);
+//             } else {
+//                 resolve(results);
+//             }
+//         });
+//     });
+// };
+
 exports.getAllComplaintsByUserId = async (userId, officerRole) => {
     return new Promise((resolve, reject) => {
         let query, statusColumn;
@@ -208,65 +291,125 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
             statusColumn = 'COOStatus';
             query = `
                 SELECT 
-                    id,
-                    language,
-                    complain,
-                    ${statusColumn} AS status,
-                    createdAt,
-                    complainCategory,
-                    reply,
-                    refNo
-                FROM officercomplains 
-                WHERE officerId = ?
-                ORDER BY createdAt DESC
+                    oc.id,
+                    oc.complain,
+                    oc.${statusColumn} AS status,
+                    oc.createdAt,
+                    oc.complainCategory,
+                    oc.reply,
+                    oc.refNo,
+                    oc.complainAssign,
+                    oc.replyTime,
+                    co.firstNameEnglish AS replyByFirstNameEnglish,
+                    co.firstNameSinhala AS replyByFirstNameSinhala,
+                    co.firstNameTamil AS replyByFirstNameTamil,
+                    co.lastNameEnglish AS replyByLastNameEnglish,
+                    co.lastNameSinhala AS replyByLastNameSinhala,
+                    co.lastNameTamil AS replyByLastNameTamil,
+                    comp.companyNameEnglish,
+                    comp.companyNameSinhala,
+                    comp.companyNameTamil,
+                    cc.centerName AS replierCenterName,
+                    cc.regCode AS replierCenterRegCode
+                FROM officercomplains oc
+                LEFT JOIN collectionofficer co ON oc.replyBy = co.id
+                LEFT JOIN company comp ON co.companyId = comp.id
+                LEFT JOIN collectioncenter cc ON co.centerId = cc.id
+                WHERE oc.officerId = ?
+                ORDER BY oc.createdAt DESC
             `;
         } else if (officerRole === 'Collection Centre Manager' || officerRole === 'Driver') {
             statusColumn = 'CCMStatus';
             query = `
                 SELECT 
-                    id,
-                    language,
-                    complain,
-                    ${statusColumn} AS status,
-                    createdAt,
-                    complainCategory,
-                    reply,
-                    refNo
-                FROM officercomplains 
-                WHERE officerId = ?
-                ORDER BY createdAt DESC
+                    oc.id,
+                    oc.complain,
+                    oc.${statusColumn} AS status,
+                    oc.createdAt,
+                    oc.complainCategory,
+                    oc.reply,
+                    oc.refNo,
+                    oc.complainAssign,
+                    oc.replyTime,
+                    co.firstNameEnglish AS replyByFirstNameEnglish,
+                    co.firstNameSinhala AS replyByFirstNameSinhala,
+                    co.firstNameTamil AS replyByFirstNameTamil,
+                    co.lastNameEnglish AS replyByLastNameEnglish,
+                    co.lastNameSinhala AS replyByLastNameSinhala,
+                    co.lastNameTamil AS replyByLastNameTamil,
+                    comp.companyNameEnglish,
+                    comp.companyNameSinhala,
+                    comp.companyNameTamil,
+                    cc.centerName AS replierCenterName,
+                    cc.regCode AS replierCenterRegCode
+                FROM officercomplains oc
+                LEFT JOIN collectionofficer co ON oc.replyBy = co.id
+                LEFT JOIN company comp ON co.companyId = comp.id
+                LEFT JOIN collectioncenter cc ON co.centerId = cc.id
+                WHERE oc.officerId = ?
+                ORDER BY oc.createdAt DESC
             `;
         } else if (officerRole === 'Distribution Centre Manager') {
             statusColumn = 'DCMStatus';
             query = `
                 SELECT 
-                    id,
-                    language,
-                    complain,
-                    ${statusColumn} AS status,
-                    createdAt,
-                    complainCategory,
-                    reply,
-                    refNo
-                FROM distributedcomplains 
-                WHERE officerId = ?
-                ORDER BY createdAt DESC
+                    dc.id,
+                    dc.complain,
+                    dc.${statusColumn} AS status,
+                    dc.createdAt,
+                    dc.complainCategory,
+                    dc.reply,
+                    dc.refNo,
+                    dc.complainAssign,
+                    dc.replyTime,
+                    co.firstNameEnglish AS replyByFirstNameEnglish,
+                    co.firstNameSinhala AS replyByFirstNameSinhala,
+                    co.firstNameTamil AS replyByFirstNameTamil,
+                    co.lastNameEnglish AS replyByLastNameEnglish,
+                    co.lastNameSinhala AS replyByLastNameSinhala,
+                    co.lastNameTamil AS replyByLastNameTamil,
+                    comp.companyNameEnglish,
+                    comp.companyNameSinhala,
+                    comp.companyNameTamil,
+                    dc_center.centerName AS replierCenterName,
+                    dc_center.regCode AS replierCenterRegCode
+                FROM distributedcomplains dc
+                LEFT JOIN collectionofficer co ON dc.replyBy = co.id
+                LEFT JOIN company comp ON co.companyId = comp.id
+                LEFT JOIN distributedcenter dc_center ON co.distributedCenterId = dc_center.id
+                WHERE dc.officerId = ?
+                ORDER BY dc.createdAt DESC
             `;
         } else if (officerRole === 'Distribution Officer') {
             statusColumn = 'DIOStatus';
             query = `
                 SELECT 
-                    id,
-                    language,
-                    complain,
-                    ${statusColumn} AS status,
-                    createdAt,
-                    complainCategory,
-                    reply,
-                    refNo
-                FROM distributedcomplains 
-                WHERE officerId = ?
-                ORDER BY createdAt DESC
+                    dc.id,
+                    dc.complain,
+                    dc.${statusColumn} AS status,
+                    dc.createdAt,
+                    dc.complainCategory,
+                    dc.reply,
+                    dc.refNo,
+                    dc.complainAssign,
+                    dc.replyTime,
+                    co.firstNameEnglish AS replyByFirstNameEnglish,
+                    co.firstNameSinhala AS replyByFirstNameSinhala,
+                    co.firstNameTamil AS replyByFirstNameTamil,
+                    co.lastNameEnglish AS replyByLastNameEnglish,
+                    co.lastNameSinhala AS replyByLastNameSinhala,
+                    co.lastNameTamil AS replyByLastNameTamil,
+                    comp.companyNameEnglish,
+                    comp.companyNameSinhala,
+                    comp.companyNameTamil,
+                    dc_center.centerName AS replierCenterName,
+                    dc_center.regCode AS replierCenterRegCode
+                FROM distributedcomplains dc
+                LEFT JOIN collectionofficer co ON dc.replyBy = co.id
+                LEFT JOIN company comp ON co.companyId = comp.id
+                LEFT JOIN distributedcenter dc_center ON co.distributedCenterId = dc_center.id
+                WHERE dc.officerId = ?
+                ORDER BY dc.createdAt DESC
             `;
         } else {
             return reject(new Error('Invalid officer role'));
@@ -277,12 +420,50 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                 console.error("Error fetching complaints:", error);
                 reject(error);
             } else {
-                resolve(results);
+                // Transform results to include formatted officer names
+                const transformedResults = results.map(complaint => {
+                    let replyByOfficerName = null;
+
+                    if (complaint.replyByFirstNameEnglish) {
+                        // Default to English names
+                        replyByOfficerName = `${complaint.replyByFirstNameEnglish || ''} ${complaint.replyByLastNameEnglish || ''}`.trim();
+                    }
+
+                    let companyName = complaint.companyNameEnglish || null;
+
+                    return {
+                        id: complaint.id,
+                        complain: complaint.complain,
+                        status: complaint.status,
+                        createdAt: complaint.createdAt,
+                        complainCategory: complaint.complainCategory,
+                        reply: complaint.reply,
+                        refNo: complaint.refNo,
+                        complainAssign: complaint.complainAssign,
+                        replyTime: complaint.replyTime,
+                        replyByOfficerName: replyByOfficerName,
+                        companyName: companyName,
+                        // Include all name variants for frontend flexibility
+                        replyByFirstNameEnglish: complaint.replyByFirstNameEnglish,
+                        replyByFirstNameSinhala: complaint.replyByFirstNameSinhala,
+                        replyByFirstNameTamil: complaint.replyByFirstNameTamil,
+                        replyByLastNameEnglish: complaint.replyByLastNameEnglish,
+                        replyByLastNameSinhala: complaint.replyByLastNameSinhala,
+                        replyByLastNameTamil: complaint.replyByLastNameTamil,
+                        companyNameEnglish: complaint.companyNameEnglish,
+                        companyNameSinhala: complaint.companyNameSinhala,
+                        companyNameTamil: complaint.companyNameTamil,
+                        // NEW: Include center information
+                        replierCenterName: complaint.replierCenterName,
+                        replierCenterRegCode: complaint.replierCenterRegCode
+                    };
+                });
+
+                resolve(transformedResults);
             }
         });
     });
 };
-
 
 exports.getComplainCategories = async (appName) => {
     return new Promise((resolve, reject) => {
@@ -321,16 +502,73 @@ exports.countComplaintsByDate = async (date) => {
     });
 };
 
-exports.countOfiicerComplaintsByDate = async (date) => {
-    const formattedDate = date.toISOString().split('T')[0]; // Convert date to YYYY-MM-DD
+// exports.countOfiicerComplaintsByDate = async (date) => {
+//     const formattedDate = date.toISOString().split('T')[0]; // Convert date to YYYY-MM-DD
+//     return new Promise((resolve, reject) => {
+//         const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+//         db.collectionofficer.query(query, [formattedDate], (error, results) => {
+//             if (error) {
+//                 console.error("Error fetching complaints:", error);
+//                 reject(error);  // Reject the promise on error
+//             } else {
+//                 resolve(results[0].count);  // Resolve the promise with the count
+//             }
+//         });
+//     });
+// };
+
+exports.countOfiicerComplaintsByDate = async (date, officerRole) => {
+    const formattedDate = date.toISOString().split('T')[0];
     return new Promise((resolve, reject) => {
-        const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+        let query;
+
+        // Count from appropriate table based on officer role
+        if (officerRole === 'Distribution Centre Manager' || officerRole === 'Distribution Officer') {
+            query = `SELECT COUNT(*) AS count FROM distributedcomplains WHERE DATE(createdAt) = ?`;
+        } else {
+            query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+        }
+
         db.collectionofficer.query(query, [formattedDate], (error, results) => {
             if (error) {
                 console.error("Error fetching complaints:", error);
-                reject(error);  // Reject the promise on error
+                reject(error);
             } else {
-                resolve(results[0].count);  // Resolve the promise with the count
+                resolve(results[0].count);
+            }
+        });
+    });
+};
+
+exports.countOfficerComplaintsByDate = async (date) => {
+    const formattedDate = date.toISOString().split('T')[0];
+
+    return new Promise((resolve, reject) => {
+        const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+
+        db.collectionofficer.query(query, [formattedDate], (error, results) => {
+            if (error) {
+                console.error("Error fetching officer complaints:", error);
+                reject(error);
+            } else {
+                resolve(results[0].count);
+            }
+        });
+    });
+};
+
+exports.countDistributedComplaintsByDate = async (date) => {
+    const formattedDate = date.toISOString().split('T')[0];
+
+    return new Promise((resolve, reject) => {
+        const query = `SELECT COUNT(*) AS count FROM distributedcomplains WHERE DATE(createdAt) = ?`;
+
+        db.collectionofficer.query(query, [formattedDate], (error, results) => {
+            if (error) {
+                console.error("Error fetching distributed complaints:", error);
+                reject(error);
+            } else {
+                resolve(results[0].count);
             }
         });
     });
