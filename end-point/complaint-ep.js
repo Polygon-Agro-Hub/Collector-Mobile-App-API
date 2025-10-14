@@ -40,12 +40,68 @@ exports.createFarmerComplaint = async (req, res) => {
 };
 
 
+// exports.createOfficerComplain = asyncHandler(async (req, res) => {
+//     try {
+//         const coId = req.user.id;
+//         const empId = req.user.empId
+
+//         const { language, complain, category } = req.body;
+//         let setlanguage;
+//         if (language === 'en') {
+//             setlanguage = 'English';
+//         } else if (language === 'si') {
+//             setlanguage = 'Sinhala';
+//         } else if (language === 'ta') {
+//             setlanguage = 'Tamil';
+//         }
+
+//         const officerRole = req.user.role;
+
+//         console.log("Officer Role:", officerRole);
+
+
+//         console.log("Creating complain:", { coId, language, complain, category, officerRole });
+//         const today = new Date();
+//         const YYMMDD = today.toISOString().slice(2, 10).replace(/-/g, '');
+//         const datePrefix = `${empId}${YYMMDD}`;
+
+//         // const complaintsOnDate = await ComplaintDao.countOfiicerComplaintsByDate(today);
+//         // Change this line in your endpoint:
+//         const complaintsOnDate = await ComplaintDao.countOfiicerComplaintsByDate(today, officerRole);
+//         const referenceNumber = `${datePrefix}${String(complaintsOnDate + 1).padStart(3, '0')}`;
+//         console.log("hit 3")
+
+//         const newComplainId = await ComplaintDao.createOfficerComplaint(
+//             coId,
+//             setlanguage,
+//             complain,
+//             category,
+//             referenceNumber,
+//             officerRole
+//         );
+
+//         res.status(201).json({
+//             status: "success",
+//             message: "Complain created successfully.",
+//             complainId: newComplainId,
+//         });
+//     } catch (err) {
+//         console.error("Error creating complain:", err);
+
+//         res.status(500).json({
+//             status: "error",
+//             message: "Internal Server Error",
+//         });
+//     }
+// });
+
 exports.createOfficerComplain = asyncHandler(async (req, res) => {
     try {
         const coId = req.user.id;
-        const empId = req.user.empId
-
+        const empId = req.user.empId;
         const { language, complain, category } = req.body;
+        const officerRole = req.user.role;
+
         let setlanguage;
         if (language === 'en') {
             setlanguage = 'English';
@@ -55,19 +111,29 @@ exports.createOfficerComplain = asyncHandler(async (req, res) => {
             setlanguage = 'Tamil';
         }
 
-        const officerRole = req.user.role;
+        console.log("Creating complain:", { coId, empId, language, complain, category, officerRole });
 
-        console.log("Officer Role:", officerRole);
-
-
-        console.log("Creating complain:", { coId, language, complain, category, officerRole });
         const today = new Date();
         const YYMMDD = today.toISOString().slice(2, 10).replace(/-/g, '');
-        const datePrefix = `${empId}${YYMMDD}`;
 
-        const complaintsOnDate = await ComplaintDao.countOfiicerComplaintsByDate(today);
-        const referenceNumber = `${datePrefix}${String(complaintsOnDate + 1).padStart(3, '0')}`;
-        console.log("hit 3")
+        let complaintsOnDate;
+
+        // Count from appropriate table based on officer role
+        if (officerRole === 'Distribution Centre Manager' || officerRole === 'Distribution Officer') {
+            complaintsOnDate = await ComplaintDao.countDistributedComplaintsByDate(today);
+            console.log("Distributed complaints today:", complaintsOnDate);
+        } else {
+            complaintsOnDate = await ComplaintDao.countOfficerComplaintsByDate(today);
+            console.log("Officer complaints today:", complaintsOnDate);
+        }
+
+        // Generate sequential number for the specific table
+        const sequentialNumber = String(complaintsOnDate + 1).padStart(4, '0');
+
+        // Format: empId + YYMMDD + table-specific 4-digit sequential number
+        const referenceNumber = `${empId}${YYMMDD}${sequentialNumber}`;
+
+        console.log("Generated Reference Number:", referenceNumber);
 
         const newComplainId = await ComplaintDao.createOfficerComplaint(
             coId,
@@ -82,16 +148,17 @@ exports.createOfficerComplain = asyncHandler(async (req, res) => {
             status: "success",
             message: "Complain created successfully.",
             complainId: newComplainId,
+            referenceNumber: referenceNumber
         });
     } catch (err) {
         console.error("Error creating complain:", err);
-
         res.status(500).json({
             status: "error",
             message: "Internal Server Error",
         });
     }
 });
+
 
 exports.getComplains = asyncHandler(async (req, res) => {
     console.log("Fetching complaints...");
