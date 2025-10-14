@@ -545,7 +545,6 @@ exports.getCollectionOfficers = async (managerId) => {
     FROM collectionofficer
     WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
       AND irmId = ?
-      AND status = 'Approved'
   `;
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
@@ -566,7 +565,7 @@ exports.getCollectionOfficersList = async (managerId) => {
       status,
       image
     FROM collectionofficer
-    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ?
+    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ? 
   `;
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
