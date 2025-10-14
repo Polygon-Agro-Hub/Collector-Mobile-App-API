@@ -116,21 +116,21 @@ exports.createOfficerComplain = asyncHandler(async (req, res) => {
         const today = new Date();
         const YYMMDD = today.toISOString().slice(2, 10).replace(/-/g, '');
 
-        let complaintsOnDate;
+        let complaintsOnDateForOfficer;
 
-        // Count from appropriate table based on officer role
+        // Count complaints for THIS SPECIFIC OFFICER on this date
         if (officerRole === 'Distribution Centre Manager' || officerRole === 'Distribution Officer') {
-            complaintsOnDate = await ComplaintDao.countDistributedComplaintsByDate(today);
-            console.log("Distributed complaints today:", complaintsOnDate);
+            complaintsOnDateForOfficer = await ComplaintDao.countDistributedComplaintsByDateAndOfficer(today, coId);
+            console.log("Distributed complaints today for this officer:", complaintsOnDateForOfficer);
         } else {
-            complaintsOnDate = await ComplaintDao.countOfficerComplaintsByDate(today);
-            console.log("Officer complaints today:", complaintsOnDate);
+            complaintsOnDateForOfficer = await ComplaintDao.countOfficerComplaintsByDateAndOfficer(today, coId);
+            console.log("Officer complaints today for this officer:", complaintsOnDateForOfficer);
         }
 
-        // Generate sequential number for the specific table
-        const sequentialNumber = String(complaintsOnDate + 1).padStart(4, '0');
+        // Generate sequential number for this specific officer
+        const sequentialNumber = String(complaintsOnDateForOfficer + 1).padStart(4, '0');
 
-        // Format: empId + YYMMDD + table-specific 4-digit sequential number
+        // Format: empId + YYMMDD + officer-specific 4-digit sequential number
         const referenceNumber = `${empId}${YYMMDD}${sequentialNumber}`;
 
         console.log("Generated Reference Number:", referenceNumber);

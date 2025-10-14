@@ -540,13 +540,17 @@ exports.countOfiicerComplaintsByDate = async (date, officerRole) => {
     });
 };
 
-exports.countOfficerComplaintsByDate = async (date) => {
+exports.countOfficerComplaintsByDateAndOfficer = async (date, officerId) => {
     const formattedDate = date.toISOString().split('T')[0];
 
     return new Promise((resolve, reject) => {
-        const query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+        const query = `
+            SELECT COUNT(*) AS count 
+            FROM officercomplains 
+            WHERE DATE(createdAt) = ? AND officerId = ?
+        `;
 
-        db.collectionofficer.query(query, [formattedDate], (error, results) => {
+        db.collectionofficer.query(query, [formattedDate, officerId], (error, results) => {
             if (error) {
                 console.error("Error fetching officer complaints:", error);
                 reject(error);
@@ -557,13 +561,17 @@ exports.countOfficerComplaintsByDate = async (date) => {
     });
 };
 
-exports.countDistributedComplaintsByDate = async (date) => {
+exports.countDistributedComplaintsByDateAndOfficer = async (date, officerId) => {
     const formattedDate = date.toISOString().split('T')[0];
 
     return new Promise((resolve, reject) => {
-        const query = `SELECT COUNT(*) AS count FROM distributedcomplains WHERE DATE(createdAt) = ?`;
+        const query = `
+            SELECT COUNT(*) AS count 
+            FROM distributedcomplains 
+            WHERE DATE(createdAt) = ? AND officerId = ?
+        `;
 
-        db.collectionofficer.query(query, [formattedDate], (error, results) => {
+        db.collectionofficer.query(query, [formattedDate, officerId], (error, results) => {
             if (error) {
                 console.error("Error fetching distributed complaints:", error);
                 reject(error);
