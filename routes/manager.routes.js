@@ -9,6 +9,8 @@ const driverEp = require('../end-point/Driver-ep')
 // Route to get collection officers under a specific manager
 router.get('/collection-officers', authenticate, managerEp.getCollectionOfficers);
 
+router.get('/collection-officers-recieve/:varietyId/:grade', authenticate, managerEp.getCollectionOfficersReciever);
+
 router.get('/collection-officerslist', authenticate, managerEp.getCollectionOfficersList);
 
 //Route to add a collection officer
