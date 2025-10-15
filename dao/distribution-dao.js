@@ -1085,65 +1085,199 @@ exports.createReplaceRequestDao = (replaceData) => {
 };
 
 // Handle DCM updates - only update orderpackageitems table
+// function handleDCMUpdates(connection, replaceData, resolve, reject) {
+//     console.log("Processing DCM updates");
+
+//     // DCM can only update productType, productId, qty, price (NOT isPacked)
+//     const updateItemsSql = `
+//         UPDATE market_place.orderpackageitems 
+//         SET productType = ?, productId = ?, qty = ?, price = ?
+//         WHERE id = ? AND orderPackageId = ?
+//     `;
+
+//     const updateItemsValues = [
+//         replaceData.productType,
+//         replaceData.productId,
+//         replaceData.qty,
+//         replaceData.price,
+//         replaceData.replaceId,
+//         replaceData.orderPackageId
+//     ];
+
+//     console.log("DCM updating specific orderpackageitem (limited fields):", updateItemsValues);
+
+//     connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
+//         if (err) {
+//             console.error("Error updating orderpackageitems:", err);
+//             return connection.rollback(() => {
+//                 connection.release();
+//                 reject(err);
+//             });
+//         }
+
+//         console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
+
+//         if (itemsResult.affectedRows === 0) {
+//             console.warn("No orderpackageitem was updated - item might not exist");
+//             return connection.rollback(() => {
+//                 connection.release();
+//                 reject(new Error("Failed to update orderpackageitem"));
+//             });
+//         }
+
+//         // Commit transaction for DCM
+//         connection.commit((err) => {
+//             if (err) {
+//                 console.error("Error committing DCM transaction:", err);
+//                 return connection.rollback(() => {
+//                     connection.release();
+//                     reject(err);
+//                 });
+//             }
+
+//             console.log("DCM transaction completed successfully");
+//             connection.release();
+
+//             resolve({
+//                 orderPackageId: replaceData.orderPackageId,
+//                 replaceItemId: replaceData.replaceId,
+//                 message: "Order package item updated successfully by DCM",
+//                 updatedBy: replaceData.userId,
+//                 permissions: 'DCM - Limited access (orderpackageitems only)'
+//             });
+//         });
+//     });
+// }
+
+
+// Handle DCM updates - save previous data and update orderpackageitems table
 function handleDCMUpdates(connection, replaceData, resolve, reject) {
     console.log("Processing DCM updates");
 
-    // DCM can only update productType, productId, qty, price (NOT isPacked)
-    const updateItemsSql = `
-        UPDATE market_place.orderpackageitems 
-        SET productType = ?, productId = ?, qty = ?, price = ?
+    // Step 1: First, get the current data before updating
+    const getCurrentDataSql = `
+        SELECT productType, productId, qty, price
+        FROM market_place.orderpackageitems 
         WHERE id = ? AND orderPackageId = ?
     `;
 
-    const updateItemsValues = [
-        replaceData.productType,
-        replaceData.productId,
-        replaceData.qty,
-        replaceData.price,
-        replaceData.replaceId,
-        replaceData.orderPackageId
-    ];
+    console.log("DCM fetching current data before update:", [replaceData.replaceId, replaceData.orderPackageId]);
 
-    console.log("DCM updating specific orderpackageitem (limited fields):", updateItemsValues);
-
-    connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
+    connection.query(getCurrentDataSql, [replaceData.replaceId, replaceData.orderPackageId], (err, currentData) => {
         if (err) {
-            console.error("Error updating orderpackageitems:", err);
+            console.error("Error fetching current orderpackageitem data:", err);
             return connection.rollback(() => {
                 connection.release();
                 reject(err);
             });
         }
 
-        console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
-
-        if (itemsResult.affectedRows === 0) {
-            console.warn("No orderpackageitem was updated - item might not exist");
+        if (!currentData || currentData.length === 0) {
+            console.error("No current data found for orderpackageitem ID:", replaceData.replaceId);
             return connection.rollback(() => {
                 connection.release();
-                reject(new Error("Failed to update orderpackageitem"));
+                reject(new Error("OrderPackageItem not found"));
             });
         }
 
-        // Commit transaction for DCM
-        connection.commit((err) => {
+        const previousData = currentData[0];
+        console.log("Previous data retrieved:", previousData);
+
+        // Step 2: Insert previous data into prevdefineproduct table
+        const insertPrevDataSql = `
+            INSERT INTO market_place.prevdefineproduct 
+            (orderPackageId, replceId, productType, productId, qty, price, createdAt) 
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `;
+
+        const insertPrevValues = [
+            replaceData.orderPackageId,
+            replaceData.replaceId,
+            previousData.productType,
+            previousData.productId,
+            previousData.qty,
+            previousData.price
+        ];
+
+        console.log("DCM inserting previous data into prevdefineproduct:", insertPrevValues);
+
+        connection.query(insertPrevDataSql, insertPrevValues, (err, insertResult) => {
             if (err) {
-                console.error("Error committing DCM transaction:", err);
+                console.error("Error inserting previous data:", err);
                 return connection.rollback(() => {
                     connection.release();
                     reject(err);
                 });
             }
 
-            console.log("DCM transaction completed successfully");
-            connection.release();
+            console.log("Previous data inserted, ID:", insertResult.insertId);
 
-            resolve({
-                orderPackageId: replaceData.orderPackageId,
-                replaceItemId: replaceData.replaceId,
-                message: "Order package item updated successfully by DCM",
-                updatedBy: replaceData.userId,
-                permissions: 'DCM - Limited access (orderpackageitems only)'
+            // Step 3: Now update the orderpackageitems with new data
+            const updateItemsSql = `
+                UPDATE market_place.orderpackageitems 
+                SET productType = ?, productId = ?, qty = ?, price = ?
+                WHERE id = ? AND orderPackageId = ?
+            `;
+
+            const updateItemsValues = [
+                replaceData.productType,
+                replaceData.productId,
+                replaceData.qty,
+                replaceData.price,
+                replaceData.replaceId,
+                replaceData.orderPackageId
+            ];
+
+            console.log("DCM updating orderpackageitem with new data:", updateItemsValues);
+
+            connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
+                if (err) {
+                    console.error("Error updating orderpackageitems:", err);
+                    return connection.rollback(() => {
+                        connection.release();
+                        reject(err);
+                    });
+                }
+
+                console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
+
+                if (itemsResult.affectedRows === 0) {
+                    console.warn("No orderpackageitem was updated");
+                    return connection.rollback(() => {
+                        connection.release();
+                        reject(new Error("Failed to update orderpackageitem"));
+                    });
+                }
+
+                // Step 4: Commit transaction
+                connection.commit((err) => {
+                    if (err) {
+                        console.error("Error committing DCM transaction:", err);
+                        return connection.rollback(() => {
+                            connection.release();
+                            reject(err);
+                        });
+                    }
+
+                    console.log("DCM transaction completed successfully");
+                    connection.release();
+
+                    resolve({
+                        orderPackageId: replaceData.orderPackageId,
+                        replaceItemId: replaceData.replaceId,
+                        previousDataId: insertResult.insertId,
+                        message: "Order package item updated successfully by DCM, previous data saved",
+                        updatedBy: replaceData.userId,
+                        previousData: previousData,
+                        newData: {
+                            productType: replaceData.productType,
+                            productId: replaceData.productId,
+                            qty: replaceData.qty,
+                            price: replaceData.price
+                        },
+                        permissions: 'DCM - Limited access (orderpackageitems only)'
+                    });
+                });
             });
         });
     });
