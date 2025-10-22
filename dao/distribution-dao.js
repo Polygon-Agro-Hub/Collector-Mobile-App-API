@@ -1623,12 +1623,14 @@ exports.updateoutForDelivery = (orderId, userId) => {
       WHERE orderId = ?
     `;
 
-    const insertNotificationSql = `
-      INSERT INTO market_place.dashnotification (orderId, title, createdAt)
-      VALUES (?, 'Order is Out for Delivery')
-      ON DUPLICATE KEY UPDATE 
-        title = VALUES(title),
-    `;
+const insertNotificationSql = `
+  INSERT INTO market_place.dashnotification (orderId, title)
+  SELECT mpp.id, 'Order is Out for Delivery'
+  FROM market_place.processorders AS mpp
+  WHERE mpp.orderId = ?
+  ON DUPLICATE KEY UPDATE 
+    title = VALUES(title)
+`;
 
     try {
       // ✅ Get a single connection from the pool
