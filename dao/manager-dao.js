@@ -549,6 +549,7 @@ exports.getCollectionOfficers = async (managerId) => {
     FROM collectionofficer
     WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
       AND irmId = ?
+      AND status = 'Approved'
   `;
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
