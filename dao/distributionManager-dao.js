@@ -142,7 +142,7 @@ exports.getDCenterTarget = (irmId = null) => {
                 distributedtarget dt
             LEFT JOIN 
                 collectionofficer co ON dt.userId = co.id
-            LEFT JOIN 
+            INNER JOIN 
                 distributedtargetitems dti ON dt.id = dti.targetId
             LEFT JOIN 
                 market_place.processorders po ON dti.orderId = po.id
