@@ -49,10 +49,21 @@ const getCompanyCenterIdFromCompanyCenter = async (centerId) => {
 };
 
 // Function to update updatedPrice in marketpriceserve table
+// const updateMarketPriceServe = async (marketPriceId, companyCenterId, updatedPrice) => {
+//     const [result] = await db.collectionofficer.promise().query(
+//         `UPDATE marketpriceserve 
+//          SET updatedPrice = ? 
+//          WHERE marketPriceId = ? AND companyCenterId = ?`,
+//         [updatedPrice, marketPriceId, companyCenterId]
+//     );
+//     return result;
+// };
+
+// Function to update updatedPrice in marketpriceserve table
 const updateMarketPriceServe = async (marketPriceId, companyCenterId, updatedPrice) => {
     const [result] = await db.collectionofficer.promise().query(
         `UPDATE marketpriceserve 
-         SET updatedPrice = ? 
+         SET updatedPrice = ?, updateAt = NOW() 
          WHERE marketPriceId = ? AND companyCenterId = ?`,
         [updatedPrice, marketPriceId, companyCenterId]
     );
