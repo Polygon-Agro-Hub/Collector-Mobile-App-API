@@ -90,24 +90,40 @@ CASE
             ELSE 'Pending'
         END
 
-    -- For package orders (check both additional and package items - ALL packages combined)
+    -- For package orders (check both additional and package items)
     WHEN o.isPackage = 1 THEN
         CASE 
             -- When both additional and package items exist
             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
                  COALESCE(package_item_counts.total_items, 0) > 0 THEN
                 CASE 
-                    -- Both fully completed
+                    -- Both fully completed → Completed
                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
                          COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
                     
-                    -- Both have no progress (both at 0)
+                    -- Both have no progress (both at 0) → Pending
                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
                          COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-
                     
-                    -- Any progress made in either (including mixed scenarios)
-                    ELSE 'Opened'
+                    -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+                    
+                    -- Both have partial progress (both opened) → Opened
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    
+                    -- At least one is fully completed and other is opened (partial progress) → Opened
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+                    
+                    ELSE 'Pending'
                 END
 
             -- When only additional items exist
@@ -115,24 +131,21 @@ CASE
                 CASE 
                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Pending'
-                           WHEN COALESCE(additional_item_counts.packed_items, 0) <0 AND 
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Pending'
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
                     ELSE 'Pending'
                 END
 
-            -- When only package items exist (across all packages)
+            -- When only package items exist
             WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
                 CASE 
                     WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
                     WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Pending'
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
                     WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
                     ELSE 'Pending'
                 END
 
-            -- When no items exist (shouldn't happen for package orders)
             ELSE 'Pending'
         END
     ELSE 'Pending'
