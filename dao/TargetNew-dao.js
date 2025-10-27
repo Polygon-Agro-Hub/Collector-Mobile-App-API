@@ -32,6 +32,7 @@ exports.getOfficerDailyTargets = (officerId) => {
           WHERE
               ot.officerId = ?
               AND DATE(dt.date) = CURDATE()
+               AND NOT (ot.target = 0 AND COALESCE(ot.complete, 0) = 0)
           ORDER BY
               dt.date DESC, dt.id DESC
       `;
