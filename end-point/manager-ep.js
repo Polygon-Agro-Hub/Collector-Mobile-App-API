@@ -313,7 +313,79 @@ exports.GetFarmerReportDetails = async (req, res) => {
 exports.getCollectionOfficers = async (req, res) => {
   try {
     const managerId = req.user.id;
+
     const [rows] = await collectionofficerDao.getCollectionOfficers(managerId);
+    console.log(rows)
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No collection officers found for the given manager ID.',
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: rows,
+    });
+  } catch (error) {
+    console.error('Error fetching collection officers:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while fetching collection officers.',
+    });
+  }
+};
+
+
+exports.getCollectionOfficersReciever = async (req, res) => {
+  try {
+    const managerId = req.user.id;
+    const companycenterId = req.user.companycenterId;
+    const { varietyId, grade } = req.params; // Changed from req.query to req.params
+
+    // Validate required parameters
+    if (!varietyId || !grade) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Variety ID and grade are required.',
+      });
+    }
+
+    const [rows] = await collectionofficerDao.getCollectionOfficersReciever(
+      managerId,
+      companycenterId,
+      varietyId,
+      grade
+    );
+
+    console.log(rows);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No collection officers found with targets for the given criteria.',
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: rows,
+    });
+  } catch (error) {
+    console.error('Error fetching collection officers:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while fetching collection officers.',
+    });
+  }
+};
+
+
+exports.getCollectionOfficersList = async (req, res) => {
+  try {
+    const managerId = req.user.id;
+    const [rows] = await collectionofficerDao.getCollectionOfficersList(managerId);
     console.log(rows)
 
     if (rows.length === 0) {

@@ -274,17 +274,42 @@ exports.getAllCropNamesForCollection = async (req, res) => {
   }
 };
 
+// exports.getVarietiesByCropId = async (req, res) => {
+//   const cropId = req.params.id;  // Extract cropId from request parameters
+//   console.log(cropId);
+//   const officerId = req.user.id;
+
+
+//   try {
+//     const varieties = await cropDetailsDao.getVarietiesByCropId(officerId, cropId);
+//     res.status(200).json(varieties);  // Return the varieties as JSON
+//   } catch (error) {
+//     console.error('Error fetching crop varieties:', error);  // Log the error for debugging
+//     res.status(500).json({ error: 'Failed to retrieve crop varieties' });
+//   }
+// };
+
 exports.getVarietiesByCropId = async (req, res) => {
-  const cropId = req.params.id;  // Extract cropId from request parameters
-  console.log(cropId);
+  const cropId = req.params.id;
   const officerId = req.user.id;
 
+  // Get today's date or use query parameters (same as getAllCropNames)
+  const today = new Date().toISOString().split('T')[0];
+  const startDate = req.query.startDate || today;
+  const endDate = req.query.endDate || today;
+
+  console.log('Query parameters:', {
+    officerId,
+    cropId,
+    startDate,
+    endDate
+  });
 
   try {
-    const varieties = await cropDetailsDao.getVarietiesByCropId(officerId, cropId);
-    res.status(200).json(varieties);  // Return the varieties as JSON
+    const varieties = await cropDetailsDao.getVarietiesByCropId(officerId, cropId, startDate, endDate);
+    res.status(200).json(varieties);
   } catch (error) {
-    console.error('Error fetching crop varieties:', error);  // Log the error for debugging
+    console.error('Error fetching crop varieties:', error);
     res.status(500).json({ error: 'Failed to retrieve crop varieties' });
   }
 };

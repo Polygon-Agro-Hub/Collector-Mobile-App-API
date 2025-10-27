@@ -66,6 +66,58 @@ exports.getOfficerDailyTargets = (officerId) => {
 };
 
 
+// exports.getCenterTarget = (centerId) => {
+//   return new Promise((resolve, reject) => {
+//       if (!centerId) {
+//           return reject(new Error("Center ID is required"));
+//       }
+
+//       const sql = `
+//           SELECT 
+//               dt.varietyId,
+//               cv.varietyNameEnglish,
+//               cv.varietyNameSinhala,
+//               cv.varietyNameTamil,
+//               dt.grade,
+//               dt.target,
+//               COALESCE(dt.complete, 0) AS complete,  -- Ensure NULL becomes 0
+//               (dt.target - COALESCE(dt.complete, 0)) AS todo
+//           FROM 
+//               dailytarget dt
+//           JOIN
+//               plant_care.cropvariety cv ON dt.varietyId = cv.id
+//           JOIN
+//               companycenter cc ON dt.companyCenterId = cc.id 
+//           WHERE 
+//               cc.centerId= ?
+//               AND DATE(dt.date) = CURDATE()
+//           ORDER BY
+//               dt.varietyId, dt.grade
+//       `;
+
+//       collectionofficer.query(sql, [centerId], (error, results) => {
+//           if (error) {
+//               console.error("Database error in getCenterTarget:", error);
+//               return reject(error);
+//           }
+
+
+//           const formattedResults = results.map(target => ({
+//               varietyId: target.varietyId,
+//               varietyNameEnglish: target.varietyNameEnglish,
+//               varietyNameSinhala: target.varietyNameSinhala,
+//               varietyNameTamil: target.varietyNameTamil,
+//               grade: target.grade,
+//               target: parseFloat(target.target).toFixed(2),
+//               complete: parseFloat(target.complete || 0).toFixed(2), // Double safety
+//               todo: parseFloat(target.todo || 0).toFixed(2) // Double safety
+//           }));
+
+//           resolve(formattedResults.length === 0 ? [] : formattedResults);
+//       });
+//   });
+// };
+
 exports.getCenterTarget = (centerId) => {
     return new Promise((resolve, reject) => {
         if (!centerId) {
@@ -91,6 +143,7 @@ exports.getCenterTarget = (centerId) => {
           WHERE 
               cc.centerId= ?
               AND DATE(dt.date) = CURDATE()
+               AND NOT (dt.target = 0 AND COALESCE(dt.complete, 0) = 0)
           ORDER BY
               dt.varietyId, dt.grade
       `;
@@ -520,9 +573,9 @@ exports.getDailyTargetByOfficerAndVariety = (officerId, varietyId, grade) => {
 exports.getOfficerSummaryDao = async (officerId) => {
     return new Promise((resolve, reject) => {
         const query = `
-          SELECT 
+         SELECT 
               COUNT(ot.id) AS totalTasks,
-              SUM(CASE WHEN ot.complete >= ot.target THEN 1 ELSE 0 END) AS completedTasks,
+              SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
               SUM(ot.target) AS totalTarget,
               SUM(ot.complete) AS totalComplete,
               (SUM(ot.target) - SUM(COALESCE(ot.complete, 0))) AS remainingTarget
@@ -556,7 +609,7 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
         const query = `
           SELECT 
               COUNT(ot.id) AS totalTasks,
-              SUM(CASE WHEN ot.complete >= ot.target THEN 1 ELSE 0 END) AS completedTasks,
+            SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
               SUM(ot.target) AS totalTarget,
               SUM(ot.complete) AS totalComplete,
               (SUM(ot.target) - SUM(COALESCE(ot.complete, 0))) AS remainingTarget,

@@ -68,81 +68,85 @@ exports.getDCenterTarget = (irmId = null) => {
                 package_item_counts.packing_status_summary AS packagePackingStatusSummary,
 
                 -- Package item status
+             CASE 
+    -- For non-package orders (only check additional items)
+    WHEN o.isPackage = 0 THEN
+        CASE 
+            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+            ELSE 'Pending'
+        END
+
+    -- For package orders (check both additional and package items)
+    WHEN o.isPackage = 1 THEN
+        CASE 
+            -- When both additional and package items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
                 CASE 
-                    WHEN o.isPackage = 0 THEN NULL
-                    WHEN COALESCE(package_item_counts.total_items, 0) = 0 THEN 'Pending'
+                    -- Both fully completed → Completed
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                    
+                    -- Both have no progress (both at 0) → Pending
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    
+                    -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+                    
+                    -- Both have partial progress (both opened) → Opened
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    
+                    -- At least one is fully completed and other is opened (partial progress) → Opened
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+                    
+                    ELSE 'Pending'
+                END
+
+            -- When only additional items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                CASE 
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                    ELSE 'Pending'
+                END
+
+            -- When only package items exist
+            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                CASE 
                     WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
                     WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
                     WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                    ELSE NULL
-                END AS packageItemStatus,
-
-                -- Overall status - FIXED LOGIC for one completed + one pending scenario
-                CASE 
-                    -- For non-package orders (only check additional items)
-                    WHEN o.isPackage = 0 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                            ELSE 'Pending'
-                        END
-                    
-                    -- For package orders (check both additional and package items)
-                    WHEN o.isPackage = 1 THEN
-                        CASE 
-                            -- When both additional and package items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    
-                                    -- FIXED LOGIC: Check for one completed, one pending scenario
-                                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                          COALESCE(package_item_counts.packed_items, 0) = 0) OR
-                                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
-                                          COALESCE(additional_item_counts.packed_items, 0) = 0) THEN 'Pending'
-                                    
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 OR 
-                                         COALESCE(package_item_counts.packed_items, 0) > 0 THEN 'Opened'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When only additional items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When only package items exist
-                            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When no items exist (shouldn't happen for package orders)
-                            ELSE 'Pending'
-                        END
                     ELSE 'Pending'
-                END AS selectedStatus
+                END
+
+            ELSE 'Pending'
+        END
+    ELSE 'Pending'
+END AS selectedStatus
+
 
             FROM 
                 distributedtarget dt
             LEFT JOIN 
                 collectionofficer co ON dt.userId = co.id
-            LEFT JOIN 
+            INNER JOIN 
                 distributedtargetitems dti ON dt.id = dti.targetId
             LEFT JOIN 
                 market_place.processorders po ON dti.orderId = po.id
@@ -531,20 +535,276 @@ exports.getOrdreReplace = (id) => {
 
 
 // targetDDao.approveReplaceRequest function
+// exports.approveReplaceRequest = (params) => {
+//     console.log("DAO approveReplaceRequest called with params:", params);
+
+//     return new Promise((resolve, reject) => {
+//         // Fix: Map replaceRequestId to replceId (the actual database column name)
+//         const { replaceRequestId, newProductId, quantity, price } = params;
+//         const replceId = replaceRequestId; // Map to the actual database column name
+
+//         // Validate required parameters
+//         if (!replceId || !newProductId || !quantity || !price) {
+//             return reject(new Error("Missing required parameters: replaceRequestId, newProductId, quantity, price"));
+//         }
+
+//         console.log("Using replceId:", replceId); // Debug log
+
+//         // Get connection from pool and start transaction
+//         db.marketPlace.getConnection((err, connection) => {
+//             if (err) {
+//                 console.error("Failed to get connection from pool:", err);
+//                 return reject(new Error("Failed to get database connection"));
+//             }
+
+//             // Start transaction
+//             connection.beginTransaction((err) => {
+//                 if (err) {
+//                     console.error("Transaction begin error:", err);
+//                     connection.release();
+//                     return reject(new Error("Failed to start transaction"));
+//                 }
+
+//                 // Step 1: Get replace request details first
+//                 const getReplaceRequestSql = `
+//                     SELECT 
+//                         rr.id,
+//                         rr.replceId,
+//                         rr.orderPackageId,
+//                         rr.productType,
+//                         rr.productId as oldProductId,
+//                         rr.qty as oldQty,
+//                         rr.price as oldPrice,
+//                         rr.status,
+//                         op.isLock
+//                     FROM market_place.replacerequest rr
+//                     JOIN market_place.orderpackage op ON rr.orderPackageId = op.id
+//                     WHERE rr.id = ?
+//                 `;
+
+//                 connection.query(getReplaceRequestSql, [replceId], (err, replaceResults) => {
+//                     if (err) {
+//                         console.error("Get replace request error:", err);
+//                         return connection.rollback(() => {
+//                             connection.release();
+//                             reject(new Error("Failed to get replace request details"));
+//                         });
+//                     }
+
+//                     if (replaceResults.length === 0) {
+//                         return connection.rollback(() => {
+//                             connection.release();
+//                             reject(new Error(`Replace request not found with replceId: ${replceId}`));
+//                         });
+//                     }
+
+//                     const replaceRequest = replaceResults[0];
+//                     console.log("Replace request found:", replaceRequest);
+
+//                     // Check if already approved
+//                     if (replaceRequest.status === 'Approved') {
+//                         return connection.rollback(() => {
+//                             connection.release();
+//                             reject(new Error("Replace request is already approved"));
+//                         });
+//                     }
+
+//                     // Step 1.5: Find the corresponding orderpackageitems record
+//                     // FIX: Instead of looking for the old product ID, find the item by orderPackageId only
+//                     // since there might be a mismatch between replace request and actual order items
+//                     const getOrderPackageItemsSql = `
+//                         SELECT id, productId, qty, price 
+//                         FROM market_place.orderpackageitems 
+//                         WHERE orderPackageId = ?
+//                         ORDER BY id ASC
+//                         LIMIT 1
+//                     `;
+
+//                     console.log("Looking for orderpackageitems with orderPackageId:", replaceRequest.orderPackageId);
+
+//                     connection.query(
+//                         getOrderPackageItemsSql,
+//                         [replaceRequest.orderPackageId],
+//                         (err, itemsResults) => {
+//                             if (err) {
+//                                 console.error("Get order package items error:", err);
+//                                 return connection.rollback(() => {
+//                                     connection.release();
+//                                     reject(new Error("Failed to get order package items"));
+//                                 });
+//                             }
+
+//                             console.log("Order package items query results:", itemsResults);
+
+//                             if (itemsResults.length === 0) {
+//                                 return connection.rollback(() => {
+//                                     connection.release();
+//                                     reject(new Error("No order package items found for this order"));
+//                                 });
+//                             }
+
+//                             const orderPackageItem = itemsResults[0];
+//                             console.log("Order package item to update:", orderPackageItem);
+
+//                             // Log the mismatch if it exists
+//                             if (orderPackageItem.productId !== replaceRequest.oldProductId) {
+//                                 console.log(`WARNING: Product ID mismatch detected!`);
+//                                 console.log(`Replace request expects oldProductId: ${replaceRequest.oldProductId}`);
+//                                 console.log(`But order package item has productId: ${orderPackageItem.productId}`);
+//                                 console.log(`Proceeding with the update using the actual order package item...`);
+//                             }
+
+//                             // Step 2: Update replacerequest table
+//                             const updateReplaceRequestSql = `
+//                                 UPDATE market_place.replacerequest 
+//                                 SET 
+//                                     productId = ?,
+//                                     qty = ?,
+//                                     price = ?,
+//                                     status = 'Approved'
+
+//                                 WHERE id = ?
+//                             `;
+
+//                             connection.query(
+//                                 updateReplaceRequestSql,
+//                                 [newProductId, quantity, price, replaceRequest.id],
+//                                 (err, updateReplaceResult) => {
+//                                     if (err) {
+//                                         console.error("Update replace request error:", err);
+//                                         return connection.rollback(() => {
+//                                             connection.release();
+//                                             reject(new Error("Failed to update replace request"));
+//                                         });
+//                                     }
+
+//                                     console.log("Replace request updated:", updateReplaceResult);
+
+//                                     // Step 3: Update orderpackageitems table
+//                                     const updateOrderPackageItemsSql = `
+//                                         UPDATE market_place.orderpackageitems 
+//                                         SET 
+//                                             productId = ?,
+//                                             qty = ?,
+//                                             price = ?
+
+//                                         WHERE id = ?
+//                                     `;
+
+//                                     console.log("About to update orderpackageitems with:", {
+//                                         newProductId,
+//                                         quantity,
+//                                         price,
+//                                         orderPackageItemId: orderPackageItem.id
+//                                     });
+
+//                                     connection.query(
+//                                         updateOrderPackageItemsSql,
+//                                         [newProductId, quantity, price, orderPackageItem.id],
+//                                         (err, updateItemsResult) => {
+//                                             if (err) {
+//                                                 console.error("Update order package items error:", err);
+//                                                 return connection.rollback(() => {
+//                                                     connection.release();
+//                                                     reject(new Error("Failed to update order package items"));
+//                                                 });
+//                                             }
+
+//                                             console.log("Order package items updated:", updateItemsResult);
+//                                             console.log("Affected rows:", updateItemsResult.affectedRows);
+
+//                                             if (updateItemsResult.affectedRows === 0) {
+//                                                 console.log("WARNING: No rows were updated in orderpackageitems!");
+//                                             }
+
+//                                             // Step 4: Update orderpackage table (set isLock = 0)
+//                                             const updateOrderPackageSql = `
+//                                                 UPDATE market_place.orderpackage 
+//                                                 SET 
+//                                                     isLock = 0
+
+//                                                 WHERE id = ?
+//                                             `;
+
+//                                             connection.query(
+//                                                 updateOrderPackageSql,
+//                                                 [replaceRequest.orderPackageId],
+//                                                 (err, updatePackageResult) => {
+//                                                     if (err) {
+//                                                         console.error("Update order package error:", err);
+//                                                         return connection.rollback(() => {
+//                                                             connection.release();
+//                                                             reject(new Error("Failed to update order package"));
+//                                                         });
+//                                                     }
+
+//                                                     console.log("Order package updated:", updatePackageResult);
+
+//                                                     // Step 5: Commit transaction
+//                                                     connection.commit((err) => {
+//                                                         if (err) {
+//                                                             console.error("Transaction commit error:", err);
+//                                                             return connection.rollback(() => {
+//                                                                 connection.release();
+//                                                                 reject(new Error("Failed to commit transaction"));
+//                                                             });
+//                                                         }
+
+//                                                         console.log("Transaction committed successfully");
+
+//                                                         // Release connection back to pool
+//                                                         connection.release();
+
+//                                                         // Return success response
+//                                                         resolve({
+//                                                             success: true,
+//                                                             message: 'Replace request approved successfully',
+//                                                             data: {
+//                                                                 replaceRequestId: replaceRequestId,
+//                                                                 replceId: replceId,
+//                                                                 orderPackageId: replaceRequest.orderPackageId,
+//                                                                 oldProductId: orderPackageItem.productId, // Use actual product ID from order
+//                                                                 newProductId: newProductId,
+//                                                                 oldQuantity: orderPackageItem.qty,
+//                                                                 newQuantity: quantity,
+//                                                                 oldPrice: orderPackageItem.price,
+//                                                                 newPrice: price,
+//                                                                 updatedTables: [
+//                                                                     'replacerequest',
+//                                                                     'orderpackageitems',
+//                                                                     'orderpackage'
+//                                                                 ]
+//                                                             }
+//                                                         });
+//                                                     });
+//                                                 }
+//                                             );
+//                                         }
+//                                     );
+//                                 }
+//                             );
+//                         }
+//                     );
+//                 });
+//             });
+//         });
+//     });
+// };
+
+
 exports.approveReplaceRequest = (params) => {
     console.log("DAO approveReplaceRequest called with params:", params);
 
     return new Promise((resolve, reject) => {
-        // Fix: Map replaceRequestId to replceId (the actual database column name)
         const { replaceRequestId, newProductId, quantity, price } = params;
-        const replceId = replaceRequestId; // Map to the actual database column name
+        const replceId = replaceRequestId;
 
         // Validate required parameters
         if (!replceId || !newProductId || !quantity || !price) {
             return reject(new Error("Missing required parameters: replaceRequestId, newProductId, quantity, price"));
         }
 
-        console.log("Using replceId:", replceId); // Debug log
+        console.log("Using replceId:", replceId);
 
         // Get connection from pool and start transaction
         db.marketPlace.getConnection((err, connection) => {
@@ -606,8 +866,6 @@ exports.approveReplaceRequest = (params) => {
                     }
 
                     // Step 1.5: Find the corresponding orderpackageitems record
-                    // FIX: Instead of looking for the old product ID, find the item by orderPackageId only
-                    // since there might be a mismatch between replace request and actual order items
                     const getOrderPackageItemsSql = `
                         SELECT id, productId, qty, price 
                         FROM market_place.orderpackageitems 
@@ -658,7 +916,6 @@ exports.approveReplaceRequest = (params) => {
                                     qty = ?,
                                     price = ?,
                                     status = 'Approved'
-                                   
                                 WHERE id = ?
                             `;
 
@@ -683,7 +940,6 @@ exports.approveReplaceRequest = (params) => {
                                             productId = ?,
                                             qty = ?,
                                             price = ?
-                                           
                                         WHERE id = ?
                                     `;
 
@@ -713,66 +969,104 @@ exports.approveReplaceRequest = (params) => {
                                                 console.log("WARNING: No rows were updated in orderpackageitems!");
                                             }
 
-                                            // Step 4: Update orderpackage table (set isLock = 0)
-                                            const updateOrderPackageSql = `
-                                                UPDATE market_place.orderpackage 
+                                            // Step 3.5: Update prevdefineproduct table
+                                            const updatePrevDefineProductSql = `
+                                                UPDATE market_place.prevdefineproduct 
                                                 SET 
-                                                    isLock = 0
-                                                
-                                                WHERE id = ?
+                                                    productId = ?,
+                                                    qty = ?,
+                                                    price = ?
+                                                WHERE orderPackageId = ? AND replceId = ?
                                             `;
 
+                                            console.log("About to update prevdefineproduct with:", {
+                                                newProductId,
+                                                quantity,
+                                                price,
+                                                orderPackageId: replaceRequest.orderPackageId,
+                                                replceId: replceId
+                                            });
+
                                             connection.query(
-                                                updateOrderPackageSql,
-                                                [replaceRequest.orderPackageId],
-                                                (err, updatePackageResult) => {
+                                                updatePrevDefineProductSql,
+                                                [newProductId, quantity, price, replaceRequest.orderPackageId, replceId],
+                                                (err, updatePrevDefineResult) => {
                                                     if (err) {
-                                                        console.error("Update order package error:", err);
+                                                        console.error("Update prevdefineproduct error:", err);
                                                         return connection.rollback(() => {
                                                             connection.release();
-                                                            reject(new Error("Failed to update order package"));
+                                                            reject(new Error("Failed to update prevdefineproduct"));
                                                         });
                                                     }
 
-                                                    console.log("Order package updated:", updatePackageResult);
+                                                    console.log("Prevdefineproduct updated:", updatePrevDefineResult);
+                                                    console.log("Prevdefineproduct affected rows:", updatePrevDefineResult.affectedRows);
 
-                                                    // Step 5: Commit transaction
-                                                    connection.commit((err) => {
-                                                        if (err) {
-                                                            console.error("Transaction commit error:", err);
-                                                            return connection.rollback(() => {
+                                                    if (updatePrevDefineResult.affectedRows === 0) {
+                                                        console.log("WARNING: No rows were updated in prevdefineproduct! This might be expected if no record exists.");
+                                                    }
+
+                                                    // Step 4: Update orderpackage table (set isLock = 0)
+                                                    const updateOrderPackageSql = `
+                                                        UPDATE market_place.orderpackage 
+                                                        SET isLock = 0
+                                                        WHERE id = ?
+                                                    `;
+
+                                                    connection.query(
+                                                        updateOrderPackageSql,
+                                                        [replaceRequest.orderPackageId],
+                                                        (err, updatePackageResult) => {
+                                                            if (err) {
+                                                                console.error("Update order package error:", err);
+                                                                return connection.rollback(() => {
+                                                                    connection.release();
+                                                                    reject(new Error("Failed to update order package"));
+                                                                });
+                                                            }
+
+                                                            console.log("Order package updated:", updatePackageResult);
+
+                                                            // Step 5: Commit transaction
+                                                            connection.commit((err) => {
+                                                                if (err) {
+                                                                    console.error("Transaction commit error:", err);
+                                                                    return connection.rollback(() => {
+                                                                        connection.release();
+                                                                        reject(new Error("Failed to commit transaction"));
+                                                                    });
+                                                                }
+
+                                                                console.log("Transaction committed successfully");
+
+                                                                // Release connection back to pool
                                                                 connection.release();
-                                                                reject(new Error("Failed to commit transaction"));
+
+                                                                // Return success response
+                                                                resolve({
+                                                                    success: true,
+                                                                    message: 'Replace request approved successfully',
+                                                                    data: {
+                                                                        replaceRequestId: replaceRequestId,
+                                                                        replceId: replceId,
+                                                                        orderPackageId: replaceRequest.orderPackageId,
+                                                                        oldProductId: orderPackageItem.productId,
+                                                                        newProductId: newProductId,
+                                                                        oldQuantity: orderPackageItem.qty,
+                                                                        newQuantity: quantity,
+                                                                        oldPrice: orderPackageItem.price,
+                                                                        newPrice: price,
+                                                                        updatedTables: [
+                                                                            'replacerequest',
+                                                                            'orderpackageitems',
+                                                                            'prevdefineproduct',
+                                                                            'orderpackage'
+                                                                        ]
+                                                                    }
+                                                                });
                                                             });
                                                         }
-
-                                                        console.log("Transaction committed successfully");
-
-                                                        // Release connection back to pool
-                                                        connection.release();
-
-                                                        // Return success response
-                                                        resolve({
-                                                            success: true,
-                                                            message: 'Replace request approved successfully',
-                                                            data: {
-                                                                replaceRequestId: replaceRequestId,
-                                                                replceId: replceId,
-                                                                orderPackageId: replaceRequest.orderPackageId,
-                                                                oldProductId: orderPackageItem.productId, // Use actual product ID from order
-                                                                newProductId: newProductId,
-                                                                oldQuantity: orderPackageItem.qty,
-                                                                newQuantity: quantity,
-                                                                oldPrice: orderPackageItem.price,
-                                                                newPrice: price,
-                                                                updatedTables: [
-                                                                    'replacerequest',
-                                                                    'orderpackageitems',
-                                                                    'orderpackage'
-                                                                ]
-                                                            }
-                                                        });
-                                                    });
+                                                    );
                                                 }
                                             );
                                         }
@@ -863,57 +1157,78 @@ exports.getDistributionOfficerTarget = (officerId) => {
                 END AS packageItemStatus,
 
                 -- Overall status - considering all items across all packages
+              CASE 
+    -- For non-package orders (only check additional items)
+    WHEN o.isPackage = 0 THEN
+        CASE 
+            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+            ELSE 'Pending'
+        END
+
+    -- For package orders (check both additional and package items)
+    WHEN o.isPackage = 1 THEN
+        CASE 
+            -- When both additional and package items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
                 CASE 
-                    -- For non-package orders (only check additional items)
-                    WHEN o.isPackage = 0 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                            ELSE 'Pending'
-                        END
+                    -- Both fully completed → Completed
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
                     
-                    -- For package orders (check both additional and package items - ALL packages combined)
-                    WHEN o.isPackage = 1 THEN
-                        CASE 
-                            -- When both additional and package items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 OR 
-                                         COALESCE(package_item_counts.packed_items, 0) > 0 THEN 'Opened'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When only additional items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When only package items exist (across all packages)
-                            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-                            
-                            -- When no items exist (shouldn't happen for package orders)
-                            ELSE 'Pending'
-                        END
+                    -- Both have no progress (both at 0) → Pending
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    
+                    -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+                    
+                    -- Both have partial progress (both opened) → Opened
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    
+                    -- At least one is fully completed and other is opened (partial progress) → Opened
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+                    
                     ELSE 'Pending'
-                END AS selectedStatus
+                END
+
+            -- When only additional items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                CASE 
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                    ELSE 'Pending'
+                END
+
+            -- When only package items exist
+            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                CASE 
+                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                    ELSE 'Pending'
+                END
+
+            ELSE 'Pending'
+        END
+    ELSE 'Pending'
+END AS selectedStatus
 
             FROM 
                 distributedtarget dt

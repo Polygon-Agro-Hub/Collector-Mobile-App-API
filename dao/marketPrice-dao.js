@@ -1,4 +1,4 @@
-const db = require('../startup/database'); 
+const db = require('../startup/database');
 
 // Function to fetch employee ID based on collectionOfficerId
 const getEmpIdFromCollectionOfficerCompanyDetails = async (userId) => {
@@ -40,10 +40,54 @@ const insertPriceRequests = async (priceRequests) => {
     return insertResult;
 };
 
+// Function to get companyCenterId from companycenter table based on centerId
+const getCompanyCenterIdFromCompanyCenter = async (centerId) => {
+    const [result] = await db.collectionofficer.promise().query(
+        `SELECT id FROM companycenter WHERE centerId = ?`, [centerId]
+    );
+    return result.length > 0 ? result[0].id : null;
+};
+
+// Function to update updatedPrice in marketpriceserve table
+// const updateMarketPriceServe = async (marketPriceId, companyCenterId, updatedPrice) => {
+//     const [result] = await db.collectionofficer.promise().query(
+//         `UPDATE marketpriceserve 
+//          SET updatedPrice = ? 
+//          WHERE marketPriceId = ? AND companyCenterId = ?`,
+//         [updatedPrice, marketPriceId, companyCenterId]
+//     );
+//     return result;
+// };
+
+// Function to update updatedPrice in marketpriceserve table
+const updateMarketPriceServe = async (marketPriceId, companyCenterId, updatedPrice) => {
+    const [result] = await db.collectionofficer.promise().query(
+        `UPDATE marketpriceserve 
+         SET updatedPrice = ?, updateAt = NOW() 
+         WHERE marketPriceId = ? AND companyCenterId = ?`,
+        [updatedPrice, marketPriceId, companyCenterId]
+    );
+    return result;
+};
+
+// Function to check if record exists in marketpriceserve
+const checkMarketPriceServeExists = async (marketPriceId, companyCenterId) => {
+    const [result] = await db.collectionofficer.promise().query(
+        `SELECT id FROM marketpriceserve 
+         WHERE marketPriceId = ? AND companyCenterId = ?`,
+        [marketPriceId, companyCenterId]
+    );
+    return result.length > 0;
+};
+
+// Update module.exports
 module.exports = {
     getEmpIdFromCollectionOfficerCompanyDetails,
     getCenterIdFromCollectionOfficer,
     getMarketPrice,
     getMarketPriceId,
     insertPriceRequests,
+    getCompanyCenterIdFromCompanyCenter,
+    updateMarketPriceServe,
+    checkMarketPriceServeExists,
 };
