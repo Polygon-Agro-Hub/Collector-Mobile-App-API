@@ -76,64 +76,80 @@ exports.getTargetForOfficerDao = (officerId) => {
                 END AS packageItemStatus,
 
                 -- Overall status - considering all items across all packages with FIXED logic
+         -- Replace the selectedStatus CASE statement with this fixed version:
+
+CASE 
+    -- For non-package orders (only check additional items)
+    WHEN o.isPackage = 0 THEN
+        CASE 
+            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+            ELSE 'Pending'
+        END
+
+    -- For package orders (check both additional and package items)
+    WHEN o.isPackage = 1 THEN
+        CASE 
+            -- When both additional and package items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
                 CASE 
-                    -- For non-package orders (only check additional items)
-                    WHEN o.isPackage = 0 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                            ELSE 'Pending'
-                        END
-
-                    -- For package orders (check both additional and package items - ALL packages combined)
-                    WHEN o.isPackage = 1 THEN
-                        CASE 
-                            -- When both additional and package items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    
-                                    -- FIXED LOGIC: Check for one completed, one pending scenario
-                                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                          COALESCE(package_item_counts.packed_items, 0) = 0) OR
-                                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
-                                          COALESCE(additional_item_counts.packed_items, 0) = 0) THEN 'Pending'
-                                    
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 OR 
-                                         COALESCE(package_item_counts.packed_items, 0) > 0 THEN 'Opened'
-                                    ELSE 'Pending'
-                                END
-
-                            -- When only additional items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-
-                            -- When only package items exist (across all packages)
-                            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-
-                            -- When no items exist (shouldn't happen for package orders)
-                            ELSE 'Pending'
-                        END
+                    -- Both fully completed → Completed
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                    
+                    -- Both have no progress (both at 0) → Pending
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    
+                    -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+                    
+                    -- Both have partial progress (both opened) → Opened
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    
+                    -- At least one is fully completed and other is opened (partial progress) → Opened
+                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+                    
                     ELSE 'Pending'
-                END AS selectedStatus
+                END
+
+            -- When only additional items exist
+            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                CASE 
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                    ELSE 'Pending'
+                END
+
+            -- When only package items exist
+            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                CASE 
+                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
+                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                    ELSE 'Pending'
+                END
+
+            ELSE 'Pending'
+        END
+    ELSE 'Pending'
+END AS selectedStatus
 
             FROM 
                 distributedtarget dt
@@ -1611,85 +1627,204 @@ exports.getDistributionTargets = async (officerId) => {
 // };
 
 
+// exports.updateoutForDelivery = (orderId, userId) => {
+//     return new Promise((resolve, reject) => {
+//         const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+//         const updateOrderSql = `
+//       UPDATE market_place.processorders 
+//       SET status = 'Out For Delivery', 
+//           outBy = ?,
+//           outDlvrDate = ?
+//       WHERE orderId = ?
+//     `;
+
+//         const insertNotificationSql = `
+//   INSERT INTO market_place.dashnotification (orderId, title)
+//   SELECT mpp.id, 'Order is Out for Delivery'
+//   FROM market_place.processorders AS mpp
+//   WHERE mpp.orderId = ?
+//   ON DUPLICATE KEY UPDATE 
+//     title = VALUES(title)
+// `;
+
+//         try {
+//             // ✅ Get a single connection from the pool
+//             db.collectionofficer.getConnection((err, connection) => {
+//                 if (err) return reject(err);
+
+//                 connection.beginTransaction((err) => {
+//                     if (err) {
+//                         connection.release();
+//                         return reject(err);
+//                     }
+
+//                     // Step 1: Update order status
+//                     connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
+//                         if (err) {
+//                             return connection.rollback(() => {
+//                                 connection.release();
+//                                 reject(err);
+//                             });
+//                         }
+
+//                         if (result.affectedRows === 0) {
+//                             return connection.rollback(() => {
+//                                 connection.release();
+//                                 reject(new Error(`No order found with orderId: ${orderId}`));
+//                             });
+//                         }
+
+//                         // Step 2: Insert/update notification
+//                         connection.query(insertNotificationSql, [orderId, currentDate], (err2, result2) => {
+//                             if (err2) {
+//                                 return connection.rollback(() => {
+//                                     connection.release();
+//                                     reject(err2);
+//                                 });
+//                             }
+
+//                             connection.commit((err3) => {
+//                                 if (err3) {
+//                                     return connection.rollback(() => {
+//                                         connection.release();
+//                                         reject(err3);
+//                                     });
+//                                 }
+
+//                                 console.log(`✅ Order ${orderId} marked as 'Out For Delivery' and notification updated.`);
+//                                 connection.release();
+//                                 resolve({
+//                                     orderUpdate: result,
+//                                     notificationUpdate: result2
+//                                 });
+//                             });
+//                         });
+//                     });
+//                 });
+//             });
+//         } catch (error) {
+//             console.error("Error in updateoutForDelivery:", error);
+//             reject(error);
+//         }
+//     });
+// };
+
 exports.updateoutForDelivery = (orderId, userId) => {
-  return new Promise((resolve, reject) => {
-    const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    return new Promise((resolve, reject) => {
+        const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    const updateOrderSql = `
-      UPDATE market_place.processorders 
-      SET status = 'Out For Delivery', 
-          outBy = ?,
-          outDlvrDate = ?
-      WHERE orderId = ?
-    `;
+        // First, get the delivery method from orders table
+        const getDeliveryMethodSql = `
+            SELECT o.delivaryMethod 
+            FROM market_place.orders AS o
+            INNER JOIN market_place.processorders AS po ON po.orderId = o.id
+            WHERE po.orderId = ?
+        `;
 
-const insertNotificationSql = `
-  INSERT INTO market_place.dashnotification (orderId, title)
-  SELECT mpp.id, 'Order is Out for Delivery'
-  FROM market_place.processorders AS mpp
-  WHERE mpp.orderId = ?
-  ON DUPLICATE KEY UPDATE 
-    title = VALUES(title)
-`;
+        // Update order status based on delivery method
+        const updateOrderSql = `
+            UPDATE market_place.processorders AS po
+            INNER JOIN market_place.orders AS o ON po.orderId = o.id
+            SET po.status = CASE 
+                WHEN o.delivaryMethod = 'Pickup' THEN 'Ready to Pickup'
+                ELSE 'Out For Delivery'
+            END,
+            po.outBy = ?,
+            po.outDlvrDate = ?
+            WHERE po.orderId = ?
+        `;
 
-    try {
-      // ✅ Get a single connection from the pool
-      db.collectionofficer.getConnection((err, connection) => {
-        if (err) return reject(err);
+        // Insert notification only for delivery orders (not pickup)
+        const insertNotificationSql = `
+            INSERT INTO market_place.dashnotification (orderId, title)
+            SELECT po.id, 'Order is Out for Delivery'
+            FROM market_place.processorders AS po
+            INNER JOIN market_place.orders AS o ON po.orderId = o.id
+            WHERE po.orderId = ? AND o.delivaryMethod != 'Pickup'
+            ON DUPLICATE KEY UPDATE 
+                title = VALUES(title)
+        `;
 
-        connection.beginTransaction((err) => {
-          if (err) {
-            connection.release();
-            return reject(err);
-          }
+        try {
+            db.collectionofficer.getConnection((err, connection) => {
+                if (err) return reject(err);
 
-          // Step 1: Update order status
-          connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
-            if (err) {
-              return connection.rollback(() => {
-                connection.release();
-                reject(err);
-              });
-            }
+                connection.beginTransaction((err) => {
+                    if (err) {
+                        connection.release();
+                        return reject(err);
+                    }
 
-            if (result.affectedRows === 0) {
-              return connection.rollback(() => {
-                connection.release();
-                reject(new Error(`No order found with orderId: ${orderId}`));
-              });
-            }
+                    // Step 1: Get delivery method
+                    connection.query(getDeliveryMethodSql, [orderId], (err, deliveryResult) => {
+                        if (err) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                reject(err);
+                            });
+                        }
 
-            // Step 2: Insert/update notification
-            connection.query(insertNotificationSql, [orderId, currentDate], (err2, result2) => {
-              if (err2) {
-                return connection.rollback(() => {
-                  connection.release();
-                  reject(err2);
+                        if (deliveryResult.length === 0) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                reject(new Error(`No order found with orderId: ${orderId}`));
+                            });
+                        }
+
+                        const deliveryMethod = deliveryResult[0].delivaryMethod;
+                        const newStatus = deliveryMethod === 'Pickup' ? 'Ready to Pickup' : 'Out For Delivery';
+
+                        // Step 2: Update order status
+                        connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
+                            if (err) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(err);
+                                });
+                            }
+
+                            if (result.affectedRows === 0) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(new Error(`No order found with orderId: ${orderId}`));
+                                });
+                            }
+
+                            // Step 3: Insert/update notification (only for delivery orders)
+                            connection.query(insertNotificationSql, [orderId], (err2, result2) => {
+                                if (err2) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(err2);
+                                    });
+                                }
+
+                                connection.commit((err3) => {
+                                    if (err3) {
+                                        return connection.rollback(() => {
+                                            connection.release();
+                                            reject(err3);
+                                        });
+                                    }
+
+                                    console.log(`✅ Order ${orderId} marked as '${newStatus}' and notification ${deliveryMethod === 'Pickup' ? 'skipped (pickup order)' : 'updated'}.`);
+                                    connection.release();
+                                    resolve({
+                                        orderUpdate: result,
+                                        notificationUpdate: result2,
+                                        status: newStatus,
+                                        deliveryMethod: deliveryMethod
+                                    });
+                                });
+                            });
+                        });
+                    });
                 });
-              }
-
-              connection.commit((err3) => {
-                if (err3) {
-                  return connection.rollback(() => {
-                    connection.release();
-                    reject(err3);
-                  });
-                }
-
-                console.log(`✅ Order ${orderId} marked as 'Out For Delivery' and notification updated.`);
-                connection.release();
-                resolve({
-                  orderUpdate: result,
-                  notificationUpdate: result2
-                });
-              });
             });
-          });
-        });
-      });
-    } catch (error) {
-      console.error("Error in updateoutForDelivery:", error);
-      reject(error);
-    }
-  });
+        } catch (error) {
+            console.error("Error in updateoutForDelivery:", error);
+            reject(error);
+        }
+    });
 };
