@@ -1089,6 +1089,303 @@ exports.approveReplaceRequest = (params) => {
 };
 
 
+// exports.getDistributionOfficerTarget = (officerId) => {
+//     console.log("Getting targets for officer ID:", officerId);
+
+//     return new Promise((resolve, reject) => {
+//         if (!officerId) {
+//             return reject(new Error("Officer ID is missing or invalid"));
+//         }
+
+//         const sql = `
+//             SELECT 
+//                 dt.id AS distributedTargetId,
+//                 dt.companycenterId,
+//                 dt.userId,
+//                 dt.target,
+//                 dt.complete,
+//                 dt.createdAt AS targetCreatedAt,
+
+//                 dti.id AS distributedTargetItemId,
+//                 dti.orderId,
+//                 dti.isComplete,
+//                 dti.completeTime,
+//                 dti.createdAt AS itemCreatedAt,
+
+//                 po.id AS processOrderId,
+//                 po.invNo,
+//                 po.transactionId,
+//                 po.paymentMethod,
+//                 po.isPaid,
+//                 po.amount,
+//                 po.status,
+//                 po.createdAt AS orderCreatedAt,
+//                 po.reportStatus,
+
+//                 o.id AS orderId,
+//                 o.isPackage,
+//                 o.userId AS orderUserId,
+//                 o.orderApp,
+//                 o.buildingType,
+//                 o.sheduleType,
+//                 o.sheduleDate,
+//                 o.sheduleTime,
+
+//                 -- Additional item counts (ensure numeric types)
+//                 CAST(COALESCE(additional_item_counts.total_items, 0) AS UNSIGNED) AS totalAdditionalItems,
+//                 CAST(COALESCE(additional_item_counts.packed_items, 0) AS UNSIGNED) AS packedAdditionalItems,
+//                 CAST(COALESCE(additional_item_counts.pending_items, 0) AS UNSIGNED) AS pendingAdditionalItems,
+
+//                 -- Additional item status
+//                 CASE 
+//                     WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN NULL
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+//                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+//                     ELSE NULL
+//                 END AS additionalItemStatus,
+
+//                 -- Package item counts (ensure numeric types and include isLock info)
+//                 CAST(COALESCE(package_item_counts.total_items, 0) AS UNSIGNED) AS totalPackageItems,
+//                 CAST(COALESCE(package_item_counts.packed_items, 0) AS UNSIGNED) AS packedPackageItems,
+//                 CAST(COALESCE(package_item_counts.pending_items, 0) AS UNSIGNED) AS pendingPackageItems,
+//                 CAST(COALESCE(package_item_counts.total_packages, 0) AS UNSIGNED) AS totalPackages,
+//                 CAST(COALESCE(package_item_counts.locked_packages, 0) AS UNSIGNED) AS lockedPackages,
+
+//                 -- Package item status (considering all packages)
+//                 CASE 
+//                     WHEN o.isPackage = 0 THEN NULL
+//                     WHEN COALESCE(package_item_counts.total_items, 0) = 0 THEN 'Pending'
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
+//                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+//                     ELSE NULL
+//                 END AS packageItemStatus,
+
+//                 -- Overall status - considering all items across all packages with FIXED logic
+//          -- Replace the selectedStatus CASE statement with this fixed version:
+
+// CASE 
+//     -- For non-package orders (only check additional items)
+//     WHEN o.isPackage = 0 THEN
+//         CASE 
+//             WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+//             WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+//             WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+//                  COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+//             WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+//             ELSE 'Pending'
+//         END
+
+//     -- For package orders (check both additional and package items)
+//     WHEN o.isPackage = 1 THEN
+//         CASE 
+//             -- When both additional and package items exist
+//             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+//                  COALESCE(package_item_counts.total_items, 0) > 0 THEN
+//                 CASE 
+//                     -- Both fully completed → Completed
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+//                          COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+
+//                     -- Both have no progress (both at 0) → Pending
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
+//                          COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+
+//                     -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
+//                     WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+//                          (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+
+//                     -- Both have partial progress (both opened) → Opened
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+//                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+//                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+//                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+
+//                     -- At least one is fully completed and other is opened (partial progress) → Opened
+//                     WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+//                           COALESCE(package_item_counts.packed_items, 0) > 0 AND
+//                           COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+//                          (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+//                           COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+//                           COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+
+//                     ELSE 'Pending'
+//                 END
+
+//             -- When only additional items exist
+//             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+//                 CASE 
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+//                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+//                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+//                     ELSE 'Pending'
+//                 END
+
+//             -- When only package items exist
+//             WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
+//                 CASE 
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
+//                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+//                     WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+//                     ELSE 'Pending'
+//                 END
+
+//             ELSE 'Pending'
+//         END
+//     ELSE 'Pending'
+// END AS selectedStatus
+
+//             FROM 
+//                 distributedtarget dt
+//             INNER JOIN 
+//                 distributedtargetitems dti ON dt.id = dti.targetId
+//             INNER JOIN 
+//                 market_place.processorders po ON dti.orderId = po.id
+//             INNER JOIN 
+//                 market_place.orders o ON po.orderId = o.id
+//             LEFT JOIN (
+//                 -- Additional items subquery
+//                 SELECT 
+//                     orderId,
+//                     COUNT(*) as total_items,
+//                     SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+//                     SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+//                 FROM 
+//                     market_place.orderadditionalitems
+//                 GROUP BY 
+//                     orderId
+//             ) additional_item_counts ON o.id = additional_item_counts.orderId
+//             LEFT JOIN (
+//                 -- Package items subquery - FIXED: Aggregate ALL packages for each processorder + include isLock
+//                 SELECT 
+//                     op.orderId,  -- This references processorders.id
+//                     COUNT(DISTINCT op.id) as total_packages,  -- Count total packages
+//                     SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,  -- Count locked packages
+//                     SUM(COALESCE(package_items.total_items, 0)) as total_items,
+//                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
+//                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items
+//                 FROM 
+//                     market_place.orderpackage op
+//                 LEFT JOIN (
+//                     -- Get item counts for each package
+//                     SELECT 
+//                         orderPackageId,
+//                         COUNT(id) as total_items,
+//                         SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+//                         SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+//                     FROM 
+//                         market_place.orderpackageitems
+//                     GROUP BY 
+//                         orderPackageId
+//                 ) package_items ON op.id = package_items.orderPackageId
+//                 GROUP BY 
+//                     op.orderId  -- Group by processorders.id to get one row per order
+//             ) package_item_counts ON po.id = package_item_counts.orderId
+//             WHERE 
+//                 dt.userId = ?
+//                 AND (
+//                     -- Last 3 days: get all data without filtering
+//                     DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+//                     OR 
+//                     -- Older than 3 days: only incomplete orders
+//                     (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+//                 )
+//             ORDER BY 
+//                 dt.companycenterId ASC,
+//                 dt.userId DESC,
+//                 dt.target ASC,
+//                 dt.complete ASC,
+//                 o.id ASC
+//         `;
+
+//         // Execute the query
+//         db.collectionofficer.query(sql, [officerId], (err, results) => {
+//             if (err) {
+//                 console.error("Error executing query:", err);
+//                 return reject(err);
+//             }
+
+//             console.log("Targets found (3 days all data + older incomplete):", results.length);
+//             if (results.length > 0) {
+//                 console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE) ===");
+
+//                 // Log first 3 records for debugging
+//                 results.slice(0, 3).forEach((row, index) => {
+//                     console.log(`Record ${index + 1}:`, {
+//                         distributedTargetId: row.distributedTargetId,
+//                         distributedTargetItemId: row.distributedTargetItemId,
+//                         isComplete: row.isComplete,
+//                         createdDate: row.targetCreatedAt,
+//                         processOrderId: row.processOrderId,
+//                         orderId: row.orderId,
+//                         isPackage: row.isPackage,
+//                         packageData: {
+//                             totalPackages: row.totalPackages,
+//                             lockedPackages: row.lockedPackages,
+//                             items: {
+//                                 total: row.totalPackageItems,
+//                                 packed: row.packedPackageItems,
+//                                 pending: row.pendingPackageItems,
+//                                 status: row.packageItemStatus
+//                             }
+//                         },
+//                         additionalItems: {
+//                             total: row.totalAdditionalItems,
+//                             packed: row.packedAdditionalItems,
+//                             pending: row.pendingAdditionalItems,
+//                             status: row.additionalItemStatus
+//                         },
+//                         overallStatus: row.selectedStatus
+//                     });
+//                 });
+
+//                 // Status summary
+//                 const statusCounts = results.reduce((acc, row) => {
+//                     acc[row.selectedStatus] = (acc[row.selectedStatus] || 0) + 1;
+//                     return acc;
+//                 }, {});
+//                 console.log("Status Distribution (3 days all + older incomplete):", statusCounts);
+
+//                 // Completion status summary
+//                 const completionCounts = results.reduce((acc, row) => {
+//                     const status = row.isComplete === null ? 'NULL' : row.isComplete.toString();
+//                     acc[status] = (acc[status] || 0) + 1;
+//                     return acc;
+//                 }, {});
+//                 console.log("Completion Status Distribution:", completionCounts);
+
+//                 // Package lock summary
+//                 const lockCounts = results.reduce((acc, row) => {
+//                     if (row.isPackage === 1) {
+//                         const lockStatus = `${row.lockedPackages}/${row.totalPackages} locked`;
+//                         acc[lockStatus] = (acc[lockStatus] || 0) + 1;
+//                     }
+//                     return acc;
+//                 }, {});
+//                 console.log("Package Lock Distribution:", lockCounts);
+
+//                 // Date-wise summary
+//                 const dateCounts = results.reduce((acc, row) => {
+//                     const date = new Date(row.targetCreatedAt).toISOString().split('T')[0];
+//                     acc[date] = (acc[date] || 0) + 1;
+//                     return acc;
+//                 }, {});
+//                 console.log("Date-wise Distribution:", dateCounts);
+
+//                 console.log("=== END DEBUGGING ===");
+//             }
+
+//             resolve(results);
+//         });
+//     });
+// };
+
+
 exports.getDistributionOfficerTarget = (officerId) => {
     console.log("Getting targets for officer ID:", officerId);
 
@@ -1164,81 +1461,79 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     ELSE NULL
                 END AS packageItemStatus,
 
-                -- Overall status - considering all items across all packages with FIXED logic
-         -- Replace the selectedStatus CASE statement with this fixed version:
-
-CASE 
-    -- For non-package orders (only check additional items)
-    WHEN o.isPackage = 0 THEN
-        CASE 
-            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-            ELSE 'Pending'
-        END
-
-    -- For package orders (check both additional and package items)
-    WHEN o.isPackage = 1 THEN
-        CASE 
-            -- When both additional and package items exist
-            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                -- Overall status
                 CASE 
-                    -- Both fully completed → Completed
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                    
-                    -- Both have no progress (both at 0) → Pending
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
-                         COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                    
-                    -- PRIORITY FIX: One is pending (0 packed) and other has ANY progress (partial or complete) → Pending
-                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
-                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
-                    
-                    -- Both have partial progress (both opened) → Opened
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
-                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
-                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
-                    
-                    -- At least one is fully completed and other is opened (partial progress) → Opened
-                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
-                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
-                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
-                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
-                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
-                    
-                    ELSE 'Pending'
-                END
+                    -- For non-package orders (only check additional items)
+                    WHEN o.isPackage = 0 THEN
+                        CASE 
+                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                            ELSE 'Pending'
+                        END
 
-            -- When only additional items exist
-            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                CASE 
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                    ELSE 'Pending'
-                END
+                    -- For package orders (check both additional and package items)
+                    WHEN o.isPackage = 1 THEN
+                        CASE 
+                            -- When both additional and package items exist
+                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                                 COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                                CASE 
+                                    -- Both fully completed → Completed
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                                         COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                                    
+                                    -- Both have no progress (both at 0) → Pending
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 AND
+                                         COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                                    
+                                    -- One is pending (0 packed) and other has ANY progress → Pending
+                                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = 0 AND COALESCE(package_item_counts.packed_items, 0) > 0) OR
+                                         (COALESCE(additional_item_counts.packed_items, 0) > 0 AND COALESCE(package_item_counts.packed_items, 0) = 0) THEN 'Pending'
+                                    
+                                    -- Both have partial progress → Opened
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) AND
+                                         COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                                    
+                                    -- At least one is fully completed and other is opened → Opened
+                                    WHEN (COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                                          COALESCE(package_item_counts.packed_items, 0) > 0 AND
+                                          COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0)) OR
+                                         (COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) AND
+                                          COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                                          COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0)) THEN 'Opened'
+                                    
+                                    ELSE 'Pending'
+                                END
 
-            -- When only package items exist
-            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
-                CASE 
-                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
-                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
-                    ELSE 'Pending'
-                END
+                            -- When only additional items exist
+                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                                    ELSE 'Pending'
+                                END
 
-            ELSE 'Pending'
-        END
-    ELSE 'Pending'
-END AS selectedStatus
+                            -- When only package items exist
+                            WHEN COALESCE(package_item_counts.total_items, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(package_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                                    WHEN COALESCE(package_item_counts.packed_items, 0) > 0 AND 
+                                         COALESCE(package_item_counts.packed_items, 0) < COALESCE(package_item_counts.total_items, 0) THEN 'Opened'
+                                    WHEN COALESCE(package_item_counts.packed_items, 0) = COALESCE(package_item_counts.total_items, 0) THEN 'Completed'
+                                    ELSE 'Pending'
+                                END
+
+                            ELSE 'Pending'
+                        END
+                    ELSE 'Pending'
+                END AS selectedStatus
 
             FROM 
                 distributedtarget dt
@@ -1261,18 +1556,17 @@ END AS selectedStatus
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Aggregate ALL packages for each processorder + include isLock
+                -- Package items subquery - ONLY include unlocked packages (isLock = 0 OR NULL)
                 SELECT 
-                    op.orderId,  -- This references processorders.id
-                    COUNT(DISTINCT op.id) as total_packages,  -- Count total packages
-                    SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,  -- Count locked packages
+                    op.orderId,
+                    COUNT(DISTINCT op.id) as total_packages,
+                    SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,
                     SUM(COALESCE(package_items.total_items, 0)) as total_items,
                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items
                 FROM 
                     market_place.orderpackage op
                 LEFT JOIN (
-                    -- Get item counts for each package
                     SELECT 
                         orderPackageId,
                         COUNT(id) as total_items,
@@ -1283,8 +1577,10 @@ END AS selectedStatus
                     GROUP BY 
                         orderPackageId
                 ) package_items ON op.id = package_items.orderPackageId
+                WHERE 
+                    COALESCE(op.isLock, 0) = 0  -- CRITICAL FIX: Only include unlocked packages
                 GROUP BY 
-                    op.orderId  -- Group by processorders.id to get one row per order
+                    op.orderId
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 dt.userId = ?
@@ -1294,6 +1590,14 @@ END AS selectedStatus
                     OR 
                     -- Older than 3 days: only incomplete orders
                     (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                )
+                -- ADDITIONAL FIX: Exclude orders where ALL packages are locked
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM market_place.orderpackage op_check
+                    WHERE op_check.orderId = po.id 
+                    AND o.isPackage = 1
+                    HAVING COUNT(*) = SUM(CASE WHEN op_check.isLock = 1 THEN 1 ELSE 0 END)
                 )
             ORDER BY 
                 dt.companycenterId ASC,
@@ -1310,9 +1614,9 @@ END AS selectedStatus
                 return reject(err);
             }
 
-            console.log("Targets found (3 days all data + older incomplete):", results.length);
+            console.log("Targets found (excluding locked packages):", results.length);
             if (results.length > 0) {
-                console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE) ===");
+                console.log("=== DEBUGGING DATA (LOCKED PACKAGES EXCLUDED) ===");
 
                 // Log first 3 records for debugging
                 results.slice(0, 3).forEach((row, index) => {
@@ -1349,33 +1653,7 @@ END AS selectedStatus
                     acc[row.selectedStatus] = (acc[row.selectedStatus] || 0) + 1;
                     return acc;
                 }, {});
-                console.log("Status Distribution (3 days all + older incomplete):", statusCounts);
-
-                // Completion status summary
-                const completionCounts = results.reduce((acc, row) => {
-                    const status = row.isComplete === null ? 'NULL' : row.isComplete.toString();
-                    acc[status] = (acc[status] || 0) + 1;
-                    return acc;
-                }, {});
-                console.log("Completion Status Distribution:", completionCounts);
-
-                // Package lock summary
-                const lockCounts = results.reduce((acc, row) => {
-                    if (row.isPackage === 1) {
-                        const lockStatus = `${row.lockedPackages}/${row.totalPackages} locked`;
-                        acc[lockStatus] = (acc[lockStatus] || 0) + 1;
-                    }
-                    return acc;
-                }, {});
-                console.log("Package Lock Distribution:", lockCounts);
-
-                // Date-wise summary
-                const dateCounts = results.reduce((acc, row) => {
-                    const date = new Date(row.targetCreatedAt).toISOString().split('T')[0];
-                    acc[date] = (acc[date] || 0) + 1;
-                    return acc;
-                }, {});
-                console.log("Date-wise Distribution:", dateCounts);
+                console.log("Status Distribution:", statusCounts);
 
                 console.log("=== END DEBUGGING ===");
             }
@@ -1384,7 +1662,6 @@ END AS selectedStatus
         });
     });
 };
-
 
 
 exports.getAllDistributionOfficer = async (managerId) => {
