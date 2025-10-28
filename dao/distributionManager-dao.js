@@ -797,14 +797,13 @@ exports.approveReplaceRequest = (params) => {
 
     return new Promise((resolve, reject) => {
         const { replaceRequestId, newProductId, quantity, price } = params;
-        const replceId = replaceRequestId;
 
         // Validate required parameters
-        if (!replceId || !newProductId || !quantity || !price) {
+        if (!replaceRequestId || !newProductId || !quantity || !price) {
             return reject(new Error("Missing required parameters: replaceRequestId, newProductId, quantity, price"));
         }
 
-        console.log("Using replceId:", replceId);
+        console.log("Using replaceRequestId:", replaceRequestId);
 
         // Get connection from pool and start transaction
         db.marketPlace.getConnection((err, connection) => {
@@ -838,7 +837,7 @@ exports.approveReplaceRequest = (params) => {
                     WHERE rr.id = ?
                 `;
 
-                connection.query(getReplaceRequestSql, [replceId], (err, replaceResults) => {
+                connection.query(getReplaceRequestSql, [replaceRequestId], (err, replaceResults) => {
                     if (err) {
                         console.error("Get replace request error:", err);
                         return connection.rollback(() => {
@@ -850,7 +849,7 @@ exports.approveReplaceRequest = (params) => {
                     if (replaceResults.length === 0) {
                         return connection.rollback(() => {
                             connection.release();
-                            reject(new Error(`Replace request not found with replceId: ${replceId}`));
+                            reject(new Error(`Replace request not found with id: ${replaceRequestId}`));
                         });
                     }
 
@@ -866,19 +865,18 @@ exports.approveReplaceRequest = (params) => {
                     }
 
                     // Step 1.5: Find the corresponding orderpackageitems record
+                    // Use replceId from replace request which should match orderpackageitems.id
                     const getOrderPackageItemsSql = `
-                        SELECT id, productId, qty, price 
+                        SELECT id, productType, productId, qty, price 
                         FROM market_place.orderpackageitems 
-                        WHERE orderPackageId = ?
-                        ORDER BY id ASC
-                        LIMIT 1
+                        WHERE id = ?
                     `;
 
-                    console.log("Looking for orderpackageitems with orderPackageId:", replaceRequest.orderPackageId);
+                    console.log("Looking for orderpackageitems with id:", replaceRequest.replceId);
 
                     connection.query(
                         getOrderPackageItemsSql,
-                        [replaceRequest.orderPackageId],
+                        [replaceRequest.replceId],
                         (err, itemsResults) => {
                             if (err) {
                                 console.error("Get order package items error:", err);
@@ -893,7 +891,7 @@ exports.approveReplaceRequest = (params) => {
                             if (itemsResults.length === 0) {
                                 return connection.rollback(() => {
                                     connection.release();
-                                    reject(new Error("No order package items found for this order"));
+                                    reject(new Error(`No order package item found with id: ${replaceRequest.replceId}`));
                                 });
                             }
 
@@ -933,77 +931,86 @@ exports.approveReplaceRequest = (params) => {
 
                                     console.log("Replace request updated:", updateReplaceResult);
 
-                                    // Step 3: Update orderpackageitems table
-                                    const updateOrderPackageItemsSql = `
-                                        UPDATE market_place.orderpackageitems 
-                                        SET 
-                                            productId = ?,
-                                            qty = ?,
-                                            price = ?
+                                    // Step 2.5: Insert original data into prevdefineproduct table (BEFORE updating orderpackageitems)
+                                    // CRITICAL FIX: Use replaceRequest.replceId (the orderpackageitems.id) for the foreign key
+                                    const insertPrevDefineProductSql = `
+                                        INSERT INTO market_place.prevdefineproduct 
+                                        (orderPackageId, replceId, productType, productId, qty, price)
+                                        SELECT ?, ?, productType, productId, qty, price
+                                        FROM market_place.orderpackageitems
                                         WHERE id = ?
+                                        AND NOT EXISTS (
+                                            SELECT 1 FROM market_place.prevdefineproduct 
+                                            WHERE orderPackageId = ? AND replceId = ?
+                                        )
                                     `;
 
-                                    console.log("About to update orderpackageitems with:", {
-                                        newProductId,
-                                        quantity,
-                                        price,
+                                    console.log("About to insert into prevdefineproduct (preserving original data):", {
+                                        orderPackageId: replaceRequest.orderPackageId,
+                                        replceId: replaceRequest.replceId,
                                         orderPackageItemId: orderPackageItem.id
                                     });
 
                                     connection.query(
-                                        updateOrderPackageItemsSql,
-                                        [newProductId, quantity, price, orderPackageItem.id],
-                                        (err, updateItemsResult) => {
+                                        insertPrevDefineProductSql,
+                                        [
+                                            replaceRequest.orderPackageId,
+                                            replaceRequest.replceId,  // FIXED: Use replaceRequest.replceId (3824) not replaceRequestId (66)
+                                            orderPackageItem.id,
+                                            replaceRequest.orderPackageId,
+                                            replaceRequest.replceId   // FIXED: Same here
+                                        ],
+                                        (err, insertPrevDefineResult) => {
                                             if (err) {
-                                                console.error("Update order package items error:", err);
+                                                console.error("Insert prevdefineproduct error:", err);
                                                 return connection.rollback(() => {
                                                     connection.release();
-                                                    reject(new Error("Failed to update order package items"));
+                                                    reject(new Error("Failed to insert into prevdefineproduct"));
                                                 });
                                             }
 
-                                            console.log("Order package items updated:", updateItemsResult);
-                                            console.log("Affected rows:", updateItemsResult.affectedRows);
+                                            console.log("Prevdefineproduct insert result:", insertPrevDefineResult);
 
-                                            if (updateItemsResult.affectedRows === 0) {
-                                                console.log("WARNING: No rows were updated in orderpackageitems!");
+                                            if (insertPrevDefineResult.affectedRows > 0) {
+                                                console.log("✓ Original product data preserved in prevdefineproduct");
+                                            } else {
+                                                console.log("Record already exists in prevdefineproduct, skipping insert");
                                             }
 
-                                            // Step 3.5: Update prevdefineproduct table
-                                            const updatePrevDefineProductSql = `
-                                                UPDATE market_place.prevdefineproduct 
+                                            // Step 3: Update orderpackageitems table with new product
+                                            const updateOrderPackageItemsSql = `
+                                                UPDATE market_place.orderpackageitems 
                                                 SET 
                                                     productId = ?,
                                                     qty = ?,
                                                     price = ?
-                                                WHERE orderPackageId = ? AND replceId = ?
+                                                WHERE id = ?
                                             `;
 
-                                            console.log("About to update prevdefineproduct with:", {
+                                            console.log("About to update orderpackageitems with new product:", {
                                                 newProductId,
                                                 quantity,
                                                 price,
-                                                orderPackageId: replaceRequest.orderPackageId,
-                                                replceId: replceId
+                                                orderPackageItemId: orderPackageItem.id
                                             });
 
                                             connection.query(
-                                                updatePrevDefineProductSql,
-                                                [newProductId, quantity, price, replaceRequest.orderPackageId, replceId],
-                                                (err, updatePrevDefineResult) => {
+                                                updateOrderPackageItemsSql,
+                                                [newProductId, quantity, price, orderPackageItem.id],
+                                                (err, updateItemsResult) => {
                                                     if (err) {
-                                                        console.error("Update prevdefineproduct error:", err);
+                                                        console.error("Update order package items error:", err);
                                                         return connection.rollback(() => {
                                                             connection.release();
-                                                            reject(new Error("Failed to update prevdefineproduct"));
+                                                            reject(new Error("Failed to update order package items"));
                                                         });
                                                     }
 
-                                                    console.log("Prevdefineproduct updated:", updatePrevDefineResult);
-                                                    console.log("Prevdefineproduct affected rows:", updatePrevDefineResult.affectedRows);
+                                                    console.log("Order package items updated:", updateItemsResult);
+                                                    console.log("Affected rows:", updateItemsResult.affectedRows);
 
-                                                    if (updatePrevDefineResult.affectedRows === 0) {
-                                                        console.log("WARNING: No rows were updated in prevdefineproduct! This might be expected if no record exists.");
+                                                    if (updateItemsResult.affectedRows === 0) {
+                                                        console.log("WARNING: No rows were updated in orderpackageitems!");
                                                     }
 
                                                     // Step 4: Update orderpackage table (set isLock = 0)
@@ -1037,7 +1044,7 @@ exports.approveReplaceRequest = (params) => {
                                                                     });
                                                                 }
 
-                                                                console.log("Transaction committed successfully");
+                                                                console.log("✓ Transaction committed successfully");
 
                                                                 // Release connection back to pool
                                                                 connection.release();
@@ -1048,7 +1055,7 @@ exports.approveReplaceRequest = (params) => {
                                                                     message: 'Replace request approved successfully',
                                                                     data: {
                                                                         replaceRequestId: replaceRequestId,
-                                                                        replceId: replceId,
+                                                                        replceId: replaceRequest.replceId,
                                                                         orderPackageId: replaceRequest.orderPackageId,
                                                                         oldProductId: orderPackageItem.productId,
                                                                         newProductId: newProductId,
@@ -1058,8 +1065,8 @@ exports.approveReplaceRequest = (params) => {
                                                                         newPrice: price,
                                                                         updatedTables: [
                                                                             'replacerequest',
+                                                                            'prevdefineproduct (inserted)',
                                                                             'orderpackageitems',
-                                                                            'prevdefineproduct',
                                                                             'orderpackage'
                                                                         ]
                                                                     }
@@ -1124,10 +1131,10 @@ exports.getDistributionOfficerTarget = (officerId) => {
                 o.sheduleDate,
                 o.sheduleTime,
 
-                -- Additional item counts
-                COALESCE(additional_item_counts.total_items, 0) AS totalAdditionalItems,
-                COALESCE(additional_item_counts.packed_items, 0) AS packedAdditionalItems,
-                COALESCE(additional_item_counts.pending_items, 0) AS pendingAdditionalItems,
+                -- Additional item counts (ensure numeric types)
+                CAST(COALESCE(additional_item_counts.total_items, 0) AS UNSIGNED) AS totalAdditionalItems,
+                CAST(COALESCE(additional_item_counts.packed_items, 0) AS UNSIGNED) AS packedAdditionalItems,
+                CAST(COALESCE(additional_item_counts.pending_items, 0) AS UNSIGNED) AS pendingAdditionalItems,
 
                 -- Additional item status
                 CASE 
@@ -1139,11 +1146,12 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     ELSE NULL
                 END AS additionalItemStatus,
 
-                -- Package item counts (aggregated for ALL packages of this order)
-                COALESCE(package_item_counts.total_items, 0) AS totalPackageItems,
-                COALESCE(package_item_counts.packed_items, 0) AS packedPackageItems,
-                COALESCE(package_item_counts.pending_items, 0) AS pendingPackageItems,
-                COALESCE(package_item_counts.total_packages, 0) AS totalPackages,
+                -- Package item counts (ensure numeric types and include isLock info)
+                CAST(COALESCE(package_item_counts.total_items, 0) AS UNSIGNED) AS totalPackageItems,
+                CAST(COALESCE(package_item_counts.packed_items, 0) AS UNSIGNED) AS packedPackageItems,
+                CAST(COALESCE(package_item_counts.pending_items, 0) AS UNSIGNED) AS pendingPackageItems,
+                CAST(COALESCE(package_item_counts.total_packages, 0) AS UNSIGNED) AS totalPackages,
+                CAST(COALESCE(package_item_counts.locked_packages, 0) AS UNSIGNED) AS lockedPackages,
 
                 -- Package item status (considering all packages)
                 CASE 
@@ -1156,8 +1164,10 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     ELSE NULL
                 END AS packageItemStatus,
 
-                -- Overall status - considering all items across all packages
-              CASE 
+                -- Overall status - considering all items across all packages with FIXED logic
+         -- Replace the selectedStatus CASE statement with this fixed version:
+
+CASE 
     -- For non-package orders (only check additional items)
     WHEN o.isPackage = 0 THEN
         CASE 
@@ -1251,10 +1261,11 @@ END AS selectedStatus
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Aggregate ALL packages for each processorder
+                -- Package items subquery - FIXED: Aggregate ALL packages for each processorder + include isLock
                 SELECT 
                     op.orderId,  -- This references processorders.id
                     COUNT(DISTINCT op.id) as total_packages,  -- Count total packages
+                    SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,  -- Count locked packages
                     SUM(COALESCE(package_items.total_items, 0)) as total_items,
                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items
@@ -1275,20 +1286,6 @@ END AS selectedStatus
                 GROUP BY 
                     op.orderId  -- Group by processorders.id to get one row per order
             ) package_item_counts ON po.id = package_item_counts.orderId
-            -- LEFT JOIN to check for replace requests
-            LEFT JOIN (
-                -- Check if order has any replace requests through orderpackage
-                SELECT DISTINCT 
-                    po_inner.id as processOrderId
-                FROM 
-                    market_place.processorders po_inner
-                INNER JOIN 
-                    market_place.orders o_inner ON po_inner.orderId = o_inner.id
-                LEFT JOIN 
-                    market_place.orderpackage op_inner ON po_inner.id = op_inner.orderId
-                INNER JOIN 
-                    market_place.replacerequest rr ON op_inner.id = rr.orderPackageId
-            ) replace_check ON po.id = replace_check.processOrderId
             WHERE 
                 dt.userId = ?
                 AND (
@@ -1298,8 +1295,6 @@ END AS selectedStatus
                     -- Older than 3 days: only incomplete orders
                     (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
                 )
-                -- Filter out orders that have replace requests
-                AND replace_check.processOrderId IS NULL
             ORDER BY 
                 dt.companycenterId ASC,
                 dt.userId DESC,
@@ -1315,9 +1310,9 @@ END AS selectedStatus
                 return reject(err);
             }
 
-            console.log("Targets found (3 days all data + older incomplete, excluding replace requests):", results.length);
+            console.log("Targets found (3 days all data + older incomplete):", results.length);
             if (results.length > 0) {
-                console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE, NO REPLACE REQUESTS) ===");
+                console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE) ===");
 
                 // Log first 3 records for debugging
                 results.slice(0, 3).forEach((row, index) => {
@@ -1325,12 +1320,13 @@ END AS selectedStatus
                         distributedTargetId: row.distributedTargetId,
                         distributedTargetItemId: row.distributedTargetItemId,
                         isComplete: row.isComplete,
-                        createdDate: row.targetCreatedAt, // Show the date for verification
+                        createdDate: row.targetCreatedAt,
                         processOrderId: row.processOrderId,
                         orderId: row.orderId,
                         isPackage: row.isPackage,
                         packageData: {
                             totalPackages: row.totalPackages,
+                            lockedPackages: row.lockedPackages,
                             items: {
                                 total: row.totalPackageItems,
                                 packed: row.packedPackageItems,
@@ -1353,7 +1349,7 @@ END AS selectedStatus
                     acc[row.selectedStatus] = (acc[row.selectedStatus] || 0) + 1;
                     return acc;
                 }, {});
-                console.log("Status Distribution (3 days all + older incomplete, no replace requests):", statusCounts);
+                console.log("Status Distribution (3 days all + older incomplete):", statusCounts);
 
                 // Completion status summary
                 const completionCounts = results.reduce((acc, row) => {
@@ -1362,6 +1358,16 @@ END AS selectedStatus
                     return acc;
                 }, {});
                 console.log("Completion Status Distribution:", completionCounts);
+
+                // Package lock summary
+                const lockCounts = results.reduce((acc, row) => {
+                    if (row.isPackage === 1) {
+                        const lockStatus = `${row.lockedPackages}/${row.totalPackages} locked`;
+                        acc[lockStatus] = (acc[lockStatus] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
+                console.log("Package Lock Distribution:", lockCounts);
 
                 // Date-wise summary
                 const dateCounts = results.reduce((acc, row) => {
