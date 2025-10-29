@@ -80,6 +80,34 @@ const checkMarketPriceServeExists = async (marketPriceId, companyCenterId) => {
     return result.length > 0;
 };
 
+// Function to update status in marketpricerequest table to "Approved"
+const updateMarketPriceRequestStatus = async (marketPriceId, centerId, requestPrice) => {
+    // First, let's find matching records to debug
+    const [findRecords] = await db.collectionofficer.promise().query(
+        `SELECT id, status FROM marketpricerequest 
+         WHERE marketPriceId = ? AND centerId = ? AND requestPrice = ?`,
+        [marketPriceId, centerId, requestPrice]
+    );
+
+    console.log(`Found ${findRecords.length} matching records for marketPriceId=${marketPriceId}, centerId=${centerId}, requestPrice=${requestPrice}`);
+
+    if (findRecords.length > 0) {
+        console.log('Matching records:', findRecords);
+    }
+
+    // Update the status
+    const [result] = await db.collectionofficer.promise().query(
+        `UPDATE marketpricerequest 
+         SET status = 'Approved' 
+         WHERE marketPriceId = ? AND centerId = ? AND requestPrice = ? AND status = 'Pending'`,
+        [marketPriceId, centerId, requestPrice]
+    );
+
+    console.log(`Update result: affectedRows=${result.affectedRows}, changedRows=${result.changedRows}`);
+
+    return result;
+};
+
 // Update module.exports
 module.exports = {
     getEmpIdFromCollectionOfficerCompanyDetails,
@@ -90,4 +118,5 @@ module.exports = {
     getCompanyCenterIdFromCompanyCenter,
     updateMarketPriceServe,
     checkMarketPriceServeExists,
+    updateMarketPriceRequestStatus,
 };
