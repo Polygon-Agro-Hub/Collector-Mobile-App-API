@@ -91,6 +91,7 @@ exports.insertMarketPriceRequestBatch = async (req, res) => {
 
 
 
+// Updated insertMarketPriceRequestBatchManager endpoint
 exports.insertMarketPriceRequestBatchManager = async (req, res) => {
     try {
         console.log('Market Price Request Body:', req.body);
@@ -116,6 +117,8 @@ exports.insertMarketPriceRequestBatchManager = async (req, res) => {
         const userId = req.user.id;
         console.log('userId:', userId);
 
+        const status = 'Approved'; // Manager directly approves
+
         // Step 1: Get the empId from collectionofficer based on req.user.id
         const empId = await marketPriceDAO.getEmpIdFromCollectionOfficerCompanyDetails(userId);
         if (!empId) {
@@ -140,8 +143,9 @@ exports.insertMarketPriceRequestBatchManager = async (req, res) => {
 
         console.log('companyCenterId:', companyCenterId);
 
-        // Step 4: Prepare the price update data for marketpriceserve table only
+        // Step 4: Prepare the price update data
         const marketPriceServeUpdates = [];
+        const priceRequests = []; // For inserting into marketpricerequest
 
         for (const price of prices) {
             const { varietyId, grade, requestPrice } = price;
@@ -174,6 +178,11 @@ exports.insertMarketPriceRequestBatchManager = async (req, res) => {
                         companyCenterId,
                         updatedPrice: requestPrice
                     });
+
+                    // Prepare data for inserting into marketpricerequest with "Approved" status
+                    priceRequests.push([
+                        marketPriceId, centerId, requestPrice, status, empId
+                    ]);
                 } else {
                     return res.status(404).json({
                         message: `Record not found in marketpriceserve for marketPriceId: ${marketPriceId}, companyCenterId: ${companyCenterId}`
@@ -182,20 +191,31 @@ exports.insertMarketPriceRequestBatchManager = async (req, res) => {
             }
         }
 
-        // Step 5: Update marketpriceserve table ONLY (no insert to marketpricerequest)
-        if (marketPriceServeUpdates.length > 0) {
-            // Update marketpriceserve table for each price change
+        // Step 5: Update marketpriceserve and insert into marketpricerequest
+        if (marketPriceServeUpdates.length > 0 && priceRequests.length > 0) {
+            let serveUpdateCount = 0;
+
+            // Update marketpriceserve table
             for (const update of marketPriceServeUpdates) {
-                await marketPriceDAO.updateMarketPriceServe(
+                const result = await marketPriceDAO.updateMarketPriceServe(
                     update.marketPriceId,
                     update.companyCenterId,
                     update.updatedPrice
                 );
+                serveUpdateCount += result.affectedRows || 0;
+                console.log(`Updated marketpriceserve: marketPriceId=${update.marketPriceId}, affectedRows=${result.affectedRows}`);
             }
 
-            return res.status(200).json({
-                message: 'Market price serve updated successfully.',
-                updatedRecords: marketPriceServeUpdates.length
+            // Insert all the price requests in one query (batch insert) with "Approved" status
+            const insertResult = await marketPriceDAO.insertPriceRequests(priceRequests);
+            console.log(`Inserted ${insertResult.affectedRows} records into marketpricerequest with Approved status`);
+
+            return res.status(201).json({
+                message: 'Market price updates processed and approved successfully.',
+                serveUpdated: serveUpdateCount,
+                requestsInserted: insertResult.affectedRows,
+                requestId: insertResult.insertId,
+                totalProcessed: marketPriceServeUpdates.length
             });
         } else {
             return res.status(400).json({
