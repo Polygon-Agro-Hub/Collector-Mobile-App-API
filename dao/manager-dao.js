@@ -357,7 +357,8 @@ exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
       UPDATE collectionofficer 
       SET 
         irmId = ?,
-        centerId = ?
+        centerId = ?,
+        claimStatus = 1
       WHERE 
         id = ?
     `;
@@ -367,7 +368,8 @@ exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
       UPDATE collectionofficer 
       SET 
         irmId = ?,
-        distributedCenterId = ?
+        distributedCenterId = ?,
+        claimStatus = 1
       WHERE 
         id = ?
     `;
@@ -389,7 +391,8 @@ exports.disclaimOfficer = (collectionOfficerId, jobRole) => {
       UPDATE collectionofficer 
       SET 
         irmId = NULL,
-        centerId = NULL
+        centerId = NULL,
+        claimStatus = 0
       WHERE 
         id = ?
     `;
@@ -398,7 +401,8 @@ exports.disclaimOfficer = (collectionOfficerId, jobRole) => {
         UPDATE collectionofficer 
       SET 
         irmId = NULL,
-        distributedCenterId = NULL
+        distributedCenterId = NULL,
+        claimStatus = 0
       WHERE 
         id = ?
       `;
@@ -551,6 +555,70 @@ exports.getCollectionOfficers = async (managerId) => {
 };
 
 
+
+// exports.getCollectionOfficersReciever = async (managerId, companycenterId, varietyId, grade) => {
+//   console.log("manager id:", managerId, "companycenterId:", companycenterId, "varietyId:", varietyId, "grade:", grade);
+
+//   const sql = `
+//     SELECT DISTINCT
+//       co.empId, 
+//       CONCAT(co.firstNameEnglish, ' ', co.lastNameEnglish) AS fullNameEnglish,
+//       CONCAT(co.firstNameSinhala, ' ', co.lastNameSinhala) AS fullNameSinhala,
+//       CONCAT(co.firstNameTamil, ' ', co.lastNameTamil) AS fullNameTamil,
+//       co.phoneNumber01 AS phoneNumber1,
+//       co.phoneNumber02 AS phoneNumber2,
+//       co.id AS collectionOfficerId,
+//       co.jobRole,
+//       co.status,
+//       co.image
+//     FROM collectionofficer co
+//     INNER JOIN officertarget ot ON co.id = ot.officerId
+//     INNER JOIN dailytarget dt ON ot.dailyTargetId = dt.id
+//     WHERE co.jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
+//       AND co.irmId = ?
+//       AND co.status = 'Approved'
+//       AND dt.companyCenterId = ?
+//       AND dt.varietyId = ?
+//       AND dt.grade = ?
+//       AND DATE(dt.date) = CURDATE()
+//   `;
+
+//   return db.collectionofficer.promise().query(sql, [managerId, companycenterId, varietyId, grade]);
+// };
+
+exports.getCollectionOfficersReciever = async (managerId, companycenterId, varietyId, grade) => {
+  console.log("manager id:", managerId, "companycenterId:", companycenterId, "varietyId:", varietyId, "grade:", grade);
+  const sql = `
+    SELECT DISTINCT
+      co.empId, 
+      CONCAT(co.firstNameEnglish, ' ', co.lastNameEnglish) AS fullNameEnglish,
+      CONCAT(co.firstNameSinhala, ' ', co.lastNameSinhala) AS fullNameSinhala,
+      CONCAT(co.firstNameTamil, ' ', co.lastNameTamil) AS fullNameTamil,
+      co.phoneNumber01 AS phoneNumber1,
+      co.phoneNumber02 AS phoneNumber2,
+      co.id AS collectionOfficerId,
+      co.jobRole,
+      co.status,
+      co.image
+    FROM collectionofficer co
+    INNER JOIN officertarget ot ON co.id = ot.officerId
+    INNER JOIN dailytarget dt ON ot.dailyTargetId = dt.id
+    WHERE co.jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
+      AND co.irmId = ?
+      AND co.status = 'Approved'
+      AND dt.companyCenterId = ?
+      AND dt.varietyId = ?
+      AND dt.grade = ?
+      AND DATE(dt.date) = CURDATE()
+      AND ot.target IS NOT NULL
+      AND ot.target > 0
+      AND ot.target > ot.complete
+  `;
+  return db.collectionofficer.promise().query(sql, [managerId, companycenterId, varietyId, grade]);
+};
+
+
+
 exports.getCollectionOfficersList = async (managerId) => {
   console.log("manager id", managerId)
   const sql = `
@@ -566,7 +634,7 @@ exports.getCollectionOfficersList = async (managerId) => {
       status,
       image
     FROM collectionofficer
-    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ?
+    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ? 
   `;
   return db.collectionofficer.promise().query(sql, [managerId]);
 };

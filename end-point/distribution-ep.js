@@ -22,6 +22,8 @@ exports.getOfficerTarget = async (req, res) => {
         // Get targets from DAO
         const targets = await distributionDao.getTargetForOfficerDao(officerId);
 
+        console.log("target----------", targets)
+
         // console.log("nwxsjklowcd", targets)
 
         res.status(200).json({

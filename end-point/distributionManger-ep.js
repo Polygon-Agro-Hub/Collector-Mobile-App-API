@@ -224,6 +224,7 @@ exports.approveReplaceRequest = async (req, res) => {
       });
     }
 
+
     // Update the replace request with new product details
     const updateResult = await targetDDao.approveReplaceRequest({
       replaceRequestId,

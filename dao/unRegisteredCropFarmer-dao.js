@@ -342,14 +342,64 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
 
 
 
-exports.getVarietiesByCropId = (officerId, cropId) => {
+// exports.getVarietiesByCropId = (officerId, cropId) => {
+//   return new Promise((resolve, reject) => {
+//     if (!officerId || !cropId) {
+//       return reject(new Error("Officer ID and Crop ID are required"));
+//     }
+
+//     // Updated query for new table structure
+//     const varietyQuery = `
+//       SELECT DISTINCT
+//           cv.id,
+//           cv.varietyNameEnglish,
+//           cv.varietyNameSinhala,
+//           cv.varietyNameTamil
+//       FROM 
+//           officertarget ot
+//       INNER JOIN
+//           dailytarget dt ON ot.dailyTargetId = dt.id
+//       INNER JOIN
+//           plant_care.cropvariety cv ON dt.varietyId = cv.id
+//       WHERE
+//           ot.officerId = ?
+//           AND cv.cropGroupId = ?
+//       ORDER BY
+//           cv.varietyNameEnglish,
+//           cv.varietyNameSinhala,
+//           cv.varietyNameTamil
+//     `;
+
+//     db.collectionofficer.query(varietyQuery, [officerId, cropId], (error, results) => {
+//       if (error) {
+//         console.error("Error fetching varieties for officer and crop:", error);
+//         return reject(error);
+//       }
+
+//       const formattedResults = results.map(variety => ({
+//         id: variety.id,
+//         varietyEnglish: variety.varietyNameEnglish,
+//         varietySinhala: variety.varietyNameSinhala,
+//         varietyTamil: variety.varietyNameTamil
+//       }));
+
+//       resolve(formattedResults);
+//     });
+//   });
+// };
+
+exports.getVarietiesByCropId = (officerId, cropId, startDate = null, endDate = null) => {
   return new Promise((resolve, reject) => {
+    console.log("Officer ID:", officerId);
+    console.log("Crop ID:", cropId);
+    console.log("Date range:", startDate, "to", endDate);
+
     if (!officerId || !cropId) {
       return reject(new Error("Officer ID and Crop ID are required"));
     }
 
-    // Updated query for new table structure
-    const varietyQuery = `
+    // Base query with date filtering
+    let varietyQuery = `
       SELECT DISTINCT
           cv.id,
           cv.varietyNameEnglish,
@@ -364,13 +414,29 @@ exports.getVarietiesByCropId = (officerId, cropId) => {
       WHERE
           ot.officerId = ?
           AND cv.cropGroupId = ?
+    `;
+
+    const params = [officerId, cropId];
+
+    // Add date range filter (same logic as getAllCropNames)
+    if (startDate) {
+      varietyQuery += ` AND DATE(dt.date) >= ?`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      varietyQuery += ` AND DATE(dt.date) <= ?`;
+      params.push(endDate);
+    }
+
+    varietyQuery += `
       ORDER BY
           cv.varietyNameEnglish,
           cv.varietyNameSinhala,
           cv.varietyNameTamil
     `;
 
-    db.collectionofficer.query(varietyQuery, [officerId, cropId], (error, results) => {
+    db.collectionofficer.query(varietyQuery, params, (error, results) => {
       if (error) {
         console.error("Error fetching varieties for officer and crop:", error);
         return reject(error);
@@ -383,6 +449,7 @@ exports.getVarietiesByCropId = (officerId, cropId) => {
         varietyTamil: variety.varietyNameTamil
       }));
 
+      console.log("Varieties fetched successfully:", formattedResults);
       resolve(formattedResults);
     });
   });
