@@ -325,21 +325,137 @@ exports.getAllDistributionOfficer = async (req, res) => {
 
 
 
+// exports.targetPass = async (req, res) => {
+//   console.log("targetPass called");
+
+//   try {
+//     const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId } = req.body;
+//     const { officerId } = req.params; // Get officerId from URL parameters
+
+//     console.log("Request body:", req.body);
+//     console.log("Route params:", req.params);
+
+//     // Validate required fields
+//     if (!assigneeOfficerId || !invoiceNumbers || !targetItems || !officerId || !processOrderId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Missing required fields: assigneeOfficerId, invoiceNumbers, targetItems, officerId, processOrderId'
+//       });
+//     }
+
+//     // Validate that invoiceNumbers is an array
+//     if (!Array.isArray(invoiceNumbers) || invoiceNumbers.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'invoiceNumbers must be a non-empty array'
+//       });
+//     }
+
+//     // Validate that targetItems is an array
+//     if (!Array.isArray(targetItems) || targetItems.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'targetItems must be a non-empty array'
+//       });
+//     }
+
+//     // Validate that processOrderId is an array
+//     if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'processOrderId must be a non-empty array'
+//       });
+//     }
+
+//     // Call the DAO function - NOW INCLUDING processOrderId
+//     const result = await targetDDao.targetPass({
+//       assigneeOfficerId,
+//       targetItems,
+//       invoiceNumbers,
+//       processOrderId, // <-- This was missing!
+//       officerId
+//     });
+
+//     console.log("DAO result:", result);
+
+//     if (result.success) {
+//       res.status(200).json({
+//         success: true,
+//         message: result.message || 'Target passed successfully',
+//         data: result.data
+//       });
+//     } else {
+//       res.status(400).json({
+//         success: false,
+//         message: result.message || 'Failed to pass target',
+//         errors: result.errors || []
+//       });
+//     }
+
+//   } catch (error) {
+//     console.error('Error in targetPass endpoint:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to pass target',
+//       error: error.message
+//     });
+//   }
+// };
+
 exports.targetPass = async (req, res) => {
   console.log("targetPass called");
 
   try {
-    const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId } = req.body;
-    const { officerId } = req.params; // Get officerId from URL parameters
-
+    // Log to debug
     console.log("Request body:", req.body);
     console.log("Route params:", req.params);
 
-    // Validate required fields
-    if (!assigneeOfficerId || !invoiceNumbers || !targetItems || !officerId || !processOrderId) {
+    // Check if body parser is working
+    if (!req.body) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: assigneeOfficerId, invoiceNumbers, targetItems, officerId, processOrderId'
+        message: 'Request body is empty. Make sure Content-Type is application/json'
+      });
+    }
+
+    const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId } = req.body;
+    const { officerId } = req.params; // This is 'DIO00001' - a string officer code
+
+    console.log("officerId from params:", officerId);
+
+    // Validate required fields
+    if (!officerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: officerId (should be in URL path)'
+      });
+    }
+
+    if (!assigneeOfficerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: assigneeOfficerId'
+      });
+    }
+
+    if (!invoiceNumbers) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: invoiceNumbers'
+      });
+    }
+
+    if (!targetItems) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: targetItems'
+      });
+    }
+
+    if (!processOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: processOrderId'
       });
     }
 
@@ -367,13 +483,14 @@ exports.targetPass = async (req, res) => {
       });
     }
 
-    // Call the DAO function - NOW INCLUDING processOrderId
+    // Call the DAO function - pass the string officerId as-is
+    // The DAO will handle looking up the numeric ID
     const result = await targetDDao.targetPass({
       assigneeOfficerId,
       targetItems,
       invoiceNumbers,
-      processOrderId, // <-- This was missing!
-      officerId
+      processOrderId,
+      officerId // Pass as string 'DIO00001'
     });
 
     console.log("DAO result:", result);
@@ -401,8 +518,6 @@ exports.targetPass = async (req, res) => {
     });
   }
 };
-
-
 
 exports.getOfficerDetailsForReport = async (req, res) => {
   const { empId } = req.params;
