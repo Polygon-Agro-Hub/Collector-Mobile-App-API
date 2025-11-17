@@ -1798,11 +1798,518 @@ exports.getAllDistributionOfficer = async (managerId) => {
 
 
 // Updated targetPass function
+// exports.targetPass = async (params) => {
+//     console.log("targetPass DAO called with params:", params);
+
+//     try {
+//         const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId, officerId } = params;
+
+//         // Validate that processOrderId is an array
+//         if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
+//             return {
+//                 success: false,
+//                 message: 'processOrderId must be a non-empty array'
+//             };
+//         }
+
+//         // Step 1: Get the id from distributedtarget table using assigneeOfficerId as userId
+//         // This id will be used as the new targetId in distributedtargetitems table
+//         const distributedTargetQuery = `
+//             SELECT id, userId FROM collection_officer.distributedtarget 
+//             WHERE userId = ? 
+//             ORDER BY companycenterId ASC, userId DESC, target ASC, complete ASC 
+//             LIMIT 1
+//         `;
+
+//         const distributedTargetResult = await db.collectionofficer.promise().query(distributedTargetQuery, [parseInt(assigneeOfficerId)]);
+
+//         console.log(`Query result for assigneeOfficerId ${assigneeOfficerId}:`, distributedTargetResult);
+
+//         // MySQL2 returns [rows, fields] - we need the first element (rows)
+//         const rows = distributedTargetResult[0];
+
+//         if (!rows || rows.length === 0) {
+//             return {
+//                 success: false,
+//                 message: `Assignee officer not found in distributed targets: ${assigneeOfficerId}`
+//             };
+//         }
+
+//         const newTargetId = parseInt(rows[0].id); // Ensure it's an integer
+//         const userId = rows[0].userId;
+//         console.log(`New Target ID (from distributedtarget.id): ${newTargetId}, User ID: ${userId}`);
+
+//         // Step 2: Process each processOrderId
+//         const results = [];
+//         const errors = [];
+
+//         for (const orderId of processOrderId) {
+//             try {
+//                 const orderIdInt = parseInt(orderId); // Ensure it's an integer
+//                 console.log(`Processing order ID: ${orderIdInt}`);
+
+//                 // Check if orderId exists in distributedtargetitems table
+//                 const checkOrderQuery = `
+//                     SELECT id, targetId, orderId FROM collection_officer.distributedtargetitems 
+//                     WHERE orderId = ?
+//                 `;
+
+//                 const existingRecords = await db.collectionofficer.promise().query(checkOrderQuery, [orderIdInt]);
+
+//                 // MySQL2 returns [rows, fields] - we need the first element (rows)
+//                 const existingRows = existingRecords[0];
+
+//                 if (!existingRows || existingRows.length === 0) {
+//                     errors.push(`No records found for order ID: ${orderIdInt}`);
+//                     continue;
+//                 }
+
+//                 console.log(`Found ${existingRows.length} records for order ID: ${orderIdInt}`);
+//                 console.log(`Current targetId for order ${orderIdInt}:`, existingRows[0].targetId);
+
+//                 // Update distributedtargetitems table - change targetId for matching orderId
+//                 const updateQuery = `
+//                     UPDATE collection_officer.distributedtargetitems 
+//                     SET targetId = ? 
+//                     WHERE orderId = ?
+//                 `;
+
+//                 console.log(`Executing update query: UPDATE distributedtargetitems SET targetId = ${newTargetId} WHERE orderId = ${orderIdInt}`);
+
+//                 const updateResult = await db.collectionofficer.promise().query(updateQuery, [newTargetId, orderIdInt]);
+
+//                 console.log(`Update result:`, updateResult);
+
+//                 if (updateResult.affectedRows === 0) {
+//                     errors.push(`No records updated for order ID: ${orderIdInt}`);
+//                     continue;
+//                 }
+
+//                 console.log(`Updated ${updateResult.affectedRows} records for order ID: ${orderIdInt}`);
+
+//                 // Get updated records for response - let's check what was actually updated
+//                 const updatedRecordsQuery = `
+//                     SELECT id, targetId, orderId FROM collection_officer.distributedtargetitems 
+//                     WHERE orderId = ?
+//                     ORDER BY id ASC
+//                 `;
+
+//                 const updatedRecords = await db.collectionofficer.promise().query(updatedRecordsQuery, [orderIdInt]);
+
+//                 // MySQL2 returns [rows, fields] - we need the first element (rows)
+//                 const updatedRows = updatedRecords[0];
+//                 console.log(`Updated records for order ID ${orderIdInt}:`, updatedRows);
+
+//                 // Add successful result
+//                 results.push({
+//                     orderId: orderIdInt,
+//                     previousTargetId: existingRows[0].targetId || 'NULL',
+//                     newTargetId: newTargetId,
+//                     assigneeOfficerId: assigneeOfficerId,
+//                     assigneeUserId: userId,
+//                     updatedRecords: updatedRows,
+//                     affectedRows: updateResult.affectedRows
+//                 });
+
+//                 console.log(`Successfully processed order ID ${orderIdInt}: ${existingRows[0].targetId || 'NULL'} -> ${newTargetId}`);
+
+//             } catch (orderError) {
+//                 console.error(`Error processing order ID ${orderId}:`, orderError);
+//                 errors.push(`Failed to process order ID ${orderId}: ${orderError.message}`);
+//             }
+//         }
+
+//         // Prepare response
+//         const response = {
+//             success: results.length > 0,
+//             message: results.length > 0 ? 'Target passed successfully' : 'No targets were passed',
+//             data: {
+//                 officerId: officerId,
+//                 assigneeOfficerId: assigneeOfficerId,
+//                 newTargetId: newTargetId,
+//                 processedOrders: results.length,
+//                 totalOrders: processOrderId.length,
+//                 targetItems: targetItems,
+//                 invoiceNumbers: invoiceNumbers,
+//                 results: results
+//             }
+//         };
+
+//         if (errors.length > 0) {
+//             response.errors = errors;
+//             response.message += ` (${errors.length} error(s) occurred)`;
+//         }
+
+//         console.log("DAO returning:", response);
+//         return response;
+
+//     } catch (error) {
+//         console.error('Error in targetPass DAO:', error);
+//         return {
+//             success: false,
+//             message: 'Database operation failed',
+//             error: error.message
+//         };
+//     }
+// };
+
+
+// exports.targetPass = async (params) => {
+//     console.log("targetPass DAO called with params:", params);
+
+//     try {
+//         const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId, officerId } = params;
+
+//         // Validate required parameters
+//         if (!officerId) {
+//             return {
+//                 success: false,
+//                 message: 'officerId is required'
+//             };
+//         }
+
+//         if (!assigneeOfficerId) {
+//             return {
+//                 success: false,
+//                 message: 'assigneeOfficerId is required'
+//             };
+//         }
+
+//         // Validate that processOrderId is an array
+//         if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
+//             return {
+//                 success: false,
+//                 message: 'processOrderId must be a non-empty array'
+//             };
+//         }
+
+//         // STEP 1: Look up the numeric user IDs from officer codes
+//         // Assuming you have a users or officers table
+//         // Adjust the table name and columns based on your schema
+
+//         let sourceOfficerId;
+//         let targetOfficerId;
+
+//         // If officerId is already a number, use it directly
+//         if (typeof officerId === 'number' || !isNaN(parseInt(officerId))) {
+//             sourceOfficerId = parseInt(officerId);
+//         } else {
+//             // Look up the user ID from officer code
+//             const sourceQuery = `
+//                 SELECT id FROM collection_officer.collectionofficer
+//                 WHERE empId = ? 
+//                 LIMIT 1
+//             `;
+//             const sourceResult = await db.collectionofficer.promise().query(sourceQuery, [officerId]);
+
+//             if (!sourceResult[0] || sourceResult[0].length === 0) {
+//                 return {
+//                     success: false,
+//                     message: `Source officer not found with code: ${officerId}`
+//                 };
+//             }
+
+//             sourceOfficerId = parseInt(sourceResult[0][0].id);
+//         }
+
+//         // If assigneeOfficerId is already a number, use it directly
+//         if (typeof assigneeOfficerId === 'number' || !isNaN(parseInt(assigneeOfficerId))) {
+//             targetOfficerId = parseInt(assigneeOfficerId);
+//         } else {
+//             // Look up the user ID from officer code
+//             const assigneeQuery = `
+//                 SELECT id FROM collection_officer.collectionofficer 
+//                 WHERE empId = ? 
+//                 LIMIT 1
+//             `;
+//             const assigneeResult = await db.collectionofficer.promise().query(assigneeQuery, [assigneeOfficerId]);
+
+//             if (!assigneeResult[0] || assigneeResult[0].length === 0) {
+//                 return {
+//                     success: false,
+//                     message: `Assignee officer not found with code: ${assigneeOfficerId}`
+//                 };
+//             }
+
+//             targetOfficerId = parseInt(assigneeResult[0][0].id);
+//         }
+
+//         console.log(`Resolved IDs - Source Officer: ${sourceOfficerId}, Assignee Officer: ${targetOfficerId}`);
+
+//         // Step 2: Get TODAY's date for filtering (server time)
+//         const today = new Date();
+//         // Adjust for your timezone (IST = UTC+5:30)
+//         const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+//         const istDate = new Date(today.getTime() + istOffset);
+//         const todayStr = istDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+//         console.log(`Using today's date for filtering: ${todayStr} (IST)`);
+
+//         // Step 3: Get the SOURCE officer's target record (officer passing the target)
+//         // Filter by today's date using createdAt column
+//         const sourceTargetQuery = `
+//             SELECT id, userId, target, complete, createdAt 
+//             FROM collection_officer.distributedtarget 
+//             WHERE userId = ? 
+//             AND DATE(createdAt) = CURDATE()
+//             ORDER BY id DESC
+//             LIMIT 1
+//         `;
+
+//         console.log(`Looking up source officer target for userId: ${sourceOfficerId}, date: TODAY`);
+
+//         const sourceTargetResult = await db.collectionofficer.promise().query(
+//             sourceTargetQuery,
+//             [sourceOfficerId]
+//         );
+
+//         const sourceRows = sourceTargetResult[0];
+
+//         if (!sourceRows || sourceRows.length === 0) {
+//             return {
+//                 success: false,
+//                 message: `Source officer (userId: ${sourceOfficerId}) has no target record for today. Please create a target first.`
+//             };
+//         }
+
+//         const sourceTargetId = parseInt(sourceRows[0].id);
+//         const sourceUserId = sourceRows[0].userId;
+//         const sourceTargetCount = sourceRows[0].target;
+//         const sourceComplete = sourceRows[0].complete;
+//         const sourceCreatedAt = sourceRows[0].createdAt;
+
+//         console.log(`Source Officer Target - ID: ${sourceTargetId}, UserID: ${sourceUserId}, Target: ${sourceTargetCount}, Complete: ${sourceComplete}, CreatedAt: ${sourceCreatedAt}`);
+
+//         // Step 4: Get the ASSIGNEE officer's target record
+//         // Filter by today's date using createdAt column
+//         const assigneeTargetQuery = `
+//             SELECT id, userId, target, complete, createdAt 
+//             FROM collection_officer.distributedtarget 
+//             WHERE userId = ? 
+//             AND DATE(createdAt) = CURDATE()
+//             ORDER BY id DESC
+//             LIMIT 1
+//         `;
+
+//         console.log(`Looking up assignee officer target for userId: ${targetOfficerId}, date: TODAY`);
+
+//         const assigneeTargetResult = await db.collectionofficer.promise().query(
+//             assigneeTargetQuery,
+//             [targetOfficerId]
+//         );
+
+//         const assigneeRows = assigneeTargetResult[0];
+
+//         if (!assigneeRows || assigneeRows.length === 0) {
+//             return {
+//                 success: false,
+//                 message: `Assignee officer (userId: ${targetOfficerId}) has no target record for today. Please create a target first.`
+//             };
+//         }
+
+//         const assigneeTargetId = parseInt(assigneeRows[0].id);
+//         const assigneeUserId = assigneeRows[0].userId;
+//         const assigneeTargetCount = assigneeRows[0].target;
+//         const assigneeComplete = assigneeRows[0].complete;
+//         const assigneeCreatedAt = assigneeRows[0].createdAt;
+
+//         console.log(`Assignee Officer Target - ID: ${assigneeTargetId}, UserID: ${assigneeUserId}, Target: ${assigneeTargetCount}, Complete: ${assigneeComplete}, CreatedAt: ${assigneeCreatedAt}`);
+
+//         // Step 5: Calculate the number of orders being transferred
+//         const transferCount = processOrderId.length;
+
+//         // Validate source has enough targets to transfer
+//         if (sourceTargetCount < transferCount) {
+//             return {
+//                 success: false,
+//                 message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}`
+//             };
+//         }
+
+//         // Step 6: Update SOURCE officer's target (reduce by transferCount)
+//         const newSourceTarget = sourceTargetCount - transferCount;
+//         const updateSourceQuery = `
+//             UPDATE collection_officer.distributedtarget 
+//             SET target = ? 
+//             WHERE id = ? AND DATE(createdAt) = CURDATE()
+//         `;
+
+//         const sourceUpdateResult = await db.collectionofficer.promise().query(
+//             updateSourceQuery,
+//             [newSourceTarget, sourceTargetId]
+//         );
+
+//         console.log(`Updated source officer target: ${sourceTargetCount} -> ${newSourceTarget} (reduced by ${transferCount})`);
+
+//         // Step 7: Update ASSIGNEE officer's target (increase by transferCount)
+//         const newAssigneeTarget = assigneeTargetCount + transferCount;
+//         const updateAssigneeQuery = `
+//             UPDATE collection_officer.distributedtarget 
+//             SET target = ? 
+//             WHERE id = ? AND DATE(createdAt) = CURDATE()
+//         `;
+
+//         const assigneeUpdateResult = await db.collectionofficer.promise().query(
+//             updateAssigneeQuery,
+//             [newAssigneeTarget, assigneeTargetId]
+//         );
+
+//         console.log(`Updated assignee officer target: ${assigneeTargetCount} -> ${newAssigneeTarget} (increased by ${transferCount})`);
+
+//         // Step 8: Process each processOrderId and transfer items
+//         const results = [];
+//         const errors = [];
+
+//         for (const orderId of processOrderId) {
+//             try {
+//                 const orderIdInt = parseInt(orderId);
+//                 console.log(`Processing order ID: ${orderIdInt}`);
+
+//                 // Check if orderId exists in distributedtargetitems table
+//                 const checkOrderQuery = `
+//                     SELECT id, targetId, orderId 
+//                     FROM collection_officer.distributedtargetitems 
+//                     WHERE orderId = ?
+//                 `;
+
+//                 const existingRecords = await db.collectionofficer.promise().query(checkOrderQuery, [orderIdInt]);
+//                 const existingRows = existingRecords[0];
+
+//                 if (!existingRows || existingRows.length === 0) {
+//                     errors.push(`No records found for order ID: ${orderIdInt}`);
+//                     continue;
+//                 }
+
+//                 console.log(`Found ${existingRows.length} records for order ID: ${orderIdInt}`);
+//                 console.log(`Current targetId for order ${orderIdInt}: ${existingRows[0].targetId}`);
+
+//                 // Verify the items belong to the source officer
+//                 if (existingRows[0].targetId !== sourceTargetId) {
+//                     errors.push(`Order ID ${orderIdInt} does not belong to source officer (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`);
+//                     continue;
+//                 }
+
+//                 // Update distributedtargetitems table - change targetId to assignee's targetId
+//                 const updateItemsQuery = `
+//                     UPDATE collection_officer.distributedtargetitems 
+//                     SET targetId = ? 
+//                     WHERE orderId = ?
+//                 `;
+
+//                 console.log(`Updating items: targetId ${sourceTargetId} -> ${assigneeTargetId} for orderId ${orderIdInt}`);
+
+//                 const updateResult = await db.collectionofficer.promise().query(
+//                     updateItemsQuery,
+//                     [assigneeTargetId, orderIdInt]
+//                 );
+
+//                 console.log(`Update result:`, updateResult);
+
+//                 if (updateResult[0].affectedRows === 0) {
+//                     errors.push(`No records updated for order ID: ${orderIdInt}`);
+//                     continue;
+//                 }
+
+//                 console.log(`Updated ${updateResult[0].affectedRows} records for order ID: ${orderIdInt}`);
+
+//                 // Get updated records for response
+//                 const updatedRecordsQuery = `
+//                     SELECT id, targetId, orderId 
+//                     FROM collection_officer.distributedtargetitems 
+//                     WHERE orderId = ?
+//                     ORDER BY id ASC
+//                 `;
+
+//                 const updatedRecords = await db.collectionofficer.promise().query(updatedRecordsQuery, [orderIdInt]);
+//                 const updatedRows = updatedRecords[0];
+
+//                 console.log(`Updated records for order ID ${orderIdInt}:`, updatedRows);
+
+//                 // Add successful result
+//                 results.push({
+//                     orderId: orderIdInt,
+//                     previousTargetId: sourceTargetId,
+//                     newTargetId: assigneeTargetId,
+//                     affectedRows: updateResult[0].affectedRows,
+//                     updatedRecords: updatedRows
+//                 });
+
+//                 console.log(`Successfully processed order ID ${orderIdInt}: targetId ${sourceTargetId} -> ${assigneeTargetId}`);
+
+//             } catch (orderError) {
+//                 console.error(`Error processing order ID ${orderId}:`, orderError);
+//                 errors.push(`Failed to process order ID ${orderId}: ${orderError.message}`);
+//             }
+//         }
+
+//         // Prepare response
+//         const response = {
+//             success: results.length > 0,
+//             message: results.length > 0 ? 'Target passed successfully' : 'No targets were passed',
+//             data: {
+//                 sourceOfficer: {
+//                     officerId: officerId,
+//                     targetId: sourceTargetId,
+//                     previousTarget: sourceTargetCount,
+//                     newTarget: newSourceTarget,
+//                     reduced: transferCount
+//                 },
+//                 assigneeOfficer: {
+//                     officerId: assigneeOfficerId,
+//                     targetId: assigneeTargetId,
+//                     previousTarget: assigneeTargetCount,
+//                     newTarget: newAssigneeTarget,
+//                     increased: transferCount
+//                 },
+//                 transferredOrders: {
+//                     successful: results.length,
+//                     total: processOrderId.length,
+//                     failed: errors.length
+//                 },
+//                 targetItems: targetItems,
+//                 invoiceNumbers: invoiceNumbers,
+//                 results: results
+//             }
+//         };
+
+//         if (errors.length > 0) {
+//             response.errors = errors;
+//             response.message += ` (${errors.length} error(s) occurred)`;
+//         }
+
+//         console.log("DAO returning:", response);
+//         return response;
+
+//     } catch (error) {
+//         console.error('Error in targetPass DAO:', error);
+//         return {
+//             success: false,
+//             message: 'Database operation failed',
+//             error: error.message
+//         };
+//     }
+// };
+
 exports.targetPass = async (params) => {
     console.log("targetPass DAO called with params:", params);
 
     try {
         const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId, officerId } = params;
+
+        // Validate required parameters
+        if (!officerId) {
+            return {
+                success: false,
+                message: 'officerId is required'
+            };
+        }
+
+        if (!assigneeOfficerId) {
+            return {
+                success: false,
+                message: 'assigneeOfficerId is required'
+            };
+        }
 
         // Validate that processOrderId is an array
         if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
@@ -1812,51 +2319,241 @@ exports.targetPass = async (params) => {
             };
         }
 
-        // Step 1: Get the id from distributedtarget table using assigneeOfficerId as userId
-        // This id will be used as the new targetId in distributedtargetitems table
-        const distributedTargetQuery = `
-            SELECT id, userId FROM collection_officer.distributedtarget 
+        // STEP 1: Look up the numeric user IDs from officer codes
+        // Assuming you have a users or officers table
+        // Adjust the table name and columns based on your schema
+
+        let sourceOfficerId;
+        let targetOfficerId;
+
+        // If officerId is already a number, use it directly
+        if (typeof officerId === 'number' || !isNaN(parseInt(officerId))) {
+            sourceOfficerId = parseInt(officerId);
+        } else {
+            // Look up the user ID from officer code
+            const sourceQuery = `
+                SELECT id FROM collection_officer.collectionofficer
+                WHERE empId = ? 
+                LIMIT 1
+            `;
+            const sourceResult = await db.collectionofficer.promise().query(sourceQuery, [officerId]);
+
+            if (!sourceResult[0] || sourceResult[0].length === 0) {
+                return {
+                    success: false,
+                    message: `Source officer not found with code: ${officerId}`
+                };
+            }
+
+            sourceOfficerId = parseInt(sourceResult[0][0].id);
+        }
+
+        // If assigneeOfficerId is already a number, use it directly
+        if (typeof assigneeOfficerId === 'number' || !isNaN(parseInt(assigneeOfficerId))) {
+            targetOfficerId = parseInt(assigneeOfficerId);
+        } else {
+            // Look up the user ID from officer code
+            const assigneeQuery = `
+                SELECT id FROM collection_officer.collectionofficer 
+                WHERE empId = ? 
+                LIMIT 1
+            `;
+            const assigneeResult = await db.collectionofficer.promise().query(assigneeQuery, [assigneeOfficerId]);
+
+            if (!assigneeResult[0] || assigneeResult[0].length === 0) {
+                return {
+                    success: false,
+                    message: `Assignee officer not found with code: ${assigneeOfficerId}`
+                };
+            }
+
+            targetOfficerId = parseInt(assigneeResult[0][0].id);
+        }
+
+        console.log(`Resolved IDs - Source Officer: ${sourceOfficerId}, Assignee Officer: ${targetOfficerId}`);
+
+        // Step 2: Get TODAY's date for filtering (server time)
+        const today = new Date();
+        // Adjust for your timezone (IST = UTC+5:30)
+        const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+        const istDate = new Date(today.getTime() + istOffset);
+        const todayStr = istDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        console.log(`Using today's date for filtering: ${todayStr} (IST)`);
+
+        // Step 3: Get the SOURCE officer's target record (officer passing the target)
+        // Filter by today's date using createdAt column
+        const sourceTargetQuery = `
+            SELECT id, userId, target, complete, createdAt, companycenterId 
+            FROM collection_officer.distributedtarget 
             WHERE userId = ? 
-            ORDER BY companycenterId ASC, userId DESC, target ASC, complete ASC 
+            AND DATE(createdAt) = CURDATE()
+            ORDER BY id DESC
             LIMIT 1
         `;
 
-        const distributedTargetResult = await db.collectionofficer.promise().query(distributedTargetQuery, [parseInt(assigneeOfficerId)]);
+        console.log(`Looking up source officer target for userId: ${sourceOfficerId}, date: TODAY`);
 
-        console.log(`Query result for assigneeOfficerId ${assigneeOfficerId}:`, distributedTargetResult);
+        const sourceTargetResult = await db.collectionofficer.promise().query(
+            sourceTargetQuery,
+            [sourceOfficerId]
+        );
 
-        // MySQL2 returns [rows, fields] - we need the first element (rows)
-        const rows = distributedTargetResult[0];
+        const sourceRows = sourceTargetResult[0];
 
-        if (!rows || rows.length === 0) {
+        if (!sourceRows || sourceRows.length === 0) {
             return {
                 success: false,
-                message: `Assignee officer not found in distributed targets: ${assigneeOfficerId}`
+                message: `Source officer (userId: ${sourceOfficerId}) has no target record for today. Please create a target first.`
             };
         }
 
-        const newTargetId = parseInt(rows[0].id); // Ensure it's an integer
-        const userId = rows[0].userId;
-        console.log(`New Target ID (from distributedtarget.id): ${newTargetId}, User ID: ${userId}`);
+        const sourceTargetId = parseInt(sourceRows[0].id);
+        const sourceUserId = sourceRows[0].userId;
+        const sourceTargetCount = sourceRows[0].target;
+        const sourceComplete = sourceRows[0].complete;
+        const sourceCreatedAt = sourceRows[0].createdAt;
 
-        // Step 2: Process each processOrderId
+        console.log(`Source Officer Target - ID: ${sourceTargetId}, UserID: ${sourceUserId}, Target: ${sourceTargetCount}, Complete: ${sourceComplete}, CreatedAt: ${sourceCreatedAt}`);
+
+        // Step 4: Get the ASSIGNEE officer's target record
+        // Filter by today's date using createdAt column
+        const assigneeTargetQuery = `
+            SELECT id, userId, target, complete, createdAt 
+            FROM collection_officer.distributedtarget 
+            WHERE userId = ? 
+            AND DATE(createdAt) = CURDATE()
+            ORDER BY id DESC
+            LIMIT 1
+        `;
+
+        console.log(`Looking up assignee officer target for userId: ${targetOfficerId}, date: TODAY`);
+
+        const assigneeTargetResult = await db.collectionofficer.promise().query(
+            assigneeTargetQuery,
+            [targetOfficerId]
+        );
+
+        const assigneeRows = assigneeTargetResult[0];
+
+        let assigneeTargetId;
+        let assigneeUserId;
+        let assigneeTargetCount;
+        let assigneeComplete;
+        let assigneeCreatedAt;
+
+        if (!assigneeRows || assigneeRows.length === 0) {
+            // Assignee officer has no target for today - CREATE A NEW ONE
+            console.log(`Assignee officer (userId: ${targetOfficerId}) has no target for today. Creating new target record...`);
+
+            // Get the companycenter from the source officer's record (or use a default)
+            const getCompanyCenterQuery = `
+                SELECT companycenterId 
+                FROM collection_officer.distributedtarget 
+                WHERE userId = ? 
+                ORDER BY id DESC 
+                LIMIT 1
+            `;
+            const companyCenterResult = await db.collectionofficer.promise().query(getCompanyCenterQuery, [targetOfficerId]);
+
+            // Use source officer's companycenterId or default to the one from source
+            let companycenterId;
+            if (companyCenterResult[0] && companyCenterResult[0].length > 0) {
+                companycenterId = companyCenterResult[0][0].companycenterId;
+            } else {
+                // Get from source officer if assignee has no history
+                companycenterId = sourceRows[0].companycenterId || null;
+            }
+
+            // Create new target record for assignee
+            const createTargetQuery = `
+                INSERT INTO collection_officer.distributedtarget 
+                (companycenterId, userId, target, complete, createdAt) 
+                VALUES (?, ?, 0, 0, NOW())
+            `;
+
+            const createResult = await db.collectionofficer.promise().query(
+                createTargetQuery,
+                [companycenterId, targetOfficerId]
+            );
+
+            assigneeTargetId = parseInt(createResult[0].insertId);
+            assigneeUserId = targetOfficerId;
+            assigneeTargetCount = 0; // Starting with 0
+            assigneeComplete = 0;
+            assigneeCreatedAt = new Date();
+
+            console.log(`Created new target record - ID: ${assigneeTargetId}, UserID: ${assigneeUserId}, Target: ${assigneeTargetCount}`);
+
+        } else {
+            // Assignee officer has existing target for today
+            assigneeTargetId = parseInt(assigneeRows[0].id);
+            assigneeUserId = assigneeRows[0].userId;
+            assigneeTargetCount = assigneeRows[0].target;
+            assigneeComplete = assigneeRows[0].complete;
+            assigneeCreatedAt = assigneeRows[0].createdAt;
+
+            console.log(`Assignee Officer Target - ID: ${assigneeTargetId}, UserID: ${assigneeUserId}, Target: ${assigneeTargetCount}, Complete: ${assigneeComplete}, CreatedAt: ${assigneeCreatedAt}`);
+        }
+
+        // Step 5: Calculate the number of orders being transferred
+        const transferCount = processOrderId.length;
+
+        // Validate source has enough targets to transfer
+        if (sourceTargetCount < transferCount) {
+            return {
+                success: false,
+                message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}`
+            };
+        }
+
+        // Step 6: Update SOURCE officer's target (reduce by transferCount)
+        const newSourceTarget = sourceTargetCount - transferCount;
+        const updateSourceQuery = `
+            UPDATE collection_officer.distributedtarget 
+            SET target = ? 
+            WHERE id = ? AND DATE(createdAt) = CURDATE()
+        `;
+
+        const sourceUpdateResult = await db.collectionofficer.promise().query(
+            updateSourceQuery,
+            [newSourceTarget, sourceTargetId]
+        );
+
+        console.log(`Updated source officer target: ${sourceTargetCount} -> ${newSourceTarget} (reduced by ${transferCount})`);
+
+        // Step 7: Update ASSIGNEE officer's target (increase by transferCount)
+        const newAssigneeTarget = assigneeTargetCount + transferCount;
+        const updateAssigneeQuery = `
+            UPDATE collection_officer.distributedtarget 
+            SET target = ? 
+            WHERE id = ? AND DATE(createdAt) = CURDATE()
+        `;
+
+        const assigneeUpdateResult = await db.collectionofficer.promise().query(
+            updateAssigneeQuery,
+            [newAssigneeTarget, assigneeTargetId]
+        );
+
+        console.log(`Updated assignee officer target: ${assigneeTargetCount} -> ${newAssigneeTarget} (increased by ${transferCount})`);
+
+        // Step 8: Process each processOrderId and transfer items
         const results = [];
         const errors = [];
 
         for (const orderId of processOrderId) {
             try {
-                const orderIdInt = parseInt(orderId); // Ensure it's an integer
+                const orderIdInt = parseInt(orderId);
                 console.log(`Processing order ID: ${orderIdInt}`);
 
                 // Check if orderId exists in distributedtargetitems table
                 const checkOrderQuery = `
-                    SELECT id, targetId, orderId FROM collection_officer.distributedtargetitems 
+                    SELECT id, targetId, orderId 
+                    FROM collection_officer.distributedtargetitems 
                     WHERE orderId = ?
                 `;
 
                 const existingRecords = await db.collectionofficer.promise().query(checkOrderQuery, [orderIdInt]);
-
-                // MySQL2 returns [rows, fields] - we need the first element (rows)
                 const existingRows = existingRecords[0];
 
                 if (!existingRows || existingRows.length === 0) {
@@ -1865,53 +2562,60 @@ exports.targetPass = async (params) => {
                 }
 
                 console.log(`Found ${existingRows.length} records for order ID: ${orderIdInt}`);
-                console.log(`Current targetId for order ${orderIdInt}:`, existingRows[0].targetId);
+                console.log(`Current targetId for order ${orderIdInt}: ${existingRows[0].targetId}`);
 
-                // Update distributedtargetitems table - change targetId for matching orderId
-                const updateQuery = `
+                // Verify the items belong to the source officer
+                if (existingRows[0].targetId !== sourceTargetId) {
+                    errors.push(`Order ID ${orderIdInt} does not belong to source officer (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`);
+                    continue;
+                }
+
+                // Update distributedtargetitems table - change targetId to assignee's targetId
+                const updateItemsQuery = `
                     UPDATE collection_officer.distributedtargetitems 
                     SET targetId = ? 
                     WHERE orderId = ?
                 `;
 
-                console.log(`Executing update query: UPDATE distributedtargetitems SET targetId = ${newTargetId} WHERE orderId = ${orderIdInt}`);
+                console.log(`Updating items: targetId ${sourceTargetId} -> ${assigneeTargetId} for orderId ${orderIdInt}`);
 
-                const updateResult = await db.collectionofficer.promise().query(updateQuery, [newTargetId, orderIdInt]);
+                const updateResult = await db.collectionofficer.promise().query(
+                    updateItemsQuery,
+                    [assigneeTargetId, orderIdInt]
+                );
 
                 console.log(`Update result:`, updateResult);
 
-                if (updateResult.affectedRows === 0) {
+                if (updateResult[0].affectedRows === 0) {
                     errors.push(`No records updated for order ID: ${orderIdInt}`);
                     continue;
                 }
 
-                console.log(`Updated ${updateResult.affectedRows} records for order ID: ${orderIdInt}`);
+                console.log(`Updated ${updateResult[0].affectedRows} records for order ID: ${orderIdInt}`);
 
-                // Get updated records for response - let's check what was actually updated
+                // Get updated records for response
                 const updatedRecordsQuery = `
-                    SELECT id, targetId, orderId FROM collection_officer.distributedtargetitems 
+                    SELECT id, targetId, orderId 
+                    FROM collection_officer.distributedtargetitems 
                     WHERE orderId = ?
                     ORDER BY id ASC
                 `;
 
                 const updatedRecords = await db.collectionofficer.promise().query(updatedRecordsQuery, [orderIdInt]);
-
-                // MySQL2 returns [rows, fields] - we need the first element (rows)
                 const updatedRows = updatedRecords[0];
+
                 console.log(`Updated records for order ID ${orderIdInt}:`, updatedRows);
 
                 // Add successful result
                 results.push({
                     orderId: orderIdInt,
-                    previousTargetId: existingRows[0].targetId || 'NULL',
-                    newTargetId: newTargetId,
-                    assigneeOfficerId: assigneeOfficerId,
-                    assigneeUserId: userId,
-                    updatedRecords: updatedRows,
-                    affectedRows: updateResult.affectedRows
+                    previousTargetId: sourceTargetId,
+                    newTargetId: assigneeTargetId,
+                    affectedRows: updateResult[0].affectedRows,
+                    updatedRecords: updatedRows
                 });
 
-                console.log(`Successfully processed order ID ${orderIdInt}: ${existingRows[0].targetId || 'NULL'} -> ${newTargetId}`);
+                console.log(`Successfully processed order ID ${orderIdInt}: targetId ${sourceTargetId} -> ${assigneeTargetId}`);
 
             } catch (orderError) {
                 console.error(`Error processing order ID ${orderId}:`, orderError);
@@ -1924,11 +2628,25 @@ exports.targetPass = async (params) => {
             success: results.length > 0,
             message: results.length > 0 ? 'Target passed successfully' : 'No targets were passed',
             data: {
-                officerId: officerId,
-                assigneeOfficerId: assigneeOfficerId,
-                newTargetId: newTargetId,
-                processedOrders: results.length,
-                totalOrders: processOrderId.length,
+                sourceOfficer: {
+                    officerId: officerId,
+                    targetId: sourceTargetId,
+                    previousTarget: sourceTargetCount,
+                    newTarget: newSourceTarget,
+                    reduced: transferCount
+                },
+                assigneeOfficer: {
+                    officerId: assigneeOfficerId,
+                    targetId: assigneeTargetId,
+                    previousTarget: assigneeTargetCount,
+                    newTarget: newAssigneeTarget,
+                    increased: transferCount
+                },
+                transferredOrders: {
+                    successful: results.length,
+                    total: processOrderId.length,
+                    failed: errors.length
+                },
                 targetItems: targetItems,
                 invoiceNumbers: invoiceNumbers,
                 results: results
