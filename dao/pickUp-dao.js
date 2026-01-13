@@ -220,7 +220,221 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
 
 
 
+// exports.getReceivedOrders = (officerId) => {
+//     console.log("Getting pickup and driver orders for officer ID:", officerId);
+//     return new Promise((resolve, reject) => {
+//         if (!officerId) {
+//             return reject(new Error("Officer ID is missing or invalid"));
+//         }
+//         const query = `
+//             SELECT 
+//                 'pickup' AS orderType,
+//                 po.id AS pickupOrderId,
+//                 po.orderId AS pickupOrderOrderId,
+//                 po.orderIssuedOfficer,
+//                 po.handOverOfficer,
+//                 po.signature,
+//                 po.handOverPrice,
+//                 po.handOverTime,
+//                 po.createdAt AS pickupCreatedAt,
+//                 NULL AS driverId,
+//                 NULL AS drvStatus,
+//                 NULL AS isHandOver,
+
+//                 -- Process orders data
+//                 pr.id AS processOrderId,
+//                 pr.orderId AS processOrderOrderId,
+//                 pr.invNo,
+//                 pr.transactionId,
+//                 pr.paymentMethod,
+//                 pr.isPaid,
+//                 pr.amount,
+//                 pr.status AS processStatus,
+
+//                 -- Orders data
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.createdAt AS orderCreatedAt
+
+//             FROM collection_officer.pickuporders po
+//             INNER JOIN market_place.processorders pr 
+//                 ON po.orderId = pr.id
+//             INNER JOIN market_place.orders o 
+//                 ON pr.orderId = o.id
+//             WHERE po.orderIssuedOfficer = ? OR po.handOverOfficer = ?
+
+//             UNION ALL
+
+//             SELECT 
+//                 'driver' AS orderType,
+//                 NULL AS pickupOrderId,
+//                 do.orderId AS pickupOrderOrderId,
+//                 NULL AS orderIssuedOfficer,
+//                 do.handOverOfficer,
+//                 do.signature,
+//                 do.handOverPrice,
+//                 NULL AS handOverTime,
+//                 NULL AS pickupCreatedAt,
+//                 do.driverId,
+//                 do.drvStatus,
+//                 do.isHandOver,
+
+//                 -- Process orders data
+//                 pr.id AS processOrderId,
+//                 pr.orderId AS processOrderOrderId,
+//                 pr.invNo,
+//                 pr.transactionId,
+//                 pr.paymentMethod,
+//                 pr.isPaid,
+//                 pr.amount,
+//                 pr.status AS processStatus,
+
+//                 -- Orders data
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.createdAt AS orderCreatedAt
+
+//             FROM collection_officer.driverorders do
+//             INNER JOIN market_place.processorders pr 
+//                 ON do.orderId = pr.id
+//             INNER JOIN market_place.orders o 
+//                 ON pr.orderId = o.id
+//             WHERE do.handOverOfficer = ?
+
+//             ORDER BY orderCreatedAt DESC
+//         `;
+
+//         db.collectionofficer.query(query, [officerId, officerId, officerId], (error, results) => {
+//             if (error) {
+//                 console.error("Database error:", error);
+//                 return reject(error);
+//             }
+//             console.log(`Found ${results.length} orders (pickup + driver) for officer ${officerId}`);
+//             resolve(results);
+//         });
+//     });
+// };
+
 exports.getReceivedOrders = (officerId) => {
+    console.log("Getting pickup and driver orders for officer ID:", officerId);
+    return new Promise((resolve, reject) => {
+        if (!officerId) {
+            return reject(new Error("Officer ID is missing or invalid"));
+        }
+        const query = `
+            SELECT 
+                'pickup' AS orderType,
+                po.id AS pickupOrderId,
+                po.orderId AS pickupOrderOrderId,
+                po.orderIssuedOfficer,
+                po.handOverOfficer,
+                po.signature,
+                po.handOverPrice,
+                po.handOverTime,
+                po.createdAt AS pickupCreatedAt,
+                CASE 
+                    WHEN po.handOverOfficer IS NOT NULL THEN po.createdAt 
+                    ELSE NULL 
+                END AS handOverReceivedTime,
+                NULL AS driverId,
+                NULL AS drvStatus,
+                NULL AS isHandOver,
+                NULL AS receivedTime,
+                NULL AS startTime,
+                
+                -- Process orders data
+                pr.id AS processOrderId,
+                pr.orderId AS processOrderOrderId,
+                pr.invNo,
+                pr.transactionId,
+                pr.paymentMethod,
+                pr.isPaid,
+                pr.amount,
+                pr.status AS processStatus,
+                
+                -- Orders data
+                o.id AS orderId,
+                o.userId,
+                o.orderApp,
+                o.delivaryMethod,
+                o.fullTotal,
+                o.createdAt AS orderCreatedAt
+                
+            FROM collection_officer.pickuporders po
+            INNER JOIN market_place.processorders pr 
+                ON po.orderId = pr.id
+            INNER JOIN market_place.orders o 
+                ON pr.orderId = o.id
+            WHERE po.orderIssuedOfficer = ? OR po.handOverOfficer = ?
+            
+            UNION ALL
+            
+            SELECT 
+                'driver' AS orderType,
+                NULL AS pickupOrderId,
+                do.orderId AS pickupOrderOrderId,
+                NULL AS orderIssuedOfficer,
+                do.handOverOfficer,
+                do.signature,
+                do.handOverPrice,
+                do.handOverTime,
+                do.createdAt AS pickupCreatedAt,
+                CASE 
+                    WHEN do.handOverOfficer IS NOT NULL THEN do.createdAt 
+                    ELSE NULL 
+                END AS handOverReceivedTime,
+                do.driverId,
+                do.drvStatus,
+                do.isHandOver,
+                do.receivedTime,
+                do.startTime,
+                
+                -- Process orders data
+                pr.id AS processOrderId,
+                pr.orderId AS processOrderOrderId,
+                pr.invNo,
+                pr.transactionId,
+                pr.paymentMethod,
+                pr.isPaid,
+                pr.amount,
+                pr.status AS processStatus,
+                
+                -- Orders data
+                o.id AS orderId,
+                o.userId,
+                o.orderApp,
+                o.delivaryMethod,
+                o.fullTotal,
+                o.createdAt AS orderCreatedAt
+                
+            FROM collection_officer.driverorders do
+            INNER JOIN market_place.processorders pr 
+                ON do.orderId = pr.id
+            INNER JOIN market_place.orders o 
+                ON pr.orderId = o.id
+            WHERE do.handOverOfficer = ?
+            
+            ORDER BY orderCreatedAt DESC
+        `;
+
+        db.collectionofficer.query(query, [officerId, officerId, officerId], (error, results) => {
+            if (error) {
+                console.error("Database error:", error);
+                return reject(error);
+            }
+            console.log(`Found ${results.length} orders (pickup + driver) for officer ${officerId}`);
+            resolve(results);
+        });
+    });
+};
+
+exports.getReceivedOrderOfficer = (officerId) => {
     console.log("Getting pickup orders for officer ID:", officerId);
     return new Promise((resolve, reject) => {
         if (!officerId) {
@@ -279,6 +493,174 @@ exports.getReceivedOrders = (officerId) => {
 
             console.log(`Found ${results.length} pickup orders for officer ${officerId}`);
             resolve(results);
+        });
+    });
+};
+
+
+exports.getOfficerByEmpId = (empId) => {
+    return new Promise((resolve, reject) => {
+        const query = `
+            SELECT id, empId 
+            FROM collection_officer.collectionofficer 
+            WHERE empId = ? 
+            LIMIT 1
+        `;
+
+        db.collectionofficer.query(query, [empId], (err, results) => {
+            if (err) {
+                console.error("Error fetching officer:", err);
+                return reject(err);
+            }
+
+            if (results && results.length > 0) {
+                resolve(results[0]);
+            } else {
+                resolve(null);
+            }
+        });
+    });
+};
+
+// Simple version - updates transactions one by one
+exports.updateCashReceived = (transactions, officerId, totalAmount) => {
+    return new Promise((resolve, reject) => {
+        // Validate input
+        if (!transactions || transactions.length === 0) {
+            return reject(new Error("No valid transactions provided"));
+        }
+
+        // Get connection and start transaction
+        db.collectionofficer.getConnection((err, connection) => {
+            if (err) {
+                console.error("Error getting connection:", err);
+                return reject(err);
+            }
+
+            // Start database transaction
+            connection.beginTransaction(err => {
+                if (err) {
+                    connection.release();
+                    return reject(err);
+                }
+
+                let completed = 0;
+                let failed = false;
+                const results = [];
+
+                // Process each transaction
+                transactions.forEach((transaction, index) => {
+                    if (failed) return;
+
+                    // First check if already handed over
+                    const checkQuery = `
+                        SELECT id, handOverOfficer 
+                        FROM collection_officer.pickuporders 
+                        WHERE id = ?
+                    `;
+
+                    connection.query(checkQuery, [transaction.transactionId], (err, checkResults) => {
+                        if (err || failed) {
+                            if (!failed) {
+                                failed = true;
+                                connection.rollback(() => {
+                                    connection.release();
+                                    reject(err);
+                                });
+                            }
+                            return;
+                        }
+
+                        // Check if transaction exists
+                        if (!checkResults || checkResults.length === 0) {
+                            failed = true;
+                            connection.rollback(() => {
+                                connection.release();
+                                reject(new Error(`Transaction ${transaction.transactionId} not found`));
+                            });
+                            return;
+                        }
+
+                        // Check if already handed over
+                        if (checkResults[0].handOverOfficer !== null) {
+                            failed = true;
+                            connection.rollback(() => {
+                                connection.release();
+                                reject(new Error(
+                                    `Transaction ${transaction.transactionId} has already been handed over`
+                                ));
+                            });
+                            return;
+                        }
+
+                        // Update the transaction
+                        const updateQuery = `
+                            UPDATE collection_officer.pickuporders
+                            SET 
+                                handOverOfficer = ?,
+                                handOverPrice = ?,
+                                handOverTime = NOW()
+                            WHERE id = ?
+                            AND handOverOfficer IS NULL
+                        `;
+
+                        const params = [
+                            officerId,
+                            transaction.amount,
+                            transaction.transactionId
+                        ];
+
+                        connection.query(updateQuery, params, (err, updateResult) => {
+                            if (err || failed) {
+                                if (!failed) {
+                                    failed = true;
+                                    connection.rollback(() => {
+                                        connection.release();
+                                        reject(err);
+                                    });
+                                }
+                                return;
+                            }
+
+                            if (updateResult.affectedRows === 0) {
+                                failed = true;
+                                connection.rollback(() => {
+                                    connection.release();
+                                    reject(new Error(
+                                        `Failed to update transaction ${transaction.transactionId}`
+                                    ));
+                                });
+                                return;
+                            }
+
+                            results.push({
+                                transactionId: transaction.transactionId,
+                                updated: true
+                            });
+
+                            completed++;
+
+                            // If all transactions processed, commit
+                            if (completed === transactions.length) {
+                                connection.commit(err => {
+                                    if (err) {
+                                        connection.rollback(() => {
+                                            connection.release();
+                                            reject(err);
+                                        });
+                                    } else {
+                                        connection.release();
+                                        resolve({
+                                            affectedRows: completed,
+                                            results: results
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                });
+            });
         });
     });
 };

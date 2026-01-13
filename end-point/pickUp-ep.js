@@ -175,3 +175,111 @@ exports.getReceivedOrders = async (req, res) => {
         });
     }
 };
+
+
+exports.getReceivedOrderOfficer = async (req, res) => {
+    console.log("pickup oreders called");
+    try {
+        // Get officerId from the decoded token (set by auth middleware)
+        const officerId = req.user.id; // Assuming your auth middleware sets req.user
+
+        console.log("Officer ID from token:", officerId);
+
+        // Validate officerId
+        if (!officerId || isNaN(officerId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid officer ID provided'
+            });
+        }
+
+        // Get pickup from DAO
+        const pickup = await pickupDao.getReceivedOrderOfficer(officerId);
+
+        console.log("pickup----------", pickup)
+
+
+        res.status(200).json({
+            success: true,
+            message: 'Officer pickup retrieved successfully',
+            data: pickup
+        });
+    } catch (error) {
+        console.error('Error getting officer pickup:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve officer pickup',
+            error: error.message
+        });
+    }
+};
+
+
+exports.updateCashReceived = asyncHandler(async (req, res) => {
+    const { transactions, officerCode, totalAmount } = req.body;
+
+    console.log("dattttaaaa", transactions, officerCode, totalAmount)
+
+    // Validation
+    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+        return res.status(400).json({
+            status: "error",
+            message: "Transactions array is required"
+        });
+    }
+
+    if (!officerCode) {
+        return res.status(400).json({
+            status: "error",
+            message: "Officer code is required"
+        });
+    }
+
+    try {
+        // First, verify the officer exists and get their ID
+        const officer = await pickupDao.getOfficerByEmpId(officerCode);
+
+        if (!officer) {
+            return res.status(404).json({
+                status: "error",
+                message: "Cash officer not found"
+            });
+        }
+
+        // Update all transactions with handover information
+        const updateResults = await pickupDao.updateCashReceived(
+            transactions,
+            officer.id,
+            totalAmount
+        );
+
+        // Success response
+        res.status(200).json({
+            status: "success",
+            message: "Cash successfully handed over",
+            data: {
+                officerCode: officerCode,
+                officerId: officer.id,
+                totalAmount: totalAmount,
+                transactionsUpdated: updateResults.affectedRows,
+                handoverTime: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error("Error in updateCashReceived:", error);
+
+        // Handle specific errors
+        if (error.message.includes("already handed over")) {
+            return res.status(409).json({
+                status: "error",
+                message: error.message
+            });
+        }
+
+        res.status(500).json({
+            status: "error",
+            message: "Failed to update cash handover",
+            error: error.message
+        });
+    }
+});

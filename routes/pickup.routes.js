@@ -20,5 +20,9 @@ router.post(
 
 router.get('/get-received-cash', auth, pickupEp.getReceivedOrders);
 
+router.get('/get-received-cash-officer', auth, pickupEp.getReceivedOrderOfficer);
+
+router.post('/update-cash-received', auth, pickupEp.updateCashReceived);
+
 
 module.exports = router;
