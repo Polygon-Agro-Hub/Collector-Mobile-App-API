@@ -9,10 +9,11 @@ const complainRoutes = require('./routes/complains.routes');
 const priceUpdatesRoutes = require('./routes/price.routes');
 const managerRoutes = require('./routes/manager.routes');
 const collectionrequest = require('./routes/collection.routes')
-const { plantcare, collectionofficer, marketPlace,  admin } = require('./startup/database');
+const { plantcare, collectionofficer, marketPlace, admin } = require('./startup/database');
 const heathRoutes = require("./routes/heathRoutes");
 const distribution = require('./routes/distribution.routes')
-const distributionManager = require('./routes/distibutionManager.routes')
+const distributionManager = require('./routes/distibutionManager.routes');
+const pickupRoute = require('./routes/pickup.routes');
 
 
 const socketIo = require('socket.io');
@@ -89,6 +90,7 @@ mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collectionrequest`, collectionrequest);
 mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
+mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
 
 const basePathStatus = '/agro-api/collection-status';
 
@@ -102,7 +104,7 @@ cron.schedule('16 18 * * *', async () => {
   console.log('SMS sending task completed');
 }, {
   scheduled: true,
-  timezone: "Asia/Colombo", 
+  timezone: "Asia/Colombo",
 });
 mainApp.listen(PORT, () => console.log(`Main API server running on port ${PORT} with base path ${basePathMain}`));
 
