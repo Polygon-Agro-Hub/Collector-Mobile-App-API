@@ -1,6 +1,104 @@
 const { collectionofficer, marketPlace } = require("../startup/database");
 const db = require('../startup/database');
 
+// exports.getPickupOrders = (officerId) => {
+//     console.log("Getting pickup orders for officer ID:", officerId);
+
+//     return new Promise((resolve, reject) => {
+//         if (!officerId) {
+//             return reject(new Error("Officer ID is missing or invalid"));
+//         }
+
+//         const sql = `
+//             SELECT 
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.createdAt,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.total,
+//                 o.buildingType,
+//                 o.sheduleDate,
+//                 o.sheduleTime,
+
+//                 po.id AS processOrderId,
+//                 po.invNo,
+//                 po.transactionId,
+//                 po.paymentMethod,
+//                 po.isPaid,
+//                 po.amount,
+//                 po.status,
+
+//                 u.cusId,
+//                 u.title,
+//                 u.firstName,
+//                 u.lastName,
+//                 u.phoneCode,
+//                 u.phoneNumber,
+//                 u.phoneCode2,
+//                 u.phoneNumber2,
+//                 u.email,
+//                 u.buyerType,
+//                 u.companyName,
+//                 u.companyPhoneCode,
+//                 u.companyPhone,
+
+//                 COALESCE(oh.city, oa.city) AS customerCity,
+//                 COALESCE(oh.houseNo, oa.houseNo) AS houseNo,
+//                 COALESCE(oh.streetName, oa.streetName) AS streetName,
+
+//                 dc.district AS distributionDistrict,
+//                 dc.centerName,
+//                 dc.regCode,
+
+//                 co.firstNameEnglish AS officerFirstName,
+//                 co.lastNameEnglish AS officerLastName
+
+//             FROM collection_officer.collectionofficer co
+
+//             INNER JOIN collection_officer.distributedcenter dc 
+//                 ON co.distributedCenterId = dc.id
+
+//             INNER JOIN market_place.orders o 
+//                 ON o.buildingType IN ('house', 'apartment')
+
+//             LEFT JOIN market_place.orderhouse oh 
+//                 ON o.id = oh.orderId 
+//                 AND o.buildingType = 'house'
+//                 AND oh.city = dc.district
+
+//             LEFT JOIN market_place.orderapartment oa 
+//                 ON o.id = oa.orderId 
+//                 AND o.buildingType = 'apartment'
+//                 AND oa.city = dc.district
+
+//             INNER JOIN market_place.processorders po 
+//                 ON o.id = po.orderId
+//                 AND po.status = 'Ready to Pickup'
+
+//             INNER JOIN market_place.marketplaceusers u 
+//                 ON o.userId = u.id
+
+//             WHERE co.id = ?
+//                 AND (oh.city IS NOT NULL OR oa.city IS NOT NULL)
+
+//             ORDER BY o.createdAt DESC;
+//         `;
+
+//         // Use collectionofficer pool since the main table is from that database
+//         // MySQL will handle the cross-database joins automatically
+//         collectionofficer.query(sql, [officerId], (error, results) => {
+//             if (error) {
+//                 console.error("Database error:", error);
+//                 return reject(error);
+//             }
+
+//             console.log(`Found ${results.length} pickup orders for officer ${officerId}`);
+//             resolve(results);
+//         });
+//     });
+// };
 exports.getPickupOrders = (officerId) => {
     console.log("Getting pickup orders for officer ID:", officerId);
 
@@ -44,10 +142,6 @@ exports.getPickupOrders = (officerId) => {
                 u.companyPhoneCode,
                 u.companyPhone,
                 
-                COALESCE(oh.city, oa.city) AS customerCity,
-                COALESCE(oh.houseNo, oa.houseNo) AS houseNo,
-                COALESCE(oh.streetName, oa.streetName) AS streetName,
-                
                 dc.district AS distributionDistrict,
                 dc.centerName,
                 dc.regCode,
@@ -61,33 +155,20 @@ exports.getPickupOrders = (officerId) => {
                 ON co.distributedCenterId = dc.id
             
             INNER JOIN market_place.orders o 
-                ON o.buildingType IN ('house', 'apartment')
-            
-            LEFT JOIN market_place.orderhouse oh 
-                ON o.id = oh.orderId 
-                AND o.buildingType = 'house'
-                AND oh.city = dc.district
-            
-            LEFT JOIN market_place.orderapartment oa 
-                ON o.id = oa.orderId 
-                AND o.buildingType = 'apartment'
-                AND oa.city = dc.district
+                ON o.centerId = dc.id
             
             INNER JOIN market_place.processorders po 
-                ON o.id = po.orderId
+                ON po.orderId = o.id
                 AND po.status = 'Ready to Pickup'
             
             INNER JOIN market_place.marketplaceusers u 
                 ON o.userId = u.id
             
             WHERE co.id = ?
-                AND (oh.city IS NOT NULL OR oa.city IS NOT NULL)
             
             ORDER BY o.createdAt DESC;
         `;
 
-        // Use collectionofficer pool since the main table is from that database
-        // MySQL will handle the cross-database joins automatically
         collectionofficer.query(sql, [officerId], (error, results) => {
             if (error) {
                 console.error("Database error:", error);
@@ -122,49 +203,6 @@ exports.checkCustome = async () => {
 };
 
 //Update Pickup orders
-
-// exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
-//     try {
-//         // Add .promise() before .query()
-//         const getProcessOrderQuery = `
-//             SELECT id 
-//             FROM market_place.processorders 
-//             WHERE invNo = ?
-//         `;
-
-//         const [processOrderResult] = await db.marketPlace.promise().query(getProcessOrderQuery, [orderId]);
-
-//         if (!processOrderResult || processOrderResult.length === 0) {
-//             throw new Error('Order not found with the given invoice number');
-//         }
-
-//         const processOrderId = processOrderResult[0].id;
-
-//         const insertQuery = `
-//             INSERT INTO collection_officer.pickuporders 
-//             (orderId, orderIssuedOfficer, signature, createdAt) 
-//             VALUES (?, ?, ?, NOW())
-//         `;
-
-//         const [result] = await db.collectionofficer.promise().query(insertQuery, [
-//             processOrderId,
-//             officerId,
-//             signatureUrl
-//         ]);
-
-//         return {
-//             success: true,
-//             insertId: result.insertId,
-//             processOrderId: processOrderId,
-//             signatureUrl: signatureUrl,
-//             message: 'Pickup details updated successfully'
-//         };
-//     } catch (error) {
-//         console.error('Error in updatePickupDetails DAO:', error);
-//         throw error;
-//     }
-// };
-
 
 exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
     try {
@@ -220,106 +258,7 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
 
 
 
-// exports.getReceivedOrders = (officerId) => {
-//     console.log("Getting pickup and driver orders for officer ID:", officerId);
-//     return new Promise((resolve, reject) => {
-//         if (!officerId) {
-//             return reject(new Error("Officer ID is missing or invalid"));
-//         }
-//         const query = `
-//             SELECT 
-//                 'pickup' AS orderType,
-//                 po.id AS pickupOrderId,
-//                 po.orderId AS pickupOrderOrderId,
-//                 po.orderIssuedOfficer,
-//                 po.handOverOfficer,
-//                 po.signature,
-//                 po.handOverPrice,
-//                 po.handOverTime,
-//                 po.createdAt AS pickupCreatedAt,
-//                 NULL AS driverId,
-//                 NULL AS drvStatus,
-//                 NULL AS isHandOver,
 
-//                 -- Process orders data
-//                 pr.id AS processOrderId,
-//                 pr.orderId AS processOrderOrderId,
-//                 pr.invNo,
-//                 pr.transactionId,
-//                 pr.paymentMethod,
-//                 pr.isPaid,
-//                 pr.amount,
-//                 pr.status AS processStatus,
-
-//                 -- Orders data
-//                 o.id AS orderId,
-//                 o.userId,
-//                 o.orderApp,
-//                 o.delivaryMethod,
-//                 o.fullTotal,
-//                 o.createdAt AS orderCreatedAt
-
-//             FROM collection_officer.pickuporders po
-//             INNER JOIN market_place.processorders pr 
-//                 ON po.orderId = pr.id
-//             INNER JOIN market_place.orders o 
-//                 ON pr.orderId = o.id
-//             WHERE po.orderIssuedOfficer = ? OR po.handOverOfficer = ?
-
-//             UNION ALL
-
-//             SELECT 
-//                 'driver' AS orderType,
-//                 NULL AS pickupOrderId,
-//                 do.orderId AS pickupOrderOrderId,
-//                 NULL AS orderIssuedOfficer,
-//                 do.handOverOfficer,
-//                 do.signature,
-//                 do.handOverPrice,
-//                 NULL AS handOverTime,
-//                 NULL AS pickupCreatedAt,
-//                 do.driverId,
-//                 do.drvStatus,
-//                 do.isHandOver,
-
-//                 -- Process orders data
-//                 pr.id AS processOrderId,
-//                 pr.orderId AS processOrderOrderId,
-//                 pr.invNo,
-//                 pr.transactionId,
-//                 pr.paymentMethod,
-//                 pr.isPaid,
-//                 pr.amount,
-//                 pr.status AS processStatus,
-
-//                 -- Orders data
-//                 o.id AS orderId,
-//                 o.userId,
-//                 o.orderApp,
-//                 o.delivaryMethod,
-//                 o.fullTotal,
-//                 o.createdAt AS orderCreatedAt
-
-//             FROM collection_officer.driverorders do
-//             INNER JOIN market_place.processorders pr 
-//                 ON do.orderId = pr.id
-//             INNER JOIN market_place.orders o 
-//                 ON pr.orderId = o.id
-//             WHERE do.handOverOfficer = ?
-
-//             ORDER BY orderCreatedAt DESC
-//         `;
-
-//         db.collectionofficer.query(query, [officerId, officerId, officerId], (error, results) => {
-//             if (error) {
-//                 console.error("Database error:", error);
-//                 return reject(error);
-//             }
-//             console.log(`Found ${results.length} orders (pickup + driver) for officer ${officerId}`);
-//             resolve(results);
-//         });
-//     });
-// };
 
 exports.getReceivedOrders = (officerId) => {
     console.log("Getting pickup and driver orders for officer ID:", officerId);
