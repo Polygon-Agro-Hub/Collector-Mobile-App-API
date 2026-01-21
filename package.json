@@ -16,15 +16,15 @@
     "@aws-sdk/s3-request-presigner": "^3.796.0",
     "axios": "^1.8.4",
     "base64-arraybuffer": "^1.0.2",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "expo-print": "~13.0.1",
     "expo-screen-capture": "^6.0.1",
     "express": "^4.19.2",
     "express-async-handler": "^1.2.0",
     "handlebars": "^4.7.8",
-    "html-pdf": "^3.0.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.30.1",
@@ -36,7 +36,6 @@
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "uuid": "^10.0.0",
-    "expo-print": "~13.0.1"
+    "uuid": "^10.0.0"
   }
 }
