@@ -4,7 +4,6 @@ exports.getOfficerByEmpId = (empId) => {
   return new Promise((resolve, reject) => {
     const normalizedEmpId = empId.toUpperCase();
 
-    // Query with case-insensitive comparison - status already included
     const sql =
       "SELECT id, jobRole, status, empId FROM collectionofficer WHERE UPPER(empId) = ?";
 
