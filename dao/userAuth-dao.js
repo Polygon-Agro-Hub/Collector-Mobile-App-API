@@ -2,12 +2,11 @@ const db = require("../startup/database");
 
 exports.getOfficerByEmpId = (empId) => {
   return new Promise((resolve, reject) => {
-    // Convert empId to uppercase before querying
     const normalizedEmpId = empId.toUpperCase();
 
-    // Query with case-insensitive comparison
+    // Query with case-insensitive comparison - status already included
     const sql =
-      "SELECT id, jobRole, empId FROM collectionofficer WHERE UPPER(empId) = ?";
+      "SELECT id, jobRole, status, empId FROM collectionofficer WHERE UPPER(empId) = ?";
 
     db.collectionofficer.query(sql, [normalizedEmpId], (err, results) => {
       if (err) {
