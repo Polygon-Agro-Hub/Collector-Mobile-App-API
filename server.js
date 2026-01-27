@@ -19,6 +19,7 @@ const heathRoutes = require("./routes/heathRoutes");
 const distribution = require("./routes/distribution.routes");
 const distributionManager = require("./routes/distibutionManager.routes");
 const pickupRoute = require("./routes/pickup.routes");
+const pensionRoute = require("./routes/pension.routes");
 
 const socketIo = require("socket.io");
 require("dotenv").config();
@@ -98,6 +99,7 @@ mainApp.use(`${basePathMain}/api/collectionrequest`, collectionrequest);
 mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
 mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
+mainApp.use(`${basePathMain}/api/pension`, pensionRoute);
 
 const basePathStatus = "/agro-api/collection-status";
 
