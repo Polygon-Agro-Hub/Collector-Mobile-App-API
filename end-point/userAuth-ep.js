@@ -18,9 +18,8 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    // Normalize empId to uppercase for consistency
     let { empId, password } = req.body;
-    empId = empId.trim().toUpperCase(); // Normalize and trim
+    empId = empId.trim().toUpperCase();
 
     console.log("Employee ID (normalized):", empId);
     console.log("Password Provided:", password);
@@ -38,11 +37,21 @@ exports.loginUser = async (req, res) => {
 
     const collectionOfficerId = collectionOfficerResult?.[0]?.id;
     const jobRole = collectionOfficerResult?.[0]?.jobRole;
+    const accountStatus = collectionOfficerResult?.[0]?.status;
 
     if (!collectionOfficerId) {
       return res.status(404).json({
         status: "error",
         message: "Invalid Employee ID",
+      });
+    }
+
+
+    if (accountStatus !== "Approved") {
+      return res.status(403).json({
+        status: "error",
+        message: "This EMP ID is not approved.",
+        accountStatus: accountStatus
       });
     }
 
@@ -58,7 +67,6 @@ exports.loginUser = async (req, res) => {
     const centerId = officer.centerId;
     const distributionCenterId = officer.distributedCenterId;
 
-    // Compare the provided password with the hashed password in the database
     const isPasswordValid = await bcrypt.compare(password, officer.password);
     console.log("Password Match Result:", isPasswordValid);
 
@@ -70,7 +78,6 @@ exports.loginUser = async (req, res) => {
     }
 
     let center;
-    // Case-insensitive job role comparison
     const normalizedJobRole = jobRole.toLowerCase();
     if (normalizedJobRole === "collection officer" || normalizedJobRole === "collection centre manager") {
       center = centerId;
@@ -80,7 +87,6 @@ exports.loginUser = async (req, res) => {
 
     console.log("Centre Id", center);
 
-    // If password is valid, generate a JWT token
     const payload = {
       id: officer.id,
       email: officer.email,
@@ -91,7 +97,8 @@ exports.loginUser = async (req, res) => {
       companyId: officer.companyId,
       empId: officer.empId,
       role: officer.jobRole,
-      companycenterId: officer.companycenterId
+      companycenterId: officer.companycenterId,
+      accountStatus: accountStatus
     };
     console.log("payload", payload);
 
@@ -114,7 +121,8 @@ exports.loginUser = async (req, res) => {
       empId: officer.empId,
       companyNameEnglish: officer.companyNameEnglish,
       companyNameSinhala: officer.companyNameSinhala,
-      companyNameTamil: officer.companyNameTamil
+      companyNameTamil: officer.companyNameTamil,
+      accountStatus: accountStatus
     };
 
     res.status(200).json(response);
@@ -137,11 +145,9 @@ exports.loginUser = async (req, res) => {
 
 
 
-
-
 exports.updatePassword = async (req, res) => {
   const officerId = req.user.id;
-  const {  currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body;
   console.log("Attempting to update password for empid:", officerId);
 
   if (!currentPassword || !newPassword) {
