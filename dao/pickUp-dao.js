@@ -119,6 +119,11 @@ exports.getPickupOrders = (officerId) => {
                 o.buildingType,
                 o.sheduleDate,
                 o.sheduleTime,
+                o.fullName,
+                o.phonecode1 As phoneCode,
+                o.phone1 As phoneNumber ,
+                o.phonecode2 As phoneCode2,
+                o.phone2 As phoneNumber2,
                 
                 po.id AS processOrderId,
                 po.invNo,
@@ -132,10 +137,6 @@ exports.getPickupOrders = (officerId) => {
                 u.title,
                 u.firstName,
                 u.lastName,
-                u.phoneCode,
-                u.phoneNumber,
-                u.phoneCode2,
-                u.phoneNumber2,
                 u.email,
                 u.buyerType,
                 u.companyName,
@@ -204,31 +205,135 @@ exports.checkCustome = async () => {
 
 //Update Pickup orders
 
+// exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
+//     try {
+//         // First, get the processorder id using the invoice number
+//         const getProcessOrderQuery = `
+//             SELECT id 
+//             FROM market_place.processorders 
+//             WHERE invNo = ?
+//         `;
+
+//         const [processOrderResult] = await db.marketPlace.promise().query(getProcessOrderQuery, [orderId]);
+
+//         if (!processOrderResult || processOrderResult.length === 0) {
+//             throw new Error('Order not found with the given invoice number');
+//         }
+
+//         const processOrderId = processOrderResult[0].id;
+
+//         // Update the status to "Picked up" in processorders table
+//         const updateStatusQuery = `
+//             UPDATE market_place.processorders 
+//             SET status = 'Picked up' 
+//             WHERE id = ?
+//         `;
+
+//         await db.marketPlace.promise().query(updateStatusQuery, [processOrderId]);
+
+//         // Insert into collection_officer.pickuporders
+//         const insertQuery = `
+//             INSERT INTO collection_officer.pickuporders 
+//             (orderId, orderIssuedOfficer, signature, createdAt) 
+//             VALUES (?, ?, ?, NOW())
+//         `;
+
+//         const [result] = await db.collectionofficer.promise().query(insertQuery, [
+//             processOrderId,
+//             officerId,
+//             signatureUrl
+//         ]);
+
+//         return {
+//             success: true,
+//             insertId: result.insertId,
+//             processOrderId: processOrderId,
+//             signatureUrl: signatureUrl,
+//             message: 'Pickup details updated successfully'
+//         };
+//     } catch (error) {
+//         console.error('Error in updatePickupDetails DAO:', error);
+//         throw error;
+//     }
+// };
+
 exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
+    const connection = await db.marketPlace.promise().getConnection();
+
     try {
-        // First, get the processorder id using the invoice number
+        await connection.beginTransaction();
+
+        // First, get the processorder details using the invoice number
         const getProcessOrderQuery = `
-            SELECT id 
+            SELECT id, paymentMethod, orderId, amount, isPaid
             FROM market_place.processorders 
             WHERE invNo = ?
         `;
 
-        const [processOrderResult] = await db.marketPlace.promise().query(getProcessOrderQuery, [orderId]);
+        const [processOrderResult] = await connection.query(getProcessOrderQuery, [orderId]);
 
         if (!processOrderResult || processOrderResult.length === 0) {
             throw new Error('Order not found with the given invoice number');
         }
 
-        const processOrderId = processOrderResult[0].id;
+        const processOrder = processOrderResult[0];
+        const processOrderId = processOrder.id;
+        const paymentMethod = processOrder.paymentMethod;
 
-        // Update the status to "Picked up" in processorders table
-        const updateStatusQuery = `
-            UPDATE market_place.processorders 
-            SET status = 'Picked up' 
-            WHERE id = ?
-        `;
+        console.log('Process Order Details:', processOrder);
 
-        await db.marketPlace.promise().query(updateStatusQuery, [processOrderId]);
+        // Check if payment method is 'Cash'
+        if (paymentMethod === 'Cash') {
+            // Get the payment amount from orders table using orderId from processorders
+            const getOrderAmountQuery = `
+                SELECT fullTotal 
+                FROM market_place.orders 
+                WHERE id = ?
+            `;
+
+            const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
+
+            console.log('Order ID used for query:', processOrder.orderId);
+
+            if (!orderResult || orderResult.length === 0) {
+                throw new Error('Order details not found');
+            }
+
+            const paymentAmount = orderResult[0].fullTotal;
+            console.log('Payment Amount from orders table:', paymentAmount);
+            console.log('Type of paymentAmount:', typeof paymentAmount);
+            console.log('ProcessOrder ID to update:', processOrderId);
+
+            // Update processorders with payment details and status
+            const updateProcessOrderQuery = `
+                UPDATE market_place.processorders 
+                SET status = ?,
+                    amount = ?,
+                    isPaid = ?,
+                    outDlvrDate = NOW()
+                WHERE id = ?
+            `;
+
+            const [updateResult] = await connection.query(updateProcessOrderQuery, [
+                'Picked up',
+                paymentAmount,
+                1,
+                processOrderId
+            ]);
+
+            console.log('Update Result:', updateResult);
+            console.log('Rows affected:', updateResult.affectedRows);
+        } else {
+            // For non-cash payments, just update status and outDlvrDate
+            const updateStatusQuery = `
+                UPDATE market_place.processorders 
+                SET status = 'Picked up',
+                    outDlvrDate = NOW()
+                WHERE id = ?
+            `;
+
+            await connection.query(updateStatusQuery, [processOrderId]);
+        }
 
         // Insert into collection_officer.pickuporders
         const insertQuery = `
@@ -237,28 +342,145 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
             VALUES (?, ?, ?, NOW())
         `;
 
-        const [result] = await db.collectionofficer.promise().query(insertQuery, [
+        const [result] = await connection.query(insertQuery, [
             processOrderId,
             officerId,
             signatureUrl
         ]);
+
+        await connection.commit();
 
         return {
             success: true,
             insertId: result.insertId,
             processOrderId: processOrderId,
             signatureUrl: signatureUrl,
+            paymentMethod: paymentMethod,
             message: 'Pickup details updated successfully'
         };
     } catch (error) {
+        await connection.rollback();
         console.error('Error in updatePickupDetails DAO:', error);
         throw error;
+    } finally {
+        connection.release();
     }
 };
 
 
 
+// exports.getReceivedOrders = (officerId) => {
+//     console.log("Getting pickup and driver orders for officer ID:", officerId);
+//     return new Promise((resolve, reject) => {
+//         if (!officerId) {
+//             return reject(new Error("Officer ID is missing or invalid"));
+//         }
+//         const query = `
+//             SELECT 
+//                 'pickup' AS orderType,
+//                 po.id AS pickupOrderId,
+//                 po.orderId AS pickupOrderOrderId,
+//                 po.orderIssuedOfficer,
+//                 po.handOverOfficer,
+//                 po.signature,
+//                 po.handOverPrice,
+//                 po.handOverTime,
+//                 po.createdAt AS pickupCreatedAt,
+//                 CASE 
+//                     WHEN po.handOverOfficer IS NOT NULL THEN po.createdAt 
+//                     ELSE NULL 
+//                 END AS handOverReceivedTime,
+//                 NULL AS driverId,
+//                 NULL AS drvStatus,
+//                 NULL AS isHandOver,
+//                 NULL AS receivedTime,
+//                 NULL AS startTime,
 
+//                 -- Process orders data
+//                 pr.id AS processOrderId,
+//                 pr.orderId AS processOrderOrderId,
+//                 pr.invNo,
+//                 pr.transactionId,
+//                 pr.paymentMethod,
+//                 pr.isPaid,
+//                 pr.amount,
+//                 pr.status AS processStatus,
+
+//                 -- Orders data
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.createdAt AS orderCreatedAt
+
+//             FROM collection_officer.pickuporders po
+//             INNER JOIN market_place.processorders pr 
+//                 ON po.orderId = pr.id
+//             INNER JOIN market_place.orders o 
+//                 ON pr.orderId = o.id
+//             WHERE po.orderIssuedOfficer = ? OR po.handOverOfficer = ?
+
+//             UNION ALL
+
+//             SELECT 
+//                 'driver' AS orderType,
+//                 NULL AS pickupOrderId,
+//                 do.orderId AS pickupOrderOrderId,
+//                 NULL AS orderIssuedOfficer,
+//                 do.handOverOfficer,
+//                 do.signature,
+//                 do.handOverPrice,
+//                 do.handOverTime,
+//                 do.createdAt AS pickupCreatedAt,
+//                 CASE 
+//                     WHEN do.handOverOfficer IS NOT NULL THEN do.createdAt 
+//                     ELSE NULL 
+//                 END AS handOverReceivedTime,
+//                 do.driverId,
+//                 do.drvStatus,
+//                 do.isHandOver,
+//                 do.receivedTime,
+//                 do.startTime,
+
+//                 -- Process orders data
+//                 pr.id AS processOrderId,
+//                 pr.orderId AS processOrderOrderId,
+//                 pr.invNo,
+//                 pr.transactionId,
+//                 pr.paymentMethod,
+//                 pr.isPaid,
+//                 pr.amount,
+//                 pr.status AS processStatus,
+
+//                 -- Orders data
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.createdAt AS orderCreatedAt
+
+//             FROM collection_officer.driverorders do
+//             INNER JOIN market_place.processorders pr 
+//                 ON do.orderId = pr.id
+//             INNER JOIN market_place.orders o 
+//                 ON pr.orderId = o.id
+//             WHERE do.handOverOfficer = ?
+
+//             ORDER BY orderCreatedAt DESC
+//         `;
+
+//         db.collectionofficer.query(query, [officerId, officerId, officerId], (error, results) => {
+//             if (error) {
+//                 console.error("Database error:", error);
+//                 return reject(error);
+//             }
+//             console.log(`Found ${results.length} orders (pickup + driver) for officer ${officerId}`);
+//             resolve(results);
+//         });
+//     });
+// };
 
 exports.getReceivedOrders = (officerId) => {
     console.log("Getting pickup and driver orders for officer ID:", officerId);
@@ -310,7 +532,8 @@ exports.getReceivedOrders = (officerId) => {
                 ON po.orderId = pr.id
             INNER JOIN market_place.orders o 
                 ON pr.orderId = o.id
-            WHERE po.orderIssuedOfficer = ? OR po.handOverOfficer = ?
+            WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
+                AND pr.paymentMethod = 'Cash'
             
             UNION ALL
             
@@ -358,6 +581,7 @@ exports.getReceivedOrders = (officerId) => {
             INNER JOIN market_place.orders o 
                 ON pr.orderId = o.id
             WHERE do.handOverOfficer = ?
+                AND pr.paymentMethod = 'Cash'
             
             ORDER BY orderCreatedAt DESC
         `;
@@ -367,12 +591,74 @@ exports.getReceivedOrders = (officerId) => {
                 console.error("Database error:", error);
                 return reject(error);
             }
-            console.log(`Found ${results.length} orders (pickup + driver) for officer ${officerId}`);
+            console.log(`Found ${results.length} cash orders (pickup + driver) for officer ${officerId}`);
             resolve(results);
         });
     });
 };
 
+// exports.getReceivedOrderOfficer = (officerId) => {
+//     console.log("Getting pickup orders for officer ID:", officerId);
+//     return new Promise((resolve, reject) => {
+//         if (!officerId) {
+//             return reject(new Error("Officer ID is missing or invalid"));
+//         }
+
+//         const query = `
+//             SELECT 
+//                 po.id AS pickupOrderId,
+//                 po.orderId AS pickupOrderOrderId,
+//                 po.orderIssuedOfficer,
+//                 po.handOverOfficer,
+//                 po.signature,
+//                 po.handOverPrice,
+//                 po.handOverTime,
+//                 po.createdAt AS pickupCreatedAt,
+
+//                 -- Process orders data
+//                 pr.id AS processOrderId,
+//                 pr.orderId AS processOrderOrderId,
+//                 pr.invNo,
+//                 pr.transactionId,
+//                 pr.paymentMethod,
+//                 pr.isPaid,
+//                 pr.amount,
+//                 pr.status AS processStatus,
+
+//                 -- Orders data
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.delivaryMethod,
+//                 o.fullTotal,
+//                 o.createdAt AS orderCreatedAt
+
+//             FROM collection_officer.pickuporders po
+
+//             -- Join with processorders using orderId from pickuporders
+//             INNER JOIN market_place.processorders pr 
+//                 ON po.orderId = pr.id
+
+//             -- Join with orders using orderId from processorders
+//             INNER JOIN market_place.orders o 
+//                 ON pr.orderId = o.id
+
+//             WHERE po.orderIssuedOfficer = ?
+
+//             ORDER BY po.createdAt DESC
+//         `;
+
+//         db.collectionofficer.query(query, [officerId], (error, results) => {
+//             if (error) {
+//                 console.error("Database error:", error);
+//                 return reject(error);
+//             }
+
+//             console.log(`Found ${results.length} pickup orders for officer ${officerId}`);
+//             resolve(results);
+//         });
+//     });
+// };
 exports.getReceivedOrderOfficer = (officerId) => {
     console.log("Getting pickup orders for officer ID:", officerId);
     return new Promise((resolve, reject) => {
@@ -420,6 +706,7 @@ exports.getReceivedOrderOfficer = (officerId) => {
                 ON pr.orderId = o.id
             
             WHERE po.orderIssuedOfficer = ?
+                AND pr.paymentMethod = 'Cash'
             
             ORDER BY po.createdAt DESC
         `;
@@ -430,12 +717,11 @@ exports.getReceivedOrderOfficer = (officerId) => {
                 return reject(error);
             }
 
-            console.log(`Found ${results.length} pickup orders for officer ${officerId}`);
+            console.log(`Found ${results.length} cash pickup orders for officer ${officerId}`);
             resolve(results);
         });
     });
 };
-
 
 exports.getOfficerByEmpId = (empId) => {
     return new Promise((resolve, reject) => {
