@@ -14,6 +14,7 @@ router.post(
 // Submit Pension Request
 router.post(
   "/pension-request/submit",
+  auth,
   upload.fields([
     { name: "nicFront", maxCount: 1 },
     { name: "nicBack", maxCount: 1 },
