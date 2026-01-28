@@ -49,10 +49,11 @@ exports.checkPensionRequestStatusByNIC = asyncHandler(async (req, res) => {
   }
 });
 
-// Submit Pension Request - UPDATED TO GET USER BY NIC INSTEAD OF AUTH USER
+// Submit Pension Request
 exports.submitPensionRequest = asyncHandler(async (req, res) => {
   try {
-    const { nic } = req.body; // Get NIC from request body
+    const { nic } = req.body;
+    const officerId = req.user.id;
 
     if (!nic) {
       return res.status(400).json({
@@ -180,17 +181,18 @@ exports.submitPensionRequest = asyncHandler(async (req, res) => {
       );
     }
 
-    // Prepare pension data with user's NIC
+    // Prepare pension data with user's NIC AND officerId
     const pensionData = {
       userId,
+      officerId,
       fullName,
-      nic: user.NICnumber, 
+      nic: user.NICnumber,
       nicFront: nicFrontUrl,
       nicBack: nicBackUrl,
       dob,
       sucFullName,
       sucType,
-      sucNic: isOver18 ? sucNic : null, 
+      sucNic: isOver18 ? sucNic : null,
       sucNicFront: sucNicFrontUrl,
       sucNicBack: sucNicBackUrl,
       birthCrtFront: birthCrtFrontUrl,
@@ -221,7 +223,8 @@ exports.checkPensionRequestStatus = asyncHandler(async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const pensionStatus = await pensionRequestDao.checkPensionRequestByUserId(userId);
+    const pensionStatus =
+      await pensionRequestDao.checkPensionRequestByUserId(userId);
 
     if (!pensionStatus) {
       return res.status(200).json({

@@ -65,17 +65,18 @@ exports.submitPensionRequestDAO = (pensionData) => {
   return new Promise((resolve, reject) => {
     const query = `
             INSERT INTO pensionrequest (
-                userId, fullName, nic, nicFront, nicBack, dob,
+                userId, officerId, fullName, nic, nicFront, nicBack, dob,
                 sucFullName, sucType, sucNic, sucNicFront, sucNicBack, 
                 birthCrtFront, birthCrtBack, sucdob,
                 reqStatus, isFirstTime
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'To Review', 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'To Review', 1)
         `;
 
     db.plantcare.query(
       query,
       [
         pensionData.userId,
+        pensionData.officerId, 
         pensionData.fullName,
         pensionData.nic,
         pensionData.nicFront,
@@ -104,8 +105,8 @@ exports.submitPensionRequestDAO = (pensionData) => {
 
 // Check Pension Request by User ID
 exports.checkPensionRequestByUserId = (userId) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
             SELECT 
                 pr.id, 
                 pr.reqStatus, 
@@ -117,43 +118,43 @@ exports.checkPensionRequestByUserId = (userId) => {
             WHERE pr.userId = ? 
             LIMIT 1
         `;
-        
-        db.plantcare.query(sql, [userId], (err, results) => {
-            if (err) {
-                console.error("Error executing query:", err);
-                reject(err);
-            } else {
-                if (results.length === 0) {
-                    resolve(null);
-                } else {
-                    resolve(results[0]);
-                }
-            }
-        });
+
+    db.plantcare.query(sql, [userId], (err, results) => {
+      if (err) {
+        console.error("Error executing query:", err);
+        reject(err);
+      } else {
+        if (results.length === 0) {
+          resolve(null);
+        } else {
+          resolve(results[0]);
+        }
+      }
     });
+  });
 };
 
 // Get User by ID
 exports.getUserById = (userId) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
             SELECT id, firstName, lastName, phoneNumber, NICnumber 
             FROM users 
             WHERE id = ? 
             LIMIT 1
         `;
-        
-        db.plantcare.query(sql, [userId], (err, results) => {
-            if (err) {
-                console.error("Error getting user by ID:", err);
-                reject(err);
-            } else {
-                if (results.length === 0) {
-                    resolve(null);
-                } else {
-                    resolve(results[0]);
-                }
-            }
-        });
+
+    db.plantcare.query(sql, [userId], (err, results) => {
+      if (err) {
+        console.error("Error getting user by ID:", err);
+        reject(err);
+      } else {
+        if (results.length === 0) {
+          resolve(null);
+        } else {
+          resolve(results[0]);
+        }
+      }
     });
+  });
 };
