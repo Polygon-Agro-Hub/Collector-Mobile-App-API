@@ -566,3 +566,28 @@ exports.updateCashReceived = (transactions, officerId, totalAmount) => {
         });
     });
 };
+
+exports.getOfficerByEmpId = (empId) => {
+    return new Promise((resolve, reject) => {
+        db.collectionofficer.getConnection((err, connection) => {
+            if (err) {
+                return reject(err);
+            }
+
+            const query = `
+                SELECT id, empId, distributedCenterId, status
+                FROM collection_officer.collectionofficer
+                WHERE empId = ?
+                LIMIT 1
+            `;
+
+            connection.query(query, [empId], (err, results) => {
+                connection.release();
+                if (err) {
+                    return reject(err);
+                }
+                resolve(results[0] || null);
+            });
+        });
+    });
+};
