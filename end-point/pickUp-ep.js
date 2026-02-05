@@ -1,7 +1,6 @@
-const pickupDao = require('../dao/pickUp-dao');
-const asyncHandler = require('express-async-handler');
-const uploadFileToS3 = require('../Middlewares/s3upload');
-
+const pickupDao = require("../dao/pickUp-dao");
+const asyncHandler = require("express-async-handler");
+const uploadFileToS3 = require("../Middlewares/s3upload");
 
 exports.getPickupOrders = async (req, res) => {
     console.log("pickup oreders called");
@@ -15,35 +14,32 @@ exports.getPickupOrders = async (req, res) => {
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid officer ID provided'
+                message: "Invalid officer ID provided",
             });
         }
 
         // Get pickup from DAO
         const pickup = await pickupDao.getPickupOrders(officerId);
 
-        console.log("pickup----------", pickup)
-
+        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,
-            message: 'Officer pickup retrieved successfully',
-            data: pickup
+            message: "Officer pickup retrieved successfully",
+            data: pickup,
         });
     } catch (error) {
-        console.error('Error getting officer pickup:', error);
+        console.error("Error getting officer pickup:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve officer pickup',
-            error: error.message
+            message: "Failed to retrieve officer pickup",
+            error: error.message,
         });
     }
 };
 
-
 exports.checkCustomer = asyncHandler(async (req, res) => {
     try {
-
         const customer = await pickupDao.checkCustome();
 
         if (!customer || customer.length === 0) {
@@ -57,8 +53,6 @@ exports.checkCustomer = asyncHandler(async (req, res) => {
     }
 });
 
-
-
 exports.updatePickupDetails = async (req, res) => {
     try {
         const { orderId } = req.body;
@@ -67,24 +61,24 @@ exports.updatePickupDetails = async (req, res) => {
 
         if (!orderId) {
             return res.status(400).json({
-                status: 'error',
-                message: 'Order ID is required'
+                status: "error",
+                message: "Order ID is required",
             });
         }
 
         if (!signatureFile) {
             return res.status(400).json({
-                status: 'error',
-                message: 'Signature file is required'
+                status: "error",
+                message: "Signature file is required",
             });
         }
 
         // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
         if (!allowedTypes.includes(signatureFile.mimetype)) {
             return res.status(400).json({
-                status: 'error',
-                message: 'Only JPEG, JPG, and PNG images are allowed'
+                status: "error",
+                message: "Only JPEG, JPG, and PNG images are allowed",
             });
         }
 
@@ -92,52 +86,50 @@ exports.updatePickupDetails = async (req, res) => {
         const signatureUrl = await uploadFileToS3(
             signatureFile.buffer,
             signatureFile.originalname,
-            'pickup-signatures'
+            "pickup-signatures",
         );
 
         // Call the DAO to insert the pickupDetails into the database
         const pickupDetails = await pickupDao.updatePickupDetails(
             officerId,
             orderId,
-            signatureUrl
+            signatureUrl,
         );
 
-        console.log('Pickup details updated:', pickupDetails);
+        console.log("Pickup details updated:", pickupDetails);
 
         return res.status(201).json({
-            status: 'success',
-            message: 'Pickup details registered successfully',
+            status: "success",
+            message: "Pickup details registered successfully",
             data: {
                 insertId: pickupDetails.insertId,
                 processOrderId: pickupDetails.processOrderId,
-                signatureUrl: pickupDetails.signatureUrl
-            }
+                signatureUrl: pickupDetails.signatureUrl,
+            },
         });
     } catch (error) {
-        console.error('Error inserting pickupDetails:', error);
+        console.error("Error inserting pickupDetails:", error);
 
-        if (error.message === 'Order not found with the given invoice number') {
+        if (error.message === "Order not found with the given invoice number") {
             return res.status(404).json({
-                status: 'error',
-                message: error.message
+                status: "error",
+                message: error.message,
             });
         }
 
-        if (error.message === 'Failed to upload file to R2') {
+        if (error.message === "Failed to upload file to R2") {
             return res.status(500).json({
-                status: 'error',
-                message: 'Failed to upload signature file'
+                status: "error",
+                message: "Failed to upload signature file",
             });
         }
 
         return res.status(500).json({
-            status: 'error',
-            message: 'Internal Server Error'
+            status: "error",
+            message: "Internal Server Error",
         });
     }
 };
-
-
 
 exports.getReceivedOrders = async (req, res) => {
     console.log("pickup oreders called");
@@ -151,31 +143,29 @@ exports.getReceivedOrders = async (req, res) => {
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid officer ID provided'
+                message: "Invalid officer ID provided",
             });
         }
 
         // Get pickup from DAO
         const pickup = await pickupDao.getReceivedOrders(officerId);
 
-        console.log("pickup----------", pickup)
-
+        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,
-            message: 'Officer pickup retrieved successfully',
-            data: pickup
+            message: "Officer pickup retrieved successfully",
+            data: pickup,
         });
     } catch (error) {
-        console.error('Error getting officer pickup:', error);
+        console.error("Error getting officer pickup:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve officer pickup',
-            error: error.message
+            message: "Failed to retrieve officer pickup",
+            error: error.message,
         });
     }
 };
-
 
 exports.getReceivedOrderOfficer = async (req, res) => {
     console.log("pickup oreders called");
@@ -189,71 +179,82 @@ exports.getReceivedOrderOfficer = async (req, res) => {
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid officer ID provided'
+                message: "Invalid officer ID provided",
             });
         }
 
         // Get pickup from DAO
         const pickup = await pickupDao.getReceivedOrderOfficer(officerId);
 
-        console.log("pickup----------", pickup)
-
+        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,
-            message: 'Officer pickup retrieved successfully',
-            data: pickup
+            message: "Officer pickup retrieved successfully",
+            data: pickup,
         });
     } catch (error) {
-        console.error('Error getting officer pickup:', error);
+        console.error("Error getting officer pickup:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve officer pickup',
-            error: error.message
+            message: "Failed to retrieve officer pickup",
+            error: error.message,
         });
     }
 };
 
-
 exports.updateCashReceived = asyncHandler(async (req, res) => {
     const { transactions, officerCode, totalAmount } = req.body;
+    const centerId = req.user.centerId;
 
-    console.log("dattttaaaa", transactions, officerCode, totalAmount)
-
-    // Validation
-    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    if (
+        !transactions ||
+        !Array.isArray(transactions) ||
+        transactions.length === 0
+    ) {
         return res.status(400).json({
             status: "error",
-            message: "Transactions array is required"
+            message: "Transactions array is required",
         });
     }
 
     if (!officerCode) {
         return res.status(400).json({
             status: "error",
-            message: "Officer code is required"
+            message: "Officer code is required",
         });
     }
 
     try {
-        // First, verify the officer exists and get their ID
         const officer = await pickupDao.getOfficerByEmpId(officerCode);
 
         if (!officer) {
             return res.status(404).json({
                 status: "error",
-                message: "Cash officer not found"
+                message: "Cash officer not found",
             });
         }
 
-        // Update all transactions with handover information
+        if (officer.distributedCenterId !== centerId) {
+            return res.status(403).json({
+                status: "error",
+                message: "This DCM officer is not in the same centre",
+            });
+        }
+
+        if (officer.status !== "Approved") {
+            return res.status(403).json({
+                status: "error",
+                message: "This Manager's ID is not acceptable.",
+            });
+        }
+
         const updateResults = await pickupDao.updateCashReceived(
             transactions,
             officer.id,
-            totalAmount
+            totalAmount,
         );
 
-        // Success response
         res.status(200).json({
             status: "success",
             message: "Cash successfully handed over",
@@ -262,24 +263,23 @@ exports.updateCashReceived = asyncHandler(async (req, res) => {
                 officerId: officer.id,
                 totalAmount: totalAmount,
                 transactionsUpdated: updateResults.affectedRows,
-                handoverTime: new Date().toISOString()
-            }
+                handoverTime: new Date().toISOString(),
+            },
         });
     } catch (error) {
         console.error("Error in updateCashReceived:", error);
 
-        // Handle specific errors
         if (error.message.includes("already handed over")) {
             return res.status(409).json({
                 status: "error",
-                message: error.message
+                message: error.message,
             });
         }
 
         res.status(500).json({
             status: "error",
             message: "Failed to update cash handover",
-            error: error.message
+            error: error.message,
         });
     }
 });
