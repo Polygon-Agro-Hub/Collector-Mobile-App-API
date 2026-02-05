@@ -106,7 +106,7 @@ exports.checkCustome = async () => {
 };
 
 //Update Pickup orders
-exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
+exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => {
     const connection = await db.marketPlace.promise().getConnection();
 
     try {
@@ -184,18 +184,38 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl) => {
             await connection.query(updateStatusQuery, [processOrderId]);
         }
 
-        // Insert into collection_officer.pickuporders
-        const insertQuery = `
-            INSERT INTO collection_officer.pickuporders 
-            (orderId, orderIssuedOfficer, signature, createdAt) 
-            VALUES (?, ?, ?, NOW())
-        `;
+        let insertQuery;
+        let insertParams;
 
-        const [result] = await connection.query(insertQuery, [
-            processOrderId,
-            officerId,
-            signatureUrl
-        ]);
+        if (role === 'Distribution Centre Manager') {
+            // Get the payment amount for handOverPrice
+            const getOrderAmountQuery = `
+                SELECT fullTotal 
+                FROM market_place.orders 
+                WHERE id = ?
+            `;
+            const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
+            const handOverPrice = orderResult[0]?.fullTotal || 0;
+
+            insertQuery = `
+                INSERT INTO collection_officer.pickuporders 
+                (orderId, orderIssuedOfficer, signature, handOverPrice, handOverTime, createdAt) 
+                VALUES (?, ?, ?, ?, NOW(), NOW())
+            `;
+            insertParams = [processOrderId, officerId, signatureUrl, handOverPrice];
+        } else if (role === 'Distribution Officer') {
+            // Distribution Officer - no handOverPrice and handOverTime
+            insertQuery = `
+                INSERT INTO collection_officer.pickuporders 
+                (orderId, orderIssuedOfficer, signature, createdAt) 
+                VALUES (?, ?, ?, NOW())
+            `;
+            insertParams = [processOrderId, officerId, signatureUrl];
+        } else {
+            throw new Error('Invalid role for pickup details update');
+        }
+
+        const [result] = await connection.query(insertQuery, insertParams);
 
         await connection.commit();
 
@@ -562,6 +582,31 @@ exports.updateCashReceived = (transactions, officerId, totalAmount) => {
                         });
                     });
                 });
+            });
+        });
+    });
+};
+
+exports.getOfficerByEmpId = (empId) => {
+    return new Promise((resolve, reject) => {
+        db.collectionofficer.getConnection((err, connection) => {
+            if (err) {
+                return reject(err);
+            }
+
+            const query = `
+                SELECT id, empId, distributedCenterId, status
+                FROM collection_officer.collectionofficer
+                WHERE empId = ?
+                LIMIT 1
+            `;
+
+            connection.query(query, [empId], (err, results) => {
+                connection.release();
+                if (err) {
+                    return reject(err);
+                }
+                resolve(results[0] || null);
             });
         });
     });
