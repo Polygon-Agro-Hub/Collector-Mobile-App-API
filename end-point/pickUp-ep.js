@@ -57,6 +57,7 @@ exports.updatePickupDetails = async (req, res) => {
     try {
         const { orderId } = req.body;
         const officerId = req.user.id;
+        const role = req.user.role;
         const signatureFile = req.file; // From multer
 
         if (!orderId) {
@@ -94,6 +95,7 @@ exports.updatePickupDetails = async (req, res) => {
             officerId,
             orderId,
             signatureUrl,
+            role
         );
 
         console.log("Pickup details updated:", pickupDetails);
