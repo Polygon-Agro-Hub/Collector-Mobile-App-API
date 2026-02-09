@@ -9,8 +9,7 @@ const asyncHandler = require('express-async-handler');
 exports.getDCenterTarget = async (req, res) => {
   console.log("getOfficerTarget called");
   try {
-    // Get officerId from the decoded token (set by auth middleware)
-    const officerId = req.user.id; // Assuming your auth middleware sets req.user
+    const officerId = req.user.id;
 
     console.log("Officer ID from token:", officerId);
 
