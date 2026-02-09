@@ -21,6 +21,7 @@ exports.getPickupOrders = (officerId) => {
                 o.buildingType,
                 o.sheduleDate,
                 o.sheduleTime,
+                o.title,
                 o.fullName,
                 o.phonecode1 As phoneCode,
                 o.phone1 As phoneNumber ,
@@ -34,9 +35,9 @@ exports.getPickupOrders = (officerId) => {
                 po.isPaid,
                 po.amount,
                 po.status,
+                po.outDlvrDate,
                 
                 u.cusId,
-                u.title,
                 u.firstName,
                 u.lastName,
                 u.email,
@@ -105,14 +106,13 @@ exports.checkCustome = async () => {
     });
 };
 
-//Update Pickup orders
+
 exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => {
     const connection = await db.marketPlace.promise().getConnection();
 
     try {
         await connection.beginTransaction();
 
-        // First, get the processorder details using the invoice number
         const getProcessOrderQuery = `
             SELECT id, paymentMethod, orderId, amount, isPaid
             FROM market_place.processorders 
@@ -131,9 +131,8 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
 
         console.log('Process Order Details:', processOrder);
 
-        // Check if payment method is 'Cash'
+
         if (paymentMethod === 'Cash') {
-            // Get the payment amount from orders table using orderId from processorders
             const getOrderAmountQuery = `
                 SELECT fullTotal 
                 FROM market_place.orders 
@@ -153,7 +152,6 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             console.log('Type of paymentAmount:', typeof paymentAmount);
             console.log('ProcessOrder ID to update:', processOrderId);
 
-            // Update processorders with payment details and status
             const updateProcessOrderQuery = `
                 UPDATE market_place.processorders 
                 SET status = ?,
@@ -173,7 +171,6 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             console.log('Update Result:', updateResult);
             console.log('Rows affected:', updateResult.affectedRows);
         } else {
-            // For non-cash payments, just update status and delivered time
             const updateStatusQuery = `
                 UPDATE market_place.processorders 
                 SET status = 'Picked up',
@@ -184,27 +181,38 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             await connection.query(updateStatusQuery, [processOrderId]);
         }
 
+
         let insertQuery;
         let insertParams;
 
         if (role === 'Distribution Centre Manager') {
-            // Get the payment amount for handOverPrice
-            const getOrderAmountQuery = `
-                SELECT fullTotal 
-                FROM market_place.orders 
-                WHERE id = ?
-            `;
-            const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
-            const handOverPrice = orderResult[0]?.fullTotal || 0;
+            if (paymentMethod === 'Cash') {
 
-            insertQuery = `
-                INSERT INTO collection_officer.pickuporders 
-                (orderId, orderIssuedOfficer, signature, handOverPrice, handOverTime, createdAt) 
-                VALUES (?, ?, ?, ?, NOW(), NOW())
-            `;
-            insertParams = [processOrderId, officerId, signatureUrl, handOverPrice];
+                const getOrderAmountQuery = `
+                    SELECT fullTotal 
+                    FROM market_place.orders 
+                    WHERE id = ?
+                `;
+                const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
+                const handOverPrice = orderResult[0]?.fullTotal || 0;
+
+                insertQuery = `
+                    INSERT INTO collection_officer.pickuporders 
+                    (orderId, orderIssuedOfficer, signature, handOverPrice, handOverTime, createdAt) 
+                    VALUES (?, ?, ?, ?, NOW(), NOW())
+                `;
+                insertParams = [processOrderId, officerId, signatureUrl, handOverPrice];
+            } else {
+
+                insertQuery = `
+                    INSERT INTO collection_officer.pickuporders 
+                    (orderId, orderIssuedOfficer, signature, createdAt) 
+                    VALUES (?, ?, ?, NOW())
+                `;
+                insertParams = [processOrderId, officerId, signatureUrl];
+            }
         } else if (role === 'Distribution Officer') {
-            // Distribution Officer - no handOverPrice and handOverTime
+
             insertQuery = `
                 INSERT INTO collection_officer.pickuporders 
                 (orderId, orderIssuedOfficer, signature, createdAt) 

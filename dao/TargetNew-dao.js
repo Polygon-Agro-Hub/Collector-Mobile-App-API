@@ -571,6 +571,40 @@ exports.getDailyTargetByOfficerAndVariety = (officerId, varietyId, grade) => {
 };
 
 
+// exports.getOfficerSummaryDao = async (officerId) => {
+//     return new Promise((resolve, reject) => {
+//         const query = `
+//          SELECT 
+//               COUNT(ot.id) AS totalTasks,
+//               SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
+//               SUM(ot.target) AS totalTarget,
+//               SUM(ot.complete) AS totalComplete,
+//               (SUM(ot.target) - SUM(COALESCE(ot.complete, 0))) AS remainingTarget
+//           FROM 
+//               officertarget ot
+//           JOIN 
+//               dailytarget dt ON ot.dailyTargetId = dt.id
+//           WHERE 
+//               ot.officerId = ?
+//               AND DATE(dt.date) = CURDATE();
+//       `;
+
+//         collectionofficer.query(query, [officerId], (error, results) => {
+//             if (error) {
+//                 console.error("Database error in getOfficerSummaryDao:", error);
+//                 return reject(error);
+//             }
+//             resolve(results[0] || {
+//                 totalTasks: 0,
+//                 completedTasks: 0,
+//                 totalTarget: 0,
+//                 totalComplete: 0,
+//                 remainingTarget: 0
+//             });
+//         });
+//     });
+// };
+
 exports.getOfficerSummaryDao = async (officerId) => {
     return new Promise((resolve, reject) => {
         const query = `
@@ -578,8 +612,18 @@ exports.getOfficerSummaryDao = async (officerId) => {
               COUNT(ot.id) AS totalTasks,
               SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
               SUM(ot.target) AS totalTarget,
-              SUM(ot.complete) AS totalComplete,
-              (SUM(ot.target) - SUM(COALESCE(ot.complete, 0))) AS remainingTarget
+              SUM(
+                  CASE 
+                      WHEN ot.complete > ot.target THEN ot.target
+                      ELSE COALESCE(ot.complete, 0)
+                  END
+              ) AS totalComplete,
+              (SUM(ot.target) - SUM(
+                  CASE 
+                      WHEN ot.complete > ot.target THEN ot.target
+                      ELSE COALESCE(ot.complete, 0)
+                  END
+              )) AS remainingTarget
           FROM 
               officertarget ot
           JOIN 
@@ -588,7 +632,6 @@ exports.getOfficerSummaryDao = async (officerId) => {
               ot.officerId = ?
               AND DATE(dt.date) = CURDATE();
       `;
-
         collectionofficer.query(query, [officerId], (error, results) => {
             if (error) {
                 console.error("Database error in getOfficerSummaryDao:", error);

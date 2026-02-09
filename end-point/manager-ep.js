@@ -227,8 +227,10 @@ exports.getFarmerListByCollectionOfficerAndDateForManager = async (req, res) => 
 exports.getClaimOfficer = async (req, res) => {
 
   const { empID, jobRole } = req.body;
+  const OfficercompanyId = req.user.companyId;
+
   try {
-    const results = await collectionofficerDao.getClaimOfficer(empID, jobRole);
+    const results = await collectionofficerDao.getClaimOfficer(empID, jobRole, OfficercompanyId);
     res.status(200).json({ result: results, status: true });
   } catch (err) {
     console.error("Error executing query:", err);

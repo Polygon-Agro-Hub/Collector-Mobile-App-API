@@ -35,7 +35,7 @@ router.get('/transaction-list', managerEp.getFarmerListByCollectionOfficerAndDat
 router.get('/my-collection', authenticate, managerEp.getFarmerListByCollectionOfficerAndDateForManager);
 
 
-router.post('/get-claim-officer', managerEp.getClaimOfficer);
+router.post('/get-claim-officer', authenticate, managerEp.getClaimOfficer);
 
 router.post('/claim-officer', managerEp.createClaimOfficer);
 
