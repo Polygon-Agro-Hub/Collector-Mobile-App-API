@@ -1,6 +1,8 @@
 const distributionDao = require('../dao/distribution-dao');
 const asyncHandler = require('express-async-handler');
 const { replaceOrderPackageSchema } = require('../Validations/distribution-validation');
+const emailService = require('../services/emailService');
+const pdfService = require('../services/pdfService');
 
 
 exports.getOfficerTarget = async (req, res) => {
@@ -422,16 +424,14 @@ exports.getDistributionTarget = async (req, res) => {
 };
 
 
-// Updated controller to handle orderIds array from frontend
 exports.updateoutForDelivery = async (req, res) => {
     try {
-        const { orderIds } = req.body; // Get orderIds from request body
+        const { orderIds } = req.body;
         const userId = req.user.id;
 
         console.log("orderIds======================", orderIds);
         console.log("userId======================", userId);
 
-        // Validate input
         if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -439,7 +439,6 @@ exports.updateoutForDelivery = async (req, res) => {
             });
         }
 
-        // Validate each orderId
         for (const orderId of orderIds) {
             if (!orderId || isNaN(orderId)) {
                 return res.status(400).json({
@@ -449,23 +448,84 @@ exports.updateoutForDelivery = async (req, res) => {
             }
         }
 
-        // Update each order
         const results = [];
         let successCount = 0;
         let errorCount = 0;
+        let emailSuccessCount = 0;
+        let emailErrorCount = 0;
 
         for (const orderId of orderIds) {
             try {
+                // Update order status
                 const updateResult = await distributionDao.updateoutForDelivery(orderId, userId);
+
                 results.push({
                     orderId: orderId,
                     success: true,
-                    affectedRows: updateResult.affectedRows
+                    affectedRows: updateResult.orderUpdate.affectedRows
                 });
                 successCount++;
-                console.log(`Successfully updated order ${orderId} to Out For Delivery by user ${userId}`);
+
+                // Send email with PDF invoice if customer email exists
+                if (updateResult.orderInfo && updateResult.orderInfo.customerEmail) {
+                    try {
+                        // Prepare data for PDF template
+                        const invoiceData = {
+                            invoiceNumber: updateResult.orderInfo.invNo,
+                            totalAmount: updateResult.orderInfo.totalAmount,
+                            order: {
+                                customerInfo: {
+                                    title: updateResult.orderInfo.title,
+                                    firstName: updateResult.orderInfo.firstName,
+                                    lastName: updateResult.orderInfo.lastName,
+                                    phoneNumber: updateResult.orderInfo.phoneNumber,
+                                    buildingType: updateResult.orderInfo.buildingType
+                                },
+                                paymentMethod: updateResult.orderInfo.paymentMethod,
+                                createdAt: updateResult.orderInfo.createdAt,
+                                scheduleDate: updateResult.orderInfo.scheduleDate
+                            },
+                            customerData: {
+                                email: updateResult.orderInfo.customerEmail,
+                                buildingDetails: {
+                                    houseNo: updateResult.orderInfo.houseNo,
+                                    floorNo: updateResult.orderInfo.floorNo,
+                                    buildingNo: updateResult.orderInfo.buildingNo,
+                                    buildingName: updateResult.orderInfo.buildingName,
+                                    unitNo: updateResult.orderInfo.unitNo,
+                                    streetName: updateResult.orderInfo.streetName,
+                                    city: updateResult.orderInfo.city
+                                }
+                            }
+                        };
+
+                        // Generate PDF
+                        const pdfBuffer = await pdfService.generateInvoicePDF(invoiceData);
+
+                        // Send email with PDF attachment
+                        await emailService.sendEmail(
+                            updateResult.orderInfo.customerEmail,
+                            `Order ${updateResult.orderInfo.invNo} - ${updateResult.status}`,
+                            'welcom',
+                            invoiceData,
+                            [{
+                                filename: `Invoice_${updateResult.orderInfo.invNo}.pdf`,
+                                content: pdfBuffer,
+                                contentType: 'application/pdf'
+                            }]
+                        );
+
+                        emailSuccessCount++;
+                        console.log(`✅ Invoice email sent to ${updateResult.orderInfo.customerEmail} for order ${orderId}`);
+                    } catch (emailError) {
+                        emailErrorCount++;
+                        console.error(`❌ Failed to send email for order ${orderId}:`, emailError);
+                    }
+                }
+
+                console.log(`✅ Successfully updated order ${orderId} to ${updateResult.status}`);
             } catch (error) {
-                console.error(`Failed to update order ${orderId}:`, error);
+                console.error(`❌ Failed to update order ${orderId}:`, error);
                 results.push({
                     orderId: orderId,
                     success: false,
@@ -475,20 +535,21 @@ exports.updateoutForDelivery = async (req, res) => {
             }
         }
 
-        // Send response
         res.status(200).json({
             success: true,
-            message: `Successfully updated ${successCount} orders to Out For Delivery${errorCount > 0 ? `, ${errorCount} failed` : ''}`,
+            message: `Updated ${successCount} orders${errorCount > 0 ? `, ${errorCount} failed` : ''}. Invoices sent: ${emailSuccessCount}${emailErrorCount > 0 ? `, ${emailErrorCount} email failures` : ''}`,
             results: results,
             summary: {
                 total: orderIds.length,
                 successful: successCount,
-                failed: errorCount
+                failed: errorCount,
+                emailsSent: emailSuccessCount,
+                emailsFailed: emailErrorCount
             }
         });
 
     } catch (error) {
-        console.error('Error updating order status:', error);
+        console.error('❌ Error updating order status:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update order status',

@@ -1725,15 +1725,36 @@ exports.updateoutForDelivery = (orderId, userId) => {
     return new Promise((resolve, reject) => {
         const currentDate = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-        // First, get the delivery method from orders table
-        const getDeliveryMethodSql = `
-            SELECT o.delivaryMethod 
+        // Enhanced query to get complete order details
+        const getOrderDetailsSql = `
+            SELECT 
+                o.id as orderId,
+                o.invNo,
+                o.delivaryMethod,
+                o.customerEmail,
+                o.paymentMethod,
+                o.amount as totalAmount,
+                o.createdAt,
+                o.scheduleDate,
+                o.scheduleTime,
+                c.title,
+                c.firstName,
+                c.lastName,
+                c.phoneNumber,
+                c.buildingType,
+                c.houseNo,
+                c.floorNo,
+                c.buildingNo,
+                c.buildingName,
+                c.unitNo,
+                c.streetName,
+                c.city
             FROM market_place.orders AS o
             INNER JOIN market_place.processorders AS po ON po.orderId = o.id
+            LEFT JOIN market_place.customer AS c ON o.customerId = c.id
             WHERE po.orderId = ?
         `;
 
-        // Update order status based on delivery method
         const updateOrderSql = `
             UPDATE market_place.processorders AS po
             INNER JOIN market_place.orders AS o ON po.orderId = o.id
@@ -1746,15 +1767,13 @@ exports.updateoutForDelivery = (orderId, userId) => {
             WHERE po.orderId = ?
         `;
 
-        // Insert notification only for delivery orders (not pickup)
         const insertNotificationSql = `
             INSERT INTO market_place.dashnotification (orderId, title)
             SELECT po.id, 'Order is Out for Delivery'
             FROM market_place.processorders AS po
             INNER JOIN market_place.orders AS o ON po.orderId = o.id
             WHERE po.orderId = ? AND o.delivaryMethod != 'Pickup'
-            ON DUPLICATE KEY UPDATE 
-                title = VALUES(title)
+            ON DUPLICATE KEY UPDATE title = VALUES(title)
         `;
 
         try {
@@ -1767,11 +1786,28 @@ exports.updateoutForDelivery = (orderId, userId) => {
                         return reject(err);
                     }
 
-                    // Step 1: Get delivery method
-                    connection.query(
-                        getDeliveryMethodSql,
-                        [orderId],
-                        (err, deliveryResult) => {
+                    // Step 1: Get complete order details
+                    connection.query(getOrderDetailsSql, [orderId], (err, orderDetails) => {
+                        if (err) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                reject(err);
+                            });
+                        }
+
+                        if (orderDetails.length === 0) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                reject(new Error(`No order found with orderId: ${orderId}`));
+                            });
+                        }
+
+                        const orderInfo = orderDetails[0];
+                        const deliveryMethod = orderInfo.delivaryMethod;
+                        const newStatus = deliveryMethod === "Pickup" ? "Ready to Pickup" : "Out For Delivery";
+
+                        // Step 2: Update order status
+                        connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
                             if (err) {
                                 return connection.rollback(() => {
                                     connection.release();
@@ -1779,77 +1815,36 @@ exports.updateoutForDelivery = (orderId, userId) => {
                                 });
                             }
 
-                            if (deliveryResult.length === 0) {
-                                return connection.rollback(() => {
+                            // Step 3: Insert notification
+                            connection.query(insertNotificationSql, [orderId], (err2) => {
+                                if (err2) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(err2);
+                                    });
+                                }
+
+                                connection.commit((err3) => {
+                                    if (err3) {
+                                        return connection.rollback(() => {
+                                            connection.release();
+                                            reject(err3);
+                                        });
+                                    }
+
+                                    console.log(`✅ Order ${orderId} marked as '${newStatus}'`);
                                     connection.release();
-                                    reject(new Error(`No order found with orderId: ${orderId}`));
+
+                                    resolve({
+                                        orderUpdate: result,
+                                        status: newStatus,
+                                        deliveryMethod: deliveryMethod,
+                                        orderInfo: orderInfo
+                                    });
                                 });
-                            }
-
-                            const deliveryMethod = deliveryResult[0].delivaryMethod;
-                            const newStatus =
-                                deliveryMethod === "Pickup"
-                                    ? "Ready to Pickup"
-                                    : "Out For Delivery";
-
-                            // Step 2: Update order status
-                            connection.query(
-                                updateOrderSql,
-                                [userId, currentDate, orderId],
-                                (err, result) => {
-                                    if (err) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            reject(err);
-                                        });
-                                    }
-
-                                    if (result.affectedRows === 0) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            reject(
-                                                new Error(`No order found with orderId: ${orderId}`),
-                                            );
-                                        });
-                                    }
-
-                                    // Step 3: Insert/update notification (only for delivery orders)
-                                    connection.query(
-                                        insertNotificationSql,
-                                        [orderId],
-                                        (err2, result2) => {
-                                            if (err2) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(err2);
-                                                });
-                                            }
-
-                                            connection.commit((err3) => {
-                                                if (err3) {
-                                                    return connection.rollback(() => {
-                                                        connection.release();
-                                                        reject(err3);
-                                                    });
-                                                }
-
-                                                console.log(
-                                                    `✅ Order ${orderId} marked as '${newStatus}' and notification ${deliveryMethod === "Pickup" ? "skipped (pickup order)" : "updated"}.`,
-                                                );
-                                                connection.release();
-                                                resolve({
-                                                    orderUpdate: result,
-                                                    notificationUpdate: result2,
-                                                    status: newStatus,
-                                                    deliveryMethod: deliveryMethod,
-                                                });
-                                            });
-                                        },
-                                    );
-                                },
-                            );
-                        },
-                    );
+                            });
+                        });
+                    });
                 });
             });
         } catch (error) {
