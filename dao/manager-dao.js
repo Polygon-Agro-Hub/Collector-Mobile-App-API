@@ -320,7 +320,36 @@ exports.getFarmerListByCollectionOfficerAndDate = (collectionOfficerId, date) =>
 };
 
 
-exports.getClaimOfficer = (empID, jobRole) => {
+// exports.getClaimOfficer = (empID, jobRole,OfficercompanyId) => {
+//   return new Promise((resolve, reject) => {
+//     const sql = `
+//       SELECT 
+//         c.*, 
+//         comp.companyNameEnglish,
+//         comp.companyNameSinhala,
+//         comp.companyNameTamil
+//       FROM 
+//         collectionofficer c 
+//       INNER JOIN 
+//         company comp 
+//       ON 
+//         c.companyId = comp.id 
+//       WHERE 
+//         c.empId = ? 
+//         AND c.jobRole = ? 
+//         AND c.centerId IS NULL 
+//         AND c.irmId IS NULL
+//     `;
+
+//     db.collectionofficer.query(sql, [empID, jobRole], (err, results) => {
+//       if (err) {
+//         return reject(err);
+//       }
+//       resolve(results);
+//     });
+//   });
+// };
+exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT 
@@ -339,12 +368,16 @@ exports.getClaimOfficer = (empID, jobRole) => {
         AND c.jobRole = ? 
         AND c.centerId IS NULL 
         AND c.irmId IS NULL
+        AND c.companyId = ?
     `;
 
-    db.collectionofficer.query(sql, [empID, jobRole], (err, results) => {
+
+    db.collectionofficer.query(sql, [empID, jobRole, OfficercompanyId], (err, results) => {
       if (err) {
         return reject(err);
       }
+
+
       resolve(results);
     });
   });

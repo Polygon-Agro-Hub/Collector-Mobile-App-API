@@ -180,38 +180,7 @@ exports.getDailyTarget = async (req, res) => {
   }
 };
 
-// exports.getOfficerTaskSummary = async (req, res) => {
-//   try {
-//     const officerId = req.user.id; // Extract officer ID from authenticated session
 
-//     if (!officerId) {
-//       return res.status(400).json({ error: "Officer ID is required" });
-//     }
-
-//     console.log("Fetching task summary for Officer ID:", officerId);
-
-//     // Fetch summary data from DAO
-//     const taskSummary = await TargetDAO.getOfficerSummaryDao(officerId);
-
-//     if (!taskSummary) {
-//       return res.status(404).json({ message: "No tasks found for this officer." });
-//     }
-
-//     const { totalTasks, completedTasks } = taskSummary;
-//     const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-//     res.status(200).json({
-//       success: true,
-//       officerId,
-//       totalTasks,
-//       completedTasks,
-//       completionPercentage: `${percentage}%`
-//     });
-//   } catch (error) {
-//     console.error("Error fetching task summary:", error);
-//     res.status(500).json({ error: "Failed to fetch task summary." });
-//   }
-// };
 
 exports.getOfficerTaskSummary = async (req, res) => {
   try {
@@ -219,7 +188,7 @@ exports.getOfficerTaskSummary = async (req, res) => {
     if (!officerId) {
       return res.status(400).json({ error: "Officer ID is required" });
     }
-    console.log("Fetching task summary for Officer ID:", officerId);
+    console.log("Fetching task summary for Officer ID:-----------", officerId);
 
     const taskSummary = await TargetDAO.getOfficerSummaryDao(officerId);
 
@@ -250,39 +219,6 @@ exports.getOfficerTaskSummary = async (req, res) => {
 };
 
 
-// exports.getOfficerTaskSummaryManagerView = async (req, res) => {
-//   try {
-//     const { collectionOfficerId } = req.params; // Extract officer ID from authenticated session
-//     console.log('officerId', collectionOfficerId);
-
-//     if (!collectionOfficerId) {
-//       return res.status(400).json({ error: "Officer ID is required" });
-//     }
-
-//     console.log("Fetching task summary for Officer ID:", collectionOfficerId);
-
-//     // Fetch summary data from DAO
-//     const taskSummary = await TargetDAO.getOfficerSummaryDaoManager(collectionOfficerId);
-
-//     if (!taskSummary) {
-//       return res.status(404).json({ message: "No tasks found for this officer." });
-//     }
-
-//     const { totalTasks, completedTasks } = taskSummary;
-//     const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-//     res.status(200).json({
-//       success: true,
-//       collectionOfficerId,
-//       totalTasks,
-//       completedTasks,
-//       completionPercentage: `${percentage}%`
-//     });
-//   } catch (error) {
-//     console.error("Error fetching task summary:", error);
-//     res.status(500).json({ error: "Failed to fetch task summary." });
-//   }
-// };
 
 exports.getOfficerTaskSummaryManagerView = async (req, res) => {
   try {
