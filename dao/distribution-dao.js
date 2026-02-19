@@ -217,7 +217,10 @@ ORDER BY
                 return reject(err);
             }
 
-            console.log("Targets found (3 days all data + older incomplete):", results.length);
+            console.log(
+                "Targets found (3 days all data + older incomplete):",
+                results.length,
+            );
             if (results.length > 0) {
                 console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE) ===");
 
@@ -238,16 +241,16 @@ ORDER BY
                                 total: row.totalPackageItems,
                                 packed: row.packedPackageItems,
                                 pending: row.pendingPackageItems,
-                                status: row.packageItemStatus
-                            }
+                                status: row.packageItemStatus,
+                            },
                         },
                         additionalItems: {
                             total: row.totalAdditionalItems,
                             packed: row.packedAdditionalItems,
                             pending: row.pendingAdditionalItems,
-                            status: row.additionalItemStatus
+                            status: row.additionalItemStatus,
                         },
-                        overallStatus: row.selectedStatus
+                        overallStatus: row.selectedStatus,
                     });
                 });
 
@@ -256,11 +259,15 @@ ORDER BY
                     acc[row.selectedStatus] = (acc[row.selectedStatus] || 0) + 1;
                     return acc;
                 }, {});
-                console.log("Status Distribution (3 days all + older incomplete):", statusCounts);
+                console.log(
+                    "Status Distribution (3 days all + older incomplete):",
+                    statusCounts,
+                );
 
                 // Completion status summary
                 const completionCounts = results.reduce((acc, row) => {
-                    const status = row.isComplete === null ? 'NULL' : row.isComplete.toString();
+                    const status =
+                        row.isComplete === null ? "NULL" : row.isComplete.toString();
                     acc[status] = (acc[status] || 0) + 1;
                     return acc;
                 }, {});
@@ -278,7 +285,9 @@ ORDER BY
 
                 // Date-wise summary
                 const dateCounts = results.reduce((acc, row) => {
-                    const date = new Date(row.targetCreatedAt).toISOString().split('T')[0];
+                    const date = new Date(row.targetCreatedAt)
+                        .toISOString()
+                        .split("T")[0];
                     acc[date] = (acc[date] || 0) + 1;
                     return acc;
                 }, {});
@@ -292,7 +301,6 @@ ORDER BY
     });
 };
 
-
 exports.getOrderData = async (req, res) => {
     console.log("getOrderData called");
     try {
@@ -305,7 +313,7 @@ exports.getOrderData = async (req, res) => {
         if (!orderId || isNaN(orderId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid order ID provided'
+                message: "Invalid order ID provided",
             });
         }
 
@@ -323,7 +331,7 @@ exports.getOrderData = async (req, res) => {
 
         // Combine all package items if needed
         let allPackageItems = [];
-        packages.forEach(pkg => {
+        packages.forEach((pkg) => {
             if (pkg.items && pkg.items.length > 0) {
                 allPackageItems = [...allPackageItems, ...pkg.items];
             }
@@ -344,25 +352,24 @@ exports.getOrderData = async (req, res) => {
                 totalAdditionalItems: additionalItems.length,
                 totalPackages: packages.length,
                 totalPackageItems: allPackageItems.length,
-                totalItems: allItems.length
-            }
+                totalItems: allItems.length,
+            },
         };
 
         res.status(200).json({
             success: true,
-            message: 'Order data retrieved successfully',
-            data: responseData
+            message: "Order data retrieved successfully",
+            data: responseData,
         });
     } catch (error) {
-        console.error('Error getting order data:', error);
+        console.error("Error getting order data:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve order data',
-            error: error.message
+            message: "Failed to retrieve order data",
+            error: error.message,
         });
     }
 };
-
 
 exports.getOrderDataDao = (orderId) => {
     console.log("Getting order data for order ID:", orderId);
@@ -499,8 +506,8 @@ exports.getOrderDataDao = (orderId) => {
                         totalPackages: 0,
                         totalPackageQty: 0,
                         totalAdditionalItems: 0,
-                        totalPackageItems: 0
-                    }
+                        totalPackageItems: 0,
+                    },
                 });
             }
 
@@ -515,16 +522,19 @@ exports.getOrderDataDao = (orderId) => {
                 sheduleDate: results[0].sheduleDate,
                 sheduleTime: results[0].sheduleTime,
                 orderCreatedAt: results[0].orderCreatedAt,
-                processOrderId: results[0].processOrderId
+                processOrderId: results[0].processOrderId,
             };
 
             const additionalItemsMap = new Map();
             const packagesMap = new Map(); // Changed to support multiple packages
             const warnings = [];
 
-            results.forEach(row => {
+            results.forEach((row) => {
                 // Process additional items
-                if (row.additionalItemId && !additionalItemsMap.has(row.additionalItemId)) {
+                if (
+                    row.additionalItemId &&
+                    !additionalItemsMap.has(row.additionalItemId)
+                ) {
                     additionalItemsMap.set(row.additionalItemId, {
                         id: row.additionalItemId,
                         productId: row.additionalProductId,
@@ -535,12 +545,16 @@ exports.getOrderDataDao = (orderId) => {
                         isPacked: row.additionalIsPacked,
                         productName: row.additionalProductName,
                         category: row.additionalProductCategory,
-                        normalPrice: preserveValue(row.additionalNormalPrice) // Preserve exact database value
+                        normalPrice: preserveValue(row.additionalNormalPrice), // Preserve exact database value
                     });
                 }
 
                 // Process package data (multiple packages support)
-                if (orderInfo.isPackage === 1 && orderInfo.processOrderId && row.orderPackageId) {
+                if (
+                    orderInfo.isPackage === 1 &&
+                    orderInfo.processOrderId &&
+                    row.orderPackageId
+                ) {
                     // Initialize package if not exists
                     if (!packagesMap.has(row.orderPackageId)) {
                         packagesMap.set(row.orderPackageId, {
@@ -555,7 +569,7 @@ exports.getOrderDataDao = (orderId) => {
                             packageStatus: row.packageStatus,
                             packagePrice: preserveValue(row.packagePrice), // Preserve exact database value
                             packagePackingFee: preserveValue(row.packagePackingFee), // Preserve exact database value
-                            items: new Map() // Use Map to avoid duplicate items
+                            items: new Map(), // Use Map to avoid duplicate items
                         });
                     }
 
@@ -574,7 +588,7 @@ exports.getOrderDataDao = (orderId) => {
                                 category: row.packageProductCategory,
                                 normalPrice: preserveValue(row.packageNormalPrice), // Preserve exact database value
                                 productTypeId: row.productTypeId,
-                                productTypeName: row.productTypeName
+                                productTypeName: row.productTypeName,
                             });
                         }
                     }
@@ -584,23 +598,27 @@ exports.getOrderDataDao = (orderId) => {
             // Data validation and warnings
             if (orderInfo.isPackage === 1 && !orderInfo.processOrderId) {
                 warnings.push({
-                    type: 'MISSING_PROCESS_ORDER',
-                    message: `Order ${orderId} is marked as package but missing processorders record`
+                    type: "MISSING_PROCESS_ORDER",
+                    message: `Order ${orderId} is marked as package but missing processorders record`,
                 });
             }
 
-            if (orderInfo.isPackage === 1 && orderInfo.processOrderId && packagesMap.size === 0) {
+            if (
+                orderInfo.isPackage === 1 &&
+                orderInfo.processOrderId &&
+                packagesMap.size === 0
+            ) {
                 warnings.push({
-                    type: 'MISSING_PACKAGE_RECORDS',
-                    message: `Order ${orderId} has processorder but missing orderpackage records`
+                    type: "MISSING_PACKAGE_RECORDS",
+                    message: `Order ${orderId} has processorder but missing orderpackage records`,
                 });
             }
 
             // Convert maps to arrays and process package items
             const additionalItems = Array.from(additionalItemsMap.values());
-            const packages = Array.from(packagesMap.values()).map(pkg => ({
+            const packages = Array.from(packagesMap.values()).map((pkg) => ({
                 ...pkg,
-                items: Array.from(pkg.items.values()) // Convert items Map to Array
+                items: Array.from(pkg.items.values()), // Convert items Map to Array
             }));
 
             // Calculate total package quantity
@@ -620,8 +638,11 @@ exports.getOrderDataDao = (orderId) => {
                     totalPackages: packages.length,
                     totalPackageQty: totalPackageQty, // Total quantity of all packages
                     totalAdditionalItems: additionalItems.length,
-                    totalPackageItems: packages.reduce((total, pkg) => total + pkg.items.length, 0)
-                }
+                    totalPackageItems: packages.reduce(
+                        (total, pkg) => total + pkg.items.length,
+                        0,
+                    ),
+                },
             };
 
             console.log("Structured order data:", {
@@ -631,20 +652,19 @@ exports.getOrderDataDao = (orderId) => {
                 additionalItemsCount: additionalItems.length,
                 packagesCount: packages.length,
                 totalPackageQty: totalPackageQty,
-                packagesInfo: packages.map(pkg => ({
+                packagesInfo: packages.map((pkg) => ({
                     packageId: pkg.packageId,
                     packageName: pkg.packageName,
                     packageQty: pkg.packageQty,
-                    itemsCount: pkg.items.length
+                    itemsCount: pkg.items.length,
                 })),
-                warningsCount: warnings.length
+                warningsCount: warnings.length,
             });
 
             resolve(structuredData);
         });
     });
 };
-
 
 exports.validateOrderStructure = async (orderId) => {
     console.log("Validating order structure for order ID:", orderId);
@@ -683,24 +703,27 @@ exports.validateOrderStructure = async (orderId) => {
             `;
 
             await new Promise((resolve, reject) => {
-                db.collectionofficer.query(createProcessOrderSql, [orderId], (err, result) => {
-                    if (err) return reject(err);
-                    fixes.push({
-                        type: 'CREATED_PROCESS_ORDER',
-                        message: `Created processorders record for order ${orderId}`,
-                        processOrderId: result.insertId
-                    });
-                    resolve(result);
-                });
+                db.collectionofficer.query(
+                    createProcessOrderSql,
+                    [orderId],
+                    (err, result) => {
+                        if (err) return reject(err);
+                        fixes.push({
+                            type: "CREATED_PROCESS_ORDER",
+                            message: `Created processorders record for order ${orderId}`,
+                            processOrderId: result.insertId,
+                        });
+                        resolve(result);
+                    },
+                );
             });
         }
 
         return {
             orderId: orderId,
             fixes: fixes,
-            fixesApplied: fixes.length > 0
+            fixesApplied: fixes.length > 0,
         };
-
     } catch (error) {
         console.error("Error in validateOrderStructure:", error);
         throw error;
@@ -713,23 +736,23 @@ exports.debugOrderRelationships = async (orderId) => {
 
     const queries = [
         {
-            name: 'orders',
-            sql: 'SELECT * FROM market_place.orders WHERE id = ?'
+            name: "orders",
+            sql: "SELECT * FROM market_place.orders WHERE id = ?",
         },
         {
-            name: 'processorders',
-            sql: 'SELECT * FROM market_place.processorders WHERE orderId = ?'
+            name: "processorders",
+            sql: "SELECT * FROM market_place.processorders WHERE orderId = ?",
         },
         {
-            name: 'orderpackage',
+            name: "orderpackage",
             sql: `SELECT op.* FROM market_place.orderpackage op 
                   JOIN market_place.processorders po ON op.orderId = po.id 
-                  WHERE po.orderId = ?`
+                  WHERE po.orderId = ?`,
         },
         {
-            name: 'orderadditionalitems',
-            sql: 'SELECT * FROM market_place.orderadditionalitems WHERE orderId = ?'
-        }
+            name: "orderadditionalitems",
+            sql: "SELECT * FROM market_place.orderadditionalitems WHERE orderId = ?",
+        },
     ];
 
     const results = {};
@@ -750,7 +773,6 @@ exports.debugOrderRelationships = async (orderId) => {
     return results;
 };
 
-
 exports.updatePackageItems = (items) => {
     return new Promise(async (resolve, reject) => {
         if (!items || items.length === 0) {
@@ -764,15 +786,19 @@ exports.updatePackageItems = (items) => {
         `;
 
         try {
-            const updatePromises = items.map(item => {
+            const updatePromises = items.map((item) => {
                 return new Promise((resolveItem, rejectItem) => {
-                    db.collectionofficer.query(sql, [item.isPacked, item.id], (err, result) => {
-                        if (err) {
-                            console.error(`Error updating package item ${item.id}:`, err);
-                            return rejectItem(err);
-                        }
-                        resolveItem(result);
-                    });
+                    db.collectionofficer.query(
+                        sql,
+                        [item.isPacked, item.id],
+                        (err, result) => {
+                            if (err) {
+                                console.error(`Error updating package item ${item.id}:`, err);
+                                return rejectItem(err);
+                            }
+                            resolveItem(result);
+                        },
+                    );
                 });
             });
 
@@ -800,15 +826,22 @@ exports.updateAdditionalItems = (items) => {
         `;
 
         try {
-            const updatePromises = items.map(item => {
+            const updatePromises = items.map((item) => {
                 return new Promise((resolveItem, rejectItem) => {
-                    db.collectionofficer.query(sql, [item.isPacked, item.id], (err, result) => {
-                        if (err) {
-                            console.error(`Error updating additional item ${item.id}:`, err);
-                            return rejectItem(err);
-                        }
-                        resolveItem(result);
-                    });
+                    db.collectionofficer.query(
+                        sql,
+                        [item.isPacked, item.id],
+                        (err, result) => {
+                            if (err) {
+                                console.error(
+                                    `Error updating additional item ${item.id}:`,
+                                    err,
+                                );
+                                return rejectItem(err);
+                            }
+                            resolveItem(result);
+                        },
+                    );
                 });
             });
 
@@ -822,9 +855,6 @@ exports.updateAdditionalItems = (items) => {
     });
 };
 
-
-
-
 exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
     return new Promise((resolve, reject) => {
         // First, get the processorders.id using the frontend orderId
@@ -833,126 +863,178 @@ exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
             WHERE orderId = ?
         `;
 
-        db.collectionofficer.query(getProcessOrderIdSql, [frontendOrderId], (err, processOrderResult) => {
-            if (err) {
-                console.error(`Error getting process order ID for orderId ${frontendOrderId}:`, err);
-                return reject(err);
-            }
+        db.collectionofficer.query(
+            getProcessOrderIdSql,
+            [frontendOrderId],
+            (err, processOrderResult) => {
+                if (err) {
+                    console.error(
+                        `Error getting process order ID for orderId ${frontendOrderId}:`,
+                        err,
+                    );
+                    return reject(err);
+                }
 
-            if (processOrderResult.length === 0) {
-                console.warn(`No process order found for orderId ${frontendOrderId}`);
-                return resolve({ affectedRows: 0 });
-            }
+                if (processOrderResult.length === 0) {
+                    console.warn(`No process order found for orderId ${frontendOrderId}`);
+                    return resolve({ affectedRows: 0 });
+                }
 
-            const processOrderId = processOrderResult[0].id;
-            console.log(`Found process order ID ${processOrderId} for frontend orderId ${frontendOrderId}`);
+                const processOrderId = processOrderResult[0].id;
+                console.log(
+                    `Found process order ID ${processOrderId} for frontend orderId ${frontendOrderId}`,
+                );
 
-            // Update the processorders table with packBy = officerId
-            const updateProcessOrderSql = `
+                // Update the processorders table with packBy = officerId
+                const updateProcessOrderSql = `
                 UPDATE market_place.processorders 
                 SET packBy = ?
                 WHERE id = ?
             `;
 
-            db.collectionofficer.query(updateProcessOrderSql, [officerId, processOrderId], (processOrderErr, processOrderResult) => {
-                if (processOrderErr) {
-                    console.error(`Error updating processorders packBy for ID ${processOrderId}:`, processOrderErr);
-                    return reject(processOrderErr);
-                }
+                db.collectionofficer.query(
+                    updateProcessOrderSql,
+                    [officerId, processOrderId],
+                    (processOrderErr, processOrderResult) => {
+                        if (processOrderErr) {
+                            console.error(
+                                `Error updating processorders packBy for ID ${processOrderId}:`,
+                                processOrderErr,
+                            );
+                            return reject(processOrderErr);
+                        }
 
-                console.log(`Updated packBy to ${officerId} for processorders ID ${processOrderId}`);
+                        console.log(
+                            `Updated packBy to ${officerId} for processorders ID ${processOrderId}`,
+                        );
 
-                // Get the targetId from the item we're about to update
-                const getTargetIdSql = `
+                        // Get the targetId from the item we're about to update
+                        const getTargetIdSql = `
                     SELECT DISTINCT targetId FROM collection_officer.distributedtargetitems
                     WHERE orderId = ?
                     LIMIT 1
                 `;
 
-                db.collectionofficer.query(getTargetIdSql, [processOrderId], (targetErr, targetResult) => {
-                    if (targetErr) {
-                        console.error(`Error getting targetId for process order ID ${processOrderId}:`, targetErr);
-                        return reject(targetErr);
-                    }
+                        db.collectionofficer.query(
+                            getTargetIdSql,
+                            [processOrderId],
+                            (targetErr, targetResult) => {
+                                if (targetErr) {
+                                    console.error(
+                                        `Error getting targetId for process order ID ${processOrderId}:`,
+                                        targetErr,
+                                    );
+                                    return reject(targetErr);
+                                }
 
-                    if (targetResult.length === 0) {
-                        console.warn(`No distributed target items found for process order ID ${processOrderId}`);
-                        return resolve({
-                            processOrderUpdated: processOrderResult.affectedRows,
-                            distributedTargetUpdated: 0,
-                            distributedTargetCountUpdated: 0
-                        });
-                    }
+                                if (targetResult.length === 0) {
+                                    console.warn(
+                                        `No distributed target items found for process order ID ${processOrderId}`,
+                                    );
+                                    return resolve({
+                                        processOrderUpdated: processOrderResult.affectedRows,
+                                        distributedTargetUpdated: 0,
+                                        distributedTargetCountUpdated: 0,
+                                    });
+                                }
 
-                    const targetId = targetResult[0].targetId;
-                    console.log(`Found targetId ${targetId} for process order ID ${processOrderId}`);
+                                const targetId = targetResult[0].targetId;
+                                console.log(
+                                    `Found targetId ${targetId} for process order ID ${processOrderId}`,
+                                );
 
-                    // Now update the distributedtargetitems using the processOrderId
-                    const updateDistributedSql = `
+                                // Now update the distributedtargetitems using the processOrderId
+                                const updateDistributedSql = `
                         UPDATE collection_officer.distributedtargetitems 
                         SET isComplete = 1, completeTime = NOW()
                         WHERE orderId = ?
                     `;
 
-                    db.collectionofficer.query(updateDistributedSql, [processOrderId], (updateErr, updateResult) => {
-                        if (updateErr) {
-                            console.error(`Error updating distributed target items for process order ID ${processOrderId}:`, updateErr);
-                            return reject(updateErr);
-                        }
+                                db.collectionofficer.query(
+                                    updateDistributedSql,
+                                    [processOrderId],
+                                    (updateErr, updateResult) => {
+                                        if (updateErr) {
+                                            console.error(
+                                                `Error updating distributed target items for process order ID ${processOrderId}:`,
+                                                updateErr,
+                                            );
+                                            return reject(updateErr);
+                                        }
 
-                        if (updateResult.affectedRows === 0) {
-                            console.warn(`No distributed target items found for process order ID ${processOrderId}`);
-                            return resolve({
-                                processOrderUpdated: processOrderResult.affectedRows,
-                                distributedTargetUpdated: updateResult.affectedRows,
-                                distributedTargetCountUpdated: 0
-                            });
-                        }
+                                        if (updateResult.affectedRows === 0) {
+                                            console.warn(
+                                                `No distributed target items found for process order ID ${processOrderId}`,
+                                            );
+                                            return resolve({
+                                                processOrderUpdated: processOrderResult.affectedRows,
+                                                distributedTargetUpdated: updateResult.affectedRows,
+                                                distributedTargetCountUpdated: 0,
+                                            });
+                                        }
 
-                        console.log(`Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`);
+                                        console.log(
+                                            `Updated ${updateResult.affectedRows} distributed target items for process order ID ${processOrderId} (frontend orderId: ${frontendOrderId})`,
+                                        );
 
-                        // Only update distributedtarget if we actually updated some items
-                        if (updateResult.affectedRows > 0) {
-                            // Update the distributedtarget table - increment complete count
-                            const updateTargetCompleteSql = `
+                                        // Only update distributedtarget if we actually updated some items
+                                        if (updateResult.affectedRows > 0) {
+                                            // Update the distributedtarget table - increment complete count
+                                            const updateTargetCompleteSql = `
                                 UPDATE collection_officer.distributedtarget
                                 SET complete = complete + ?
                                 WHERE id = ?
                             `;
 
-                            db.collectionofficer.query(updateTargetCompleteSql, [updateResult.affectedRows, targetId], (targetUpdateErr, targetUpdateResult) => {
-                                if (targetUpdateErr) {
-                                    console.error(`Error updating distributedtarget complete count for targetId ${targetId}:`, targetUpdateErr);
-                                    return reject(targetUpdateErr);
-                                }
+                                            db.collectionofficer.query(
+                                                updateTargetCompleteSql,
+                                                [updateResult.affectedRows, targetId],
+                                                (targetUpdateErr, targetUpdateResult) => {
+                                                    if (targetUpdateErr) {
+                                                        console.error(
+                                                            `Error updating distributedtarget complete count for targetId ${targetId}:`,
+                                                            targetUpdateErr,
+                                                        );
+                                                        return reject(targetUpdateErr);
+                                                    }
 
-                                if (targetUpdateResult.affectedRows === 0) {
-                                    console.warn(`No distributedtarget record found for targetId ${targetId}`);
-                                } else {
-                                    console.log(`Incremented complete count by ${updateResult.affectedRows} for distributedtarget ID ${targetId}`);
-                                }
+                                                    if (targetUpdateResult.affectedRows === 0) {
+                                                        console.warn(
+                                                            `No distributedtarget record found for targetId ${targetId}`,
+                                                        );
+                                                    } else {
+                                                        console.log(
+                                                            `Incremented complete count by ${updateResult.affectedRows} for distributedtarget ID ${targetId}`,
+                                                        );
+                                                    }
 
-                                resolve({
-                                    processOrderUpdated: processOrderResult.affectedRows,
-                                    distributedTargetUpdated: updateResult.affectedRows,
-                                    distributedTargetCountUpdated: targetUpdateResult.affectedRows
-                                });
-                            });
-                        } else {
-                            // No items were updated, so don't update the target count
-                            resolve({
-                                processOrderUpdated: processOrderResult.affectedRows,
-                                distributedTargetUpdated: updateResult.affectedRows,
-                                distributedTargetCountUpdated: 0
-                            });
-                        }
-                    });
-                });
-            });
-        });
+                                                    resolve({
+                                                        processOrderUpdated:
+                                                            processOrderResult.affectedRows,
+                                                        distributedTargetUpdated: updateResult.affectedRows,
+                                                        distributedTargetCountUpdated:
+                                                            targetUpdateResult.affectedRows,
+                                                    });
+                                                },
+                                            );
+                                        } else {
+                                            // No items were updated, so don't update the target count
+                                            resolve({
+                                                processOrderUpdated: processOrderResult.affectedRows,
+                                                distributedTargetUpdated: updateResult.affectedRows,
+                                                distributedTargetCountUpdated: 0,
+                                            });
+                                        }
+                                    },
+                                );
+                            },
+                        );
+                    },
+                );
+            },
+        );
     });
 };
-
 
 // DAO function
 exports.getAllRetailItems = async (orderId) => {
@@ -993,14 +1075,19 @@ exports.getAllRetailItems = async (orderId) => {
                 reject(error);
             } else {
                 // Additional safety check in DAO
-                const retailOnly = results.filter(item => item.category === 'Retail');
+                const retailOnly = results.filter((item) => item.category === "Retail");
                 resolve(retailOnly);
-                console.log("Fetched", retailOnly.length, "retail items for order", orderId, "- sorted A-Z");
+                console.log(
+                    "Fetched",
+                    retailOnly.length,
+                    "retail items for order",
+                    orderId,
+                    "- sorted A-Z",
+                );
             }
         });
     });
 };
-
 
 exports.createReplaceRequestDao = (replaceData) => {
     console.log("Creating replace request with data:", replaceData);
@@ -1022,145 +1109,111 @@ exports.createReplaceRequestDao = (replaceData) => {
                 }
 
                 // First, check if the record exists
-                const checkSql = "SELECT id, isLock FROM market_place.orderpackage WHERE id = ?";
-                console.log("Checking if record exists with ID:", replaceData.orderPackageId);
+                const checkSql =
+                    "SELECT id, isLock FROM market_place.orderpackage WHERE id = ?";
+                console.log(
+                    "Checking if record exists with ID:",
+                    replaceData.orderPackageId,
+                );
 
-                connection.query(checkSql, [replaceData.orderPackageId], (err, checkResult) => {
-                    if (err) {
-                        console.error("Error checking record existence:", err);
-                        return connection.rollback(() => {
-                            connection.release();
-                            reject(err);
-                        });
-                    }
-
-                    console.log("Record check result:", checkResult);
-
-                    if (!checkResult || checkResult.length === 0) {
-                        console.error("No record found with ID:", replaceData.orderPackageId);
-                        return connection.rollback(() => {
-                            connection.release();
-                            reject(new Error(`OrderPackage with ID ${replaceData.orderPackageId} not found`));
-                        });
-                    }
-
-                    // Check if already locked (only relevant for DIO operations)
-                    if (replaceData.isDIO && checkResult[0].isLock === 1) {
-                        console.warn("Record is already locked:", replaceData.orderPackageId);
-                        return connection.rollback(() => {
-                            connection.release();
-                            reject(new Error("OrderPackage is already locked"));
-                        });
-                    }
-
-                    // Additional check: Verify that the replaceId exists in orderpackageitems table
-                    const checkItemSql = "SELECT id FROM market_place.orderpackageitems WHERE id = ? AND orderPackageId = ?";
-                    console.log("Checking if orderpackageitem exists with ID:", replaceData.replaceId);
-
-                    connection.query(checkItemSql, [replaceData.replaceId, replaceData.orderPackageId], (err, itemCheckResult) => {
+                connection.query(
+                    checkSql,
+                    [replaceData.orderPackageId],
+                    (err, checkResult) => {
                         if (err) {
-                            console.error("Error checking orderpackageitem existence:", err);
+                            console.error("Error checking record existence:", err);
                             return connection.rollback(() => {
                                 connection.release();
                                 reject(err);
                             });
                         }
 
-                        if (!itemCheckResult || itemCheckResult.length === 0) {
-                            console.error("No orderpackageitem found with ID:", replaceData.replaceId);
+                        console.log("Record check result:", checkResult);
+
+                        if (!checkResult || checkResult.length === 0) {
+                            console.error(
+                                "No record found with ID:",
+                                replaceData.orderPackageId,
+                            );
                             return connection.rollback(() => {
                                 connection.release();
-                                reject(new Error(`OrderPackageItem with ID ${replaceData.replaceId} not found for OrderPackage ${replaceData.orderPackageId}`));
+                                reject(
+                                    new Error(
+                                        `OrderPackage with ID ${replaceData.orderPackageId} not found`,
+                                    ),
+                                );
                             });
                         }
 
-                        // Handle different roles
-                        if (replaceData.isDCM) {
-                            // DCM: Only update orderpackageitems table
-                            handleDCMUpdates(connection, replaceData, resolve, reject);
-                        } else if (replaceData.isDIO) {
-                            // DIO: Update orderpackage (set isLock=1) and insert into replacerequest
-                            handleDIOUpdates(connection, replaceData, resolve, reject);
-                        } else {
-                            // Unknown role
-                            console.error("Unknown user role");
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(new Error("Unknown user role"));
-                            });
-                        }
-                    });
-                });
+                        // if (replaceData.isDIO && checkResult[0].isLock === 1) {
+                        //     console.warn("Record is already locked:", replaceData.orderPackageId);
+                        //     return connection.rollback(() => {
+                        //         connection.release();
+                        //         reject(new Error("OrderPackage is already locked"));
+                        //     });
+                        // }
+
+                        // Additional check: Verify that the replaceId exists in orderpackageitems table
+                        const checkItemSql =
+                            "SELECT id FROM market_place.orderpackageitems WHERE id = ? AND orderPackageId = ?";
+                        console.log(
+                            "Checking if orderpackageitem exists with ID:",
+                            replaceData.replaceId,
+                        );
+
+                        connection.query(
+                            checkItemSql,
+                            [replaceData.replaceId, replaceData.orderPackageId],
+                            (err, itemCheckResult) => {
+                                if (err) {
+                                    console.error(
+                                        "Error checking orderpackageitem existence:",
+                                        err,
+                                    );
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(err);
+                                    });
+                                }
+
+                                if (!itemCheckResult || itemCheckResult.length === 0) {
+                                    console.error(
+                                        "No orderpackageitem found with ID:",
+                                        replaceData.replaceId,
+                                    );
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(
+                                            new Error(
+                                                `OrderPackageItem with ID ${replaceData.replaceId} not found for OrderPackage ${replaceData.orderPackageId}`,
+                                            ),
+                                        );
+                                    });
+                                }
+
+                                // Handle different roles
+                                if (replaceData.isDCM) {
+                                    // DCM: Only update orderpackageitems table
+                                    handleDCMUpdates(connection, replaceData, resolve, reject);
+                                } else if (replaceData.isDIO) {
+                                    // DIO: Update orderpackage (set isLock=1) and insert into replacerequest
+                                    handleDIOUpdates(connection, replaceData, resolve, reject);
+                                } else {
+                                    // Unknown role
+                                    console.error("Unknown user role");
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(new Error("Unknown user role"));
+                                    });
+                                }
+                            },
+                        );
+                    },
+                );
             });
         });
     });
 };
-
-// Handle DCM updates - only update orderpackageitems table
-// function handleDCMUpdates(connection, replaceData, resolve, reject) {
-//     console.log("Processing DCM updates");
-
-//     // DCM can only update productType, productId, qty, price (NOT isPacked)
-//     const updateItemsSql = `
-//         UPDATE market_place.orderpackageitems 
-//         SET productType = ?, productId = ?, qty = ?, price = ?
-//         WHERE id = ? AND orderPackageId = ?
-//     `;
-
-//     const updateItemsValues = [
-//         replaceData.productType,
-//         replaceData.productId,
-//         replaceData.qty,
-//         replaceData.price,
-//         replaceData.replaceId,
-//         replaceData.orderPackageId
-//     ];
-
-//     console.log("DCM updating specific orderpackageitem (limited fields):", updateItemsValues);
-
-//     connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
-//         if (err) {
-//             console.error("Error updating orderpackageitems:", err);
-//             return connection.rollback(() => {
-//                 connection.release();
-//                 reject(err);
-//             });
-//         }
-
-//         console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
-
-//         if (itemsResult.affectedRows === 0) {
-//             console.warn("No orderpackageitem was updated - item might not exist");
-//             return connection.rollback(() => {
-//                 connection.release();
-//                 reject(new Error("Failed to update orderpackageitem"));
-//             });
-//         }
-
-//         // Commit transaction for DCM
-//         connection.commit((err) => {
-//             if (err) {
-//                 console.error("Error committing DCM transaction:", err);
-//                 return connection.rollback(() => {
-//                     connection.release();
-//                     reject(err);
-//                 });
-//             }
-
-//             console.log("DCM transaction completed successfully");
-//             connection.release();
-
-//             resolve({
-//                 orderPackageId: replaceData.orderPackageId,
-//                 replaceItemId: replaceData.replaceId,
-//                 message: "Order package item updated successfully by DCM",
-//                 updatedBy: replaceData.userId,
-//                 permissions: 'DCM - Limited access (orderpackageitems only)'
-//             });
-//         });
-//     });
-// }
-
 
 // Handle DCM updates - save previous data and update orderpackageitems table
 function handleDCMUpdates(connection, replaceData, resolve, reject) {
@@ -1173,126 +1226,154 @@ function handleDCMUpdates(connection, replaceData, resolve, reject) {
         WHERE id = ? AND orderPackageId = ?
     `;
 
-    console.log("DCM fetching current data before update:", [replaceData.replaceId, replaceData.orderPackageId]);
+    console.log("DCM fetching current data before update:", [
+        replaceData.replaceId,
+        replaceData.orderPackageId,
+    ]);
 
-    connection.query(getCurrentDataSql, [replaceData.replaceId, replaceData.orderPackageId], (err, currentData) => {
-        if (err) {
-            console.error("Error fetching current orderpackageitem data:", err);
-            return connection.rollback(() => {
-                connection.release();
-                reject(err);
-            });
-        }
-
-        if (!currentData || currentData.length === 0) {
-            console.error("No current data found for orderpackageitem ID:", replaceData.replaceId);
-            return connection.rollback(() => {
-                connection.release();
-                reject(new Error("OrderPackageItem not found"));
-            });
-        }
-
-        const previousData = currentData[0];
-        console.log("Previous data retrieved:", previousData);
-
-        // Step 2: Insert previous data into prevdefineproduct table
-        const insertPrevDataSql = `
-            INSERT INTO market_place.prevdefineproduct 
-            (orderPackageId, replceId, productType, productId, qty, price, createdAt) 
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-        `;
-
-        const insertPrevValues = [
-            replaceData.orderPackageId,
-            replaceData.replaceId,
-            previousData.productType,
-            previousData.productId,
-            previousData.qty,
-            previousData.price
-        ];
-
-        console.log("DCM inserting previous data into prevdefineproduct:", insertPrevValues);
-
-        connection.query(insertPrevDataSql, insertPrevValues, (err, insertResult) => {
+    connection.query(
+        getCurrentDataSql,
+        [replaceData.replaceId, replaceData.orderPackageId],
+        (err, currentData) => {
             if (err) {
-                console.error("Error inserting previous data:", err);
+                console.error("Error fetching current orderpackageitem data:", err);
                 return connection.rollback(() => {
                     connection.release();
                     reject(err);
                 });
             }
 
-            console.log("Previous data inserted, ID:", insertResult.insertId);
+            if (!currentData || currentData.length === 0) {
+                console.error(
+                    "No current data found for orderpackageitem ID:",
+                    replaceData.replaceId,
+                );
+                return connection.rollback(() => {
+                    connection.release();
+                    reject(new Error("OrderPackageItem not found"));
+                });
+            }
 
-            // Step 3: Now update the orderpackageitems with new data
-            const updateItemsSql = `
-                UPDATE market_place.orderpackageitems 
-                SET productType = ?, productId = ?, qty = ?, price = ?
-                WHERE id = ? AND orderPackageId = ?
-            `;
+            const previousData = currentData[0];
+            console.log("Previous data retrieved:", previousData);
 
-            const updateItemsValues = [
-                replaceData.productType,
-                replaceData.productId,
-                replaceData.qty,
-                replaceData.price,
+            // Step 2: Insert previous data into prevdefineproduct table
+            const insertPrevDataSql = `
+            INSERT INTO market_place.prevdefineproduct 
+            (orderPackageId, replceId, productType, productId, qty, price, createdAt) 
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `;
+
+            const insertPrevValues = [
+                replaceData.orderPackageId,
                 replaceData.replaceId,
-                replaceData.orderPackageId
+                previousData.productType,
+                previousData.productId,
+                previousData.qty,
+                previousData.price,
             ];
 
-            console.log("DCM updating orderpackageitem with new data:", updateItemsValues);
+            console.log(
+                "DCM inserting previous data into prevdefineproduct:",
+                insertPrevValues,
+            );
 
-            connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
-                if (err) {
-                    console.error("Error updating orderpackageitems:", err);
-                    return connection.rollback(() => {
-                        connection.release();
-                        reject(err);
-                    });
-                }
-
-                console.log("OrderPackageItems updated (DCM):", itemsResult.affectedRows);
-
-                if (itemsResult.affectedRows === 0) {
-                    console.warn("No orderpackageitem was updated");
-                    return connection.rollback(() => {
-                        connection.release();
-                        reject(new Error("Failed to update orderpackageitem"));
-                    });
-                }
-
-                // Step 4: Commit transaction
-                connection.commit((err) => {
+            connection.query(
+                insertPrevDataSql,
+                insertPrevValues,
+                (err, insertResult) => {
                     if (err) {
-                        console.error("Error committing DCM transaction:", err);
+                        console.error("Error inserting previous data:", err);
                         return connection.rollback(() => {
                             connection.release();
                             reject(err);
                         });
                     }
 
-                    console.log("DCM transaction completed successfully");
-                    connection.release();
+                    console.log("Previous data inserted, ID:", insertResult.insertId);
 
-                    resolve({
-                        orderPackageId: replaceData.orderPackageId,
-                        replaceItemId: replaceData.replaceId,
-                        previousDataId: insertResult.insertId,
-                        message: "Order package item updated successfully by DCM, previous data saved",
-                        updatedBy: replaceData.userId,
-                        previousData: previousData,
-                        newData: {
-                            productType: replaceData.productType,
-                            productId: replaceData.productId,
-                            qty: replaceData.qty,
-                            price: replaceData.price
+                    // Step 3: Now update the orderpackageitems with new data
+                    const updateItemsSql = `
+                UPDATE market_place.orderpackageitems 
+                SET productType = ?, productId = ?, qty = ?, price = ?
+                WHERE id = ? AND orderPackageId = ?
+            `;
+
+                    const updateItemsValues = [
+                        replaceData.productType,
+                        replaceData.productId,
+                        replaceData.qty,
+                        replaceData.price,
+                        replaceData.replaceId,
+                        replaceData.orderPackageId,
+                    ];
+
+                    console.log(
+                        "DCM updating orderpackageitem with new data:",
+                        updateItemsValues,
+                    );
+
+                    connection.query(
+                        updateItemsSql,
+                        updateItemsValues,
+                        (err, itemsResult) => {
+                            if (err) {
+                                console.error("Error updating orderpackageitems:", err);
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(err);
+                                });
+                            }
+
+                            console.log(
+                                "OrderPackageItems updated (DCM):",
+                                itemsResult.affectedRows,
+                            );
+
+                            if (itemsResult.affectedRows === 0) {
+                                console.warn("No orderpackageitem was updated");
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(new Error("Failed to update orderpackageitem"));
+                                });
+                            }
+
+                            // Step 4: Commit transaction
+                            connection.commit((err) => {
+                                if (err) {
+                                    console.error("Error committing DCM transaction:", err);
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        reject(err);
+                                    });
+                                }
+
+                                console.log("DCM transaction completed successfully");
+                                connection.release();
+
+                                resolve({
+                                    orderPackageId: replaceData.orderPackageId,
+                                    replaceItemId: replaceData.replaceId,
+                                    previousDataId: insertResult.insertId,
+                                    message:
+                                        "Order package item updated successfully by DCM, previous data saved",
+                                    updatedBy: replaceData.userId,
+                                    previousData: previousData,
+                                    newData: {
+                                        productType: replaceData.productType,
+                                        productId: replaceData.productId,
+                                        qty: replaceData.qty,
+                                        price: replaceData.price,
+                                    },
+                                    permissions: "DCM - Limited access (orderpackageitems only)",
+                                });
+                            });
                         },
-                        permissions: 'DCM - Limited access (orderpackageitems only)'
-                    });
-                });
-            });
-        });
-    });
+                    );
+                },
+            );
+        },
+    );
 }
 
 // Handle DIO updates - update orderpackage (set isLock=1) and insert into replacerequest
@@ -1303,104 +1384,139 @@ function handleDIOUpdates(connection, replaceData, resolve, reject) {
     const updateOrderPackageSql = `
         UPDATE market_place.orderpackage 
         SET isLock = 1 
-        WHERE id = ? AND isLock = 0
+        WHERE id = ? 
     `;
 
-    console.log("DIO updating orderpackage isLock:", [replaceData.orderPackageId]);
+    // console.log("DIO updating orderpackage isLock:", [replaceData.orderPackageId]);
 
-    connection.query(updateOrderPackageSql, [replaceData.orderPackageId], (err, updateResult) => {
-        if (err) {
-            console.error("Error updating orderpackage:", err);
-            return connection.rollback(() => {
-                connection.release();
-                reject(err);
-            });
-        }
-
-        console.log("OrderPackage updated (DIO):", updateResult.affectedRows);
-
-        if (updateResult.affectedRows === 0) {
-            console.error("No rows were updated in orderpackage");
-            return connection.rollback(() => {
-                connection.release();
-                reject(new Error("Failed to lock OrderPackage - no rows affected"));
-            });
-        }
-
-        // Step 2: Insert into replacerequest table (now includes userId)
-        const insertReplaceSql = `
-            INSERT INTO market_place.replacerequest 
-            (orderPackageId, replceId, productType, productId, qty, price, status, userId, createdAt) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        `;
-
-        const insertValues = [
-            replaceData.orderPackageId,
-            replaceData.replaceId,
-            replaceData.productType,
-            replaceData.productId,
-            replaceData.qty,
-            replaceData.price,
-            replaceData.status,
-            replaceData.userId  // Added userId to the insert
-        ];
-
-        console.log("DIO inserting replace request with values:", insertValues);
-
-        connection.query(insertReplaceSql, insertValues, (err, insertResult) => {
+    connection.query(
+        updateOrderPackageSql,
+        [replaceData.orderPackageId],
+        (err, updateResult) => {
             if (err) {
-                console.error("Error inserting replace request:", err);
+                console.error("Error updating orderpackage:", err);
                 return connection.rollback(() => {
                     connection.release();
                     reject(err);
                 });
             }
 
-            console.log("Replace request inserted (DIO), ID:", insertResult.insertId);
+            console.log("OrderPackage updated (DIO):", updateResult.affectedRows);
 
-            // Step 3: Optionally update orderpackageitems if DIO wants to update items too
-            if (replaceData.updateItems) {
-                // DIO can update all fields including isPacked
-                const updateItemsSql = `
+            if (updateResult.affectedRows === 0) {
+                console.error("No rows were updated in orderpackage");
+                return connection.rollback(() => {
+                    connection.release();
+                    reject(new Error("Failed to lock OrderPackage - no rows affected"));
+                });
+            }
+
+            // Step 2: Insert into replacerequest table (now includes userId)
+            const insertReplaceSql = `
+            INSERT INTO market_place.replacerequest 
+            (orderPackageId, replceId, productType, productId, qty, price, status, userId, createdAt) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `;
+
+            const insertValues = [
+                replaceData.orderPackageId,
+                replaceData.replaceId,
+                replaceData.productType,
+                replaceData.productId,
+                replaceData.qty,
+                replaceData.price,
+                replaceData.status,
+                replaceData.userId, // Added userId to the insert
+            ];
+
+            console.log("DIO inserting replace request with values:", insertValues);
+
+            connection.query(insertReplaceSql, insertValues, (err, insertResult) => {
+                if (err) {
+                    console.error("Error inserting replace request:", err);
+                    return connection.rollback(() => {
+                        connection.release();
+                        reject(err);
+                    });
+                }
+
+                console.log(
+                    "Replace request inserted (DIO), ID:",
+                    insertResult.insertId,
+                );
+
+                // Step 3: Optionally update orderpackageitems if DIO wants to update items too
+                if (replaceData.updateItems) {
+                    // DIO can update all fields including isPacked
+                    const updateItemsSql = `
                     UPDATE market_place.orderpackageitems 
                     SET productType = ?, productId = ?, qty = ?, price = ?, isPacked = ?
                     WHERE id = ? AND orderPackageId = ?
                 `;
 
-                const updateItemsValues = [
-                    replaceData.productType,
-                    replaceData.productId,
-                    replaceData.qty,
-                    replaceData.price,
-                    replaceData.isPacked || 0,
-                    replaceData.replaceId,
-                    replaceData.orderPackageId
-                ];
+                    const updateItemsValues = [
+                        replaceData.productType,
+                        replaceData.productId,
+                        replaceData.qty,
+                        replaceData.price,
+                        replaceData.isPacked || 0,
+                        replaceData.replaceId,
+                        replaceData.orderPackageId,
+                    ];
 
-                console.log("DIO updating specific orderpackageitem (all fields):", updateItemsValues);
+                    console.log(
+                        "DIO updating specific orderpackageitem (all fields):",
+                        updateItemsValues,
+                    );
 
-                connection.query(updateItemsSql, updateItemsValues, (err, itemsResult) => {
-                    if (err) {
-                        console.error("Error updating orderpackageitems:", err);
-                        return connection.rollback(() => {
-                            connection.release();
-                            reject(err);
-                        });
-                    }
+                    connection.query(
+                        updateItemsSql,
+                        updateItemsValues,
+                        (err, itemsResult) => {
+                            if (err) {
+                                console.error("Error updating orderpackageitems:", err);
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(err);
+                                });
+                            }
 
-                    console.log("OrderPackageItems updated (DIO):", itemsResult.affectedRows);
-                    commitDIOTransaction(connection, resolve, reject, replaceData, insertResult.insertId);
-                });
-            } else {
-                // Just commit without updating items
-                commitDIOTransaction(connection, resolve, reject, replaceData, insertResult.insertId);
-            }
-        });
-    });
+                            console.log(
+                                "OrderPackageItems updated (DIO):",
+                                itemsResult.affectedRows,
+                            );
+                            commitDIOTransaction(
+                                connection,
+                                resolve,
+                                reject,
+                                replaceData,
+                                insertResult.insertId,
+                            );
+                        },
+                    );
+                } else {
+                    // Just commit without updating items
+                    commitDIOTransaction(
+                        connection,
+                        resolve,
+                        reject,
+                        replaceData,
+                        insertResult.insertId,
+                    );
+                }
+            });
+        },
+    );
 }
 
 // Helper function to commit DIO transaction
-function commitDIOTransaction(connection, resolve, reject, replaceData, insertId) {
+function commitDIOTransaction(
+    connection,
+    resolve,
+    reject,
+    replaceData,
+    insertId,
+) {
     connection.commit((err) => {
         if (err) {
             console.error("Error committing DIO transaction:", err);
@@ -1417,15 +1533,16 @@ function commitDIOTransaction(connection, resolve, reject, replaceData, insertId
             replaceRequestId: insertId,
             orderPackageId: replaceData.orderPackageId,
             replaceItemId: replaceData.replaceId,
-            message: "Replacement request created and order package locked successfully by DIO",
+            message:
+                "Replacement request created and order package locked successfully by DIO",
             updatedBy: replaceData.userId,
-            permissions: 'DIO - Full access (orderpackage + replacerequest)'
+            permissions: "DIO - Full access (orderpackage + replacerequest)",
         });
     });
 }
 
 exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
-    console.log("--------------------------------------------------")
+    console.log("--------------------------------------------------");
     let marketPlaceConnection;
     let collectionOfficerConnection;
 
@@ -1438,13 +1555,12 @@ exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
             });
         });
 
-        const [processOrderResults] = await marketPlaceConnection.promise().query(
-            'SELECT id FROM processorders WHERE orderId = ?',
-            [orderId]
-        );
+        const [processOrderResults] = await marketPlaceConnection
+            .promise()
+            .query("SELECT id FROM processorders WHERE orderId = ?", [orderId]);
 
         if (processOrderResults.length === 0) {
-            throw new Error('Process order not found');
+            throw new Error("Process order not found");
         }
 
         const processOrderId = processOrderResults[0].id;
@@ -1458,20 +1574,24 @@ exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
         });
 
         // 3. Get incomplete items for this order
-        const getItemsQuery = targetItemIds.length === 0
-            ? 'SELECT id, targetId FROM distributedtargetitems WHERE orderId = ? AND isComplete = 0 ORDER BY id'
-            : 'SELECT id, targetId FROM distributedtargetitems WHERE orderId = ? AND id IN (?) ORDER BY id';
+        const getItemsQuery =
+            targetItemIds.length === 0
+                ? "SELECT id, targetId FROM distributedtargetitems WHERE orderId = ? AND isComplete = 0 ORDER BY id"
+                : "SELECT id, targetId FROM distributedtargetitems WHERE orderId = ? AND id IN (?) ORDER BY id";
 
-        const getItemsParams = targetItemIds.length === 0
-            ? [processOrderId]
-            : [processOrderId, targetItemIds];
+        const getItemsParams =
+            targetItemIds.length === 0
+                ? [processOrderId]
+                : [processOrderId, targetItemIds];
 
-        const [items] = await collectionOfficerConnection.promise().query(getItemsQuery, getItemsParams);
+        const [items] = await collectionOfficerConnection
+            .promise()
+            .query(getItemsQuery, getItemsParams);
 
         if (items.length === 0) {
             return {
                 updatedItems: 0,
-                updatedTargets: 0
+                updatedTargets: 0,
             };
         }
 
@@ -1484,32 +1604,44 @@ exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
         try {
             // Process items one by one
             for (const item of items) {
-                console.log(`Processing item ${item.id} with targetId ${item.targetId}`);
-
-                // Update the distributedtargetitems record first
-                const [itemUpdateResult] = await collectionOfficerConnection.promise().query(
-                    'UPDATE distributedtargetitems SET isComplete = 1, completeTime = NOW() WHERE id = ? AND isComplete = 0',
-                    [item.id]
+                console.log(
+                    `Processing item ${item.id} with targetId ${item.targetId}`,
                 );
 
-                console.log(`Item update - affected rows: ${itemUpdateResult.affectedRows}`);
+                // Update the distributedtargetitems record first
+                const [itemUpdateResult] = await collectionOfficerConnection
+                    .promise()
+                    .query(
+                        "UPDATE distributedtargetitems SET isComplete = 1, completeTime = NOW() WHERE id = ? AND isComplete = 0",
+                        [item.id],
+                    );
+
+                console.log(
+                    `Item update - affected rows: ${itemUpdateResult.affectedRows}`,
+                );
 
                 if (itemUpdateResult.affectedRows === 1) {
                     updatedItemsCount++;
 
                     // Now update the distributedtarget table
                     // Simple increment - since you confirmed the column starts with 0, not NULL
-                    const [targetUpdateResult] = await collectionOfficerConnection.promise().query(
-                        'UPDATE distributedtarget SET complete = complete + 1 WHERE id = ?',
-                        [item.targetId]
-                    );
+                    const [targetUpdateResult] = await collectionOfficerConnection
+                        .promise()
+                        .query(
+                            "UPDATE distributedtarget SET complete = complete + 1 WHERE id = ?",
+                            [item.targetId],
+                        );
 
-                    console.log(`Target update - affected rows: ${targetUpdateResult.affectedRows}`);
+                    console.log(
+                        `Target update - affected rows: ${targetUpdateResult.affectedRows}`,
+                    );
 
                     if (targetUpdateResult.affectedRows === 1) {
                         updatedTargetsCount++;
                     } else {
-                        console.error(`Failed to update target ${item.targetId} - target may not exist`);
+                        console.error(
+                            `Failed to update target ${item.targetId} - target may not exist`,
+                        );
                         // Don't throw error, just log and continue
                     }
                 }
@@ -1518,22 +1650,22 @@ exports.updateDistributedTargetItems = async (targetItemIds, orderId) => {
             // Commit the transaction
             await collectionOfficerConnection.promise().commit();
 
-            console.log(`Transaction committed successfully. Updated ${updatedItemsCount} items and ${updatedTargetsCount} targets`);
+            console.log(
+                `Transaction committed successfully. Updated ${updatedItemsCount} items and ${updatedTargetsCount} targets`,
+            );
 
             return {
                 updatedItems: updatedItemsCount,
-                updatedTargets: updatedTargetsCount
+                updatedTargets: updatedTargetsCount,
             };
-
         } catch (transactionError) {
             // Rollback on any error within the transaction
             await collectionOfficerConnection.promise().rollback();
-            console.error('Transaction rolled back due to error:', transactionError);
+            console.error("Transaction rolled back due to error:", transactionError);
             throw transactionError;
         }
-
     } catch (error) {
-        console.error('Function error:', error);
+        console.error("Function error:", error);
         throw error;
     } finally {
         // Always release connections
@@ -1570,18 +1702,18 @@ exports.getDistributionTargets = async (officerId) => {
                     console.log("Query results:", results);
 
                     // Transform the single aggregated result
-                    const transformedResults = results.map(row => ({
-                        id: `${row.userId}_aggregated_${new Date().toISOString().split('T')[0]}`,
+                    const transformedResults = results.map((row) => ({
+                        id: `${row.userId}_aggregated_${new Date().toISOString().split("T")[0]}`,
                         companycenterId: null, // Since we're aggregating across centers
                         userId: row.userId,
                         target: row.total_target,
                         complete: row.total_complete,
                         completionPercentage: row.completionPercentage,
                         createdAt: row.createdAt,
-                        updatedAt: row.updatedAt
+                        updatedAt: row.updatedAt,
                     }));
                     resolve(transformedResults);
-                }
+                },
             );
         });
     });
@@ -1589,136 +1721,40 @@ exports.getDistributionTargets = async (officerId) => {
 
 
 
-// exports.updateoutForDelivery = (orderId, userId) => {
-//     return new Promise((resolve, reject) => {
-//         const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-//         const sql = `
-//             UPDATE market_place.processorders 
-//             SET status = 'Out For Delivery', 
-//                 outBy = ?,
-//                 outDlvrDate = ?
-//             WHERE orderId = ?
-//         `;
-
-//         try {
-//             db.collectionofficer.query(sql, [userId, currentDate, orderId], (err, result) => {
-//                 if (err) {
-//                     console.error(`Error updating order ${orderId}:`, err);
-//                     return reject(err);
-//                 }
-
-//                 if (result.affectedRows === 0) {
-//                     return reject(new Error(`No order found with orderId: ${orderId}`));
-//                 }
-
-//                 console.log(`Successfully updated order ${orderId} - affected rows: ${result.affectedRows}`);
-//                 resolve(result);
-//             });
-//         } catch (error) {
-//             console.error("Error in updateoutForDelivery:", error);
-//             reject(error);
-//         }
-//     });
-// };
-
-
-// exports.updateoutForDelivery = (orderId, userId) => {
-//     return new Promise((resolve, reject) => {
-//         const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-//         const updateOrderSql = `
-//       UPDATE market_place.processorders 
-//       SET status = 'Out For Delivery', 
-//           outBy = ?,
-//           outDlvrDate = ?
-//       WHERE orderId = ?
-//     `;
-
-//         const insertNotificationSql = `
-//   INSERT INTO market_place.dashnotification (orderId, title)
-//   SELECT mpp.id, 'Order is Out for Delivery'
-//   FROM market_place.processorders AS mpp
-//   WHERE mpp.orderId = ?
-//   ON DUPLICATE KEY UPDATE 
-//     title = VALUES(title)
-// `;
-
-//         try {
-//             // ✅ Get a single connection from the pool
-//             db.collectionofficer.getConnection((err, connection) => {
-//                 if (err) return reject(err);
-
-//                 connection.beginTransaction((err) => {
-//                     if (err) {
-//                         connection.release();
-//                         return reject(err);
-//                     }
-
-//                     // Step 1: Update order status
-//                     connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
-//                         if (err) {
-//                             return connection.rollback(() => {
-//                                 connection.release();
-//                                 reject(err);
-//                             });
-//                         }
-
-//                         if (result.affectedRows === 0) {
-//                             return connection.rollback(() => {
-//                                 connection.release();
-//                                 reject(new Error(`No order found with orderId: ${orderId}`));
-//                             });
-//                         }
-
-//                         // Step 2: Insert/update notification
-//                         connection.query(insertNotificationSql, [orderId, currentDate], (err2, result2) => {
-//                             if (err2) {
-//                                 return connection.rollback(() => {
-//                                     connection.release();
-//                                     reject(err2);
-//                                 });
-//                             }
-
-//                             connection.commit((err3) => {
-//                                 if (err3) {
-//                                     return connection.rollback(() => {
-//                                         connection.release();
-//                                         reject(err3);
-//                                     });
-//                                 }
-
-//                                 console.log(`✅ Order ${orderId} marked as 'Out For Delivery' and notification updated.`);
-//                                 connection.release();
-//                                 resolve({
-//                                     orderUpdate: result,
-//                                     notificationUpdate: result2
-//                                 });
-//                             });
-//                         });
-//                     });
-//                 });
-//             });
-//         } catch (error) {
-//             console.error("Error in updateoutForDelivery:", error);
-//             reject(error);
-//         }
-//     });
-// };
-
 exports.updateoutForDelivery = (orderId, userId) => {
     return new Promise((resolve, reject) => {
-        const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const currentDate = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-        // First, get the delivery method from orders table
-        const getDeliveryMethodSql = `
-            SELECT o.delivaryMethod 
+        // Enhanced query to get complete order details
+        const getOrderDetailsSql = `
+            SELECT 
+                o.id as orderId,
+                o.invNo,
+                o.delivaryMethod,
+                o.customerEmail,
+                o.paymentMethod,
+                o.amount as totalAmount,
+                o.createdAt,
+                o.scheduleDate,
+                o.scheduleTime,
+                c.title,
+                c.firstName,
+                c.lastName,
+                c.phoneNumber,
+                c.buildingType,
+                c.houseNo,
+                c.floorNo,
+                c.buildingNo,
+                c.buildingName,
+                c.unitNo,
+                c.streetName,
+                c.city
             FROM market_place.orders AS o
             INNER JOIN market_place.processorders AS po ON po.orderId = o.id
+            LEFT JOIN market_place.customer AS c ON o.customerId = c.id
             WHERE po.orderId = ?
         `;
 
-        // Update order status based on delivery method
         const updateOrderSql = `
             UPDATE market_place.processorders AS po
             INNER JOIN market_place.orders AS o ON po.orderId = o.id
@@ -1731,15 +1767,13 @@ exports.updateoutForDelivery = (orderId, userId) => {
             WHERE po.orderId = ?
         `;
 
-        // Insert notification only for delivery orders (not pickup)
         const insertNotificationSql = `
             INSERT INTO market_place.dashnotification (orderId, title)
             SELECT po.id, 'Order is Out for Delivery'
             FROM market_place.processorders AS po
             INNER JOIN market_place.orders AS o ON po.orderId = o.id
             WHERE po.orderId = ? AND o.delivaryMethod != 'Pickup'
-            ON DUPLICATE KEY UPDATE 
-                title = VALUES(title)
+            ON DUPLICATE KEY UPDATE title = VALUES(title)
         `;
 
         try {
@@ -1752,8 +1786,8 @@ exports.updateoutForDelivery = (orderId, userId) => {
                         return reject(err);
                     }
 
-                    // Step 1: Get delivery method
-                    connection.query(getDeliveryMethodSql, [orderId], (err, deliveryResult) => {
+                    // Step 1: Get complete order details
+                    connection.query(getOrderDetailsSql, [orderId], (err, orderDetails) => {
                         if (err) {
                             return connection.rollback(() => {
                                 connection.release();
@@ -1761,15 +1795,16 @@ exports.updateoutForDelivery = (orderId, userId) => {
                             });
                         }
 
-                        if (deliveryResult.length === 0) {
+                        if (orderDetails.length === 0) {
                             return connection.rollback(() => {
                                 connection.release();
                                 reject(new Error(`No order found with orderId: ${orderId}`));
                             });
                         }
 
-                        const deliveryMethod = deliveryResult[0].delivaryMethod;
-                        const newStatus = deliveryMethod === 'Pickup' ? 'Ready to Pickup' : 'Out For Delivery';
+                        const orderInfo = orderDetails[0];
+                        const deliveryMethod = orderInfo.delivaryMethod;
+                        const newStatus = deliveryMethod === "Pickup" ? "Ready to Pickup" : "Out For Delivery";
 
                         // Step 2: Update order status
                         connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
@@ -1780,15 +1815,8 @@ exports.updateoutForDelivery = (orderId, userId) => {
                                 });
                             }
 
-                            if (result.affectedRows === 0) {
-                                return connection.rollback(() => {
-                                    connection.release();
-                                    reject(new Error(`No order found with orderId: ${orderId}`));
-                                });
-                            }
-
-                            // Step 3: Insert/update notification (only for delivery orders)
-                            connection.query(insertNotificationSql, [orderId], (err2, result2) => {
+                            // Step 3: Insert notification
+                            connection.query(insertNotificationSql, [orderId], (err2) => {
                                 if (err2) {
                                     return connection.rollback(() => {
                                         connection.release();
@@ -1804,13 +1832,14 @@ exports.updateoutForDelivery = (orderId, userId) => {
                                         });
                                     }
 
-                                    console.log(`✅ Order ${orderId} marked as '${newStatus}' and notification ${deliveryMethod === 'Pickup' ? 'skipped (pickup order)' : 'updated'}.`);
+                                    console.log(`✅ Order ${orderId} marked as '${newStatus}'`);
                                     connection.release();
+
                                     resolve({
                                         orderUpdate: result,
-                                        notificationUpdate: result2,
                                         status: newStatus,
-                                        deliveryMethod: deliveryMethod
+                                        deliveryMethod: deliveryMethod,
+                                        orderInfo: orderInfo
                                     });
                                 });
                             });
