@@ -1719,41 +1719,50 @@ exports.getDistributionTargets = async (officerId) => {
     });
 };
 
-
-
 exports.updateoutForDelivery = (orderId, userId) => {
     return new Promise((resolve, reject) => {
         const currentDate = new Date().toISOString().slice(0, 19).replace("T", " ");
 
-        // Enhanced query to get complete order details
         const getOrderDetailsSql = `
-            SELECT 
-                o.id as orderId,
-                o.invNo,
-                o.delivaryMethod,
-                o.customerEmail,
-                o.paymentMethod,
-                o.amount as totalAmount,
-                o.createdAt,
-                o.scheduleDate,
-                o.scheduleTime,
-                c.title,
-                c.firstName,
-                c.lastName,
-                c.phoneNumber,
-                c.buildingType,
-                c.houseNo,
-                c.floorNo,
-                c.buildingNo,
-                c.buildingName,
-                c.unitNo,
-                c.streetName,
-                c.city
-            FROM market_place.orders AS o
-            INNER JOIN market_place.processorders AS po ON po.orderId = o.id
-            LEFT JOIN market_place.customer AS c ON o.customerId = c.id
-            WHERE po.orderId = ?
-        `;
+    SELECT 
+        o.id as orderId,
+        po.invNo,
+        o.delivaryMethod,
+        c.email,
+        po.paymentMethod,
+        po.amount as totalAmount,
+        o.createdAt,
+        o.sheduleDate,
+        o.sheduleTime,
+        c.title,
+        c.firstName,
+        c.lastName,
+        c.phoneNumber,
+        c.buildingType,
+
+        -- House fields
+        oh.houseNo       AS houseHouseNo,
+        oh.streetName    AS houseStreetName,
+        oh.city          AS houseCity,
+
+        -- Apartment fields
+        oa.buildingNo,
+        oa.buildingName,
+        oa.unitNo,
+        oa.floorNo,
+        oa.houseNo       AS aptHouseNo,
+        oa.streetName    AS aptStreetName,
+        oa.city          AS aptCity
+
+    FROM market_place.orders AS o
+    INNER JOIN market_place.processorders AS po ON po.orderId = o.id
+    LEFT JOIN market_place.marketplaceusers AS c ON o.userId = c.id
+    LEFT JOIN market_place.orderhouse AS oh 
+        ON oh.orderId = o.id AND c.buildingType = 'House'
+    LEFT JOIN market_place.orderapartment AS oa 
+        ON oa.orderId = o.id AND c.buildingType = 'Apartment'
+    WHERE po.orderId = ?
+`;
 
         const updateOrderSql = `
             UPDATE market_place.processorders AS po
@@ -1787,27 +1796,10 @@ exports.updateoutForDelivery = (orderId, userId) => {
                     }
 
                     // Step 1: Get complete order details
-                    connection.query(getOrderDetailsSql, [orderId], (err, orderDetails) => {
-                        if (err) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(err);
-                            });
-                        }
-
-                        if (orderDetails.length === 0) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(new Error(`No order found with orderId: ${orderId}`));
-                            });
-                        }
-
-                        const orderInfo = orderDetails[0];
-                        const deliveryMethod = orderInfo.delivaryMethod;
-                        const newStatus = deliveryMethod === "Pickup" ? "Ready to Pickup" : "Out For Delivery";
-
-                        // Step 2: Update order status
-                        connection.query(updateOrderSql, [userId, currentDate, orderId], (err, result) => {
+                    connection.query(
+                        getOrderDetailsSql,
+                        [orderId],
+                        (err, orderDetails) => {
                             if (err) {
                                 return connection.rollback(() => {
                                     connection.release();
@@ -1815,36 +1807,66 @@ exports.updateoutForDelivery = (orderId, userId) => {
                                 });
                             }
 
-                            // Step 3: Insert notification
-                            connection.query(insertNotificationSql, [orderId], (err2) => {
-                                if (err2) {
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        reject(err2);
-                                    });
-                                }
+                            if (orderDetails.length === 0) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    reject(new Error(`No order found with orderId: ${orderId}`));
+                                });
+                            }
 
-                                connection.commit((err3) => {
-                                    if (err3) {
+                            const orderInfo = orderDetails[0];
+                            const deliveryMethod = orderInfo.delivaryMethod;
+                            const newStatus =
+                                deliveryMethod === "Pickup"
+                                    ? "Ready to Pickup"
+                                    : "Out For Delivery";
+
+                            // Step 2: Update order status
+                            connection.query(
+                                updateOrderSql,
+                                [userId, currentDate, orderId],
+                                (err, result) => {
+                                    if (err) {
                                         return connection.rollback(() => {
                                             connection.release();
-                                            reject(err3);
+                                            reject(err);
                                         });
                                     }
 
-                                    console.log(`✅ Order ${orderId} marked as '${newStatus}'`);
-                                    connection.release();
+                                    // Step 3: Insert notification
+                                    connection.query(insertNotificationSql, [orderId], (err2) => {
+                                        if (err2) {
+                                            return connection.rollback(() => {
+                                                connection.release();
+                                                reject(err2);
+                                            });
+                                        }
 
-                                    resolve({
-                                        orderUpdate: result,
-                                        status: newStatus,
-                                        deliveryMethod: deliveryMethod,
-                                        orderInfo: orderInfo
+                                        connection.commit((err3) => {
+                                            if (err3) {
+                                                return connection.rollback(() => {
+                                                    connection.release();
+                                                    reject(err3);
+                                                });
+                                            }
+
+                                            console.log(
+                                                `✅ Order ${orderId} marked as '${newStatus}'`,
+                                            );
+                                            connection.release();
+
+                                            resolve({
+                                                orderUpdate: result,
+                                                status: newStatus,
+                                                deliveryMethod: deliveryMethod,
+                                                orderInfo: orderInfo,
+                                            });
+                                        });
                                     });
-                                });
-                            });
-                        });
-                    });
+                                },
+                            );
+                        },
+                    );
                 });
             });
         } catch (error) {
