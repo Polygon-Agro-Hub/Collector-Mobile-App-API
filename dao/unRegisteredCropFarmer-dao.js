@@ -1,7 +1,6 @@
 const jwt = require("jsonwebtoken");
 const db = require("../startup/database");
 
-// Insert payment for a registered farmer
 exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {
   return new Promise((resolve, reject) => {
     const paymentQuery = `
@@ -14,7 +13,7 @@ exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {
       if (err) {
         return reject(err);
       }
-      resolve(result.insertId); // Return the inserted farmer payment ID
+      resolve(result.insertId);
     });
   });
 };
@@ -31,7 +30,7 @@ exports.insertCropDetails = (registeredFarmerId, crop, officerId, centerId) => {
       gradeCquan,
       imageAUrl,
       imageBUrl,
-      imageCUrl
+      imageCUrl,
     } = crop;
 
     const cropQuery = `
@@ -52,7 +51,7 @@ exports.insertCropDetails = (registeredFarmerId, crop, officerId, centerId) => {
       gradeCquan || 0,
       imageAUrl,
       imageBUrl,
-      imageCUrl
+      imageCUrl,
     ];
 
     db.collectionofficer.getConnection((err, connection) => {
@@ -66,7 +65,6 @@ exports.insertCropDetails = (registeredFarmerId, crop, officerId, centerId) => {
           return reject(transactionErr);
         }
 
-        // First insert the crop details
         connection.query(cropQuery, cropValues, (insertErr, insertResult) => {
           if (insertErr) {
             return connection.rollback(() => {
@@ -74,8 +72,6 @@ exports.insertCropDetails = (registeredFarmerId, crop, officerId, centerId) => {
               reject(insertErr);
             });
           }
-
-
 
           const updateOfficerQuery = `
           UPDATE officertarget ot
@@ -101,20 +97,21 @@ AND DATE(dt.date) = CURDATE()
             gradeBquan || 0,
             gradeCquan || 0,
             varietyId,
-            officerId
+            officerId,
           ];
 
-          connection.query(updateOfficerQuery, updateOfficerValues, (updateOfficerErr, updateOfficerResult) => {
-            if (updateOfficerErr) {
-              return connection.rollback(() => {
-                connection.release();
-                reject(updateOfficerErr);
-              });
-            }
+          connection.query(
+            updateOfficerQuery,
+            updateOfficerValues,
+            (updateOfficerErr, updateOfficerResult) => {
+              if (updateOfficerErr) {
+                return connection.rollback(() => {
+                  connection.release();
+                  reject(updateOfficerErr);
+                });
+              }
 
-
-
-            const updateCenterQuery = `
+              const updateCenterQuery = `
             UPDATE dailytarget dt
 JOIN companycenter cc ON dt.companyCenterId = cc.id 
 SET dt.complete = CAST(
@@ -137,51 +134,59 @@ AND EXISTS (
 )
           `;
 
-            const updateCenterValues = [
-              gradeAquan || 0,
-              gradeBquan || 0,
-              gradeCquan || 0,
-              varietyId,
-              centerId,
-              officerId
-            ];
+              const updateCenterValues = [
+                gradeAquan || 0,
+                gradeBquan || 0,
+                gradeCquan || 0,
+                varietyId,
+                centerId,
+                officerId,
+              ];
 
-            connection.query(updateCenterQuery, updateCenterValues, (updateCenterErr, updateCenterResult) => {
-              if (updateCenterErr) {
-                return connection.rollback(() => {
-                  connection.release();
-                  reject(updateCenterErr);
-                });
-              }
+              connection.query(
+                updateCenterQuery,
+                updateCenterValues,
+                (updateCenterErr, updateCenterResult) => {
+                  if (updateCenterErr) {
+                    return connection.rollback(() => {
+                      connection.release();
+                      reject(updateCenterErr);
+                    });
+                  }
 
-              connection.commit((commitErr) => {
-                if (commitErr) {
-                  return connection.rollback(() => {
+                  connection.commit((commitErr) => {
+                    if (commitErr) {
+                      return connection.rollback(() => {
+                        connection.release();
+                        reject(commitErr);
+                      });
+                    }
+
                     connection.release();
-                    reject(commitErr);
+                    resolve({
+                      cropInserted: true,
+                      officerTargetUpdated:
+                        updateOfficerResult.affectedRows > 0,
+                      centerTargetUpdated: updateCenterResult.affectedRows > 0,
+                      cropId: insertResult.insertId,
+                      officerUpdatedRows: updateOfficerResult.affectedRows,
+                      centerUpdatedRows: updateCenterResult.affectedRows,
+                    });
                   });
-                }
-
-                connection.release();
-                resolve({
-                  cropInserted: true,
-                  officerTargetUpdated: updateOfficerResult.affectedRows > 0,
-                  centerTargetUpdated: updateCenterResult.affectedRows > 0,
-                  cropId: insertResult.insertId,
-                  officerUpdatedRows: updateOfficerResult.affectedRows,
-                  centerUpdatedRows: updateCenterResult.affectedRows
-                });
-              });
-            });
-          });
+                },
+              );
+            },
+          );
         });
       });
     });
   });
 };
 
-
-exports.getCropDetailsByUserAndFarmerId = async (userId, registeredFarmerId) => {
+exports.getCropDetailsByUserAndFarmerId = async (
+  userId,
+  registeredFarmerId,
+) => {
   const query = `
     SELECT 
       fpc.id AS id, 
@@ -213,82 +218,78 @@ exports.getCropDetailsByUserAndFarmerId = async (userId, registeredFarmerId) => 
   `;
 
   return new Promise((resolve, reject) => {
+    db.collectionofficer.query(
+      query,
+      [userId, registeredFarmerId],
+      (error, results) => {
+        if (error) return reject(error);
 
-    console.log('@@@@@@@@ UserId:', userId);
-    console.log('@@@@@@@@@   registeredFarmerId:', registeredFarmerId);
+        const transformedResults = results.flatMap((row) => {
+          const entries = [];
 
-    db.collectionofficer.query(query, [userId, registeredFarmerId], (error, results) => {
-      if (error) return reject(error);
+          if (row.weightA > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              variety: row.variety,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              grade: "A",
+              unitPrice: row.unitPriceA,
+              quantity: row.weightA,
+              subTotal: (row.unitPriceA * row.weightA).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
 
-      const transformedResults = results.flatMap(row => {
-        const entries = [];
+          if (row.weightB > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              variety: row.variety,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              grade: "B",
+              unitPrice: row.unitPriceB,
+              quantity: row.weightB,
+              subTotal: (row.unitPriceB * row.weightB).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
 
-        if (row.weightA > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          variety: row.variety,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          grade: 'A',
-          unitPrice: row.unitPriceA,
-          quantity: row.weightA,
-          subTotal: (row.unitPriceA * row.weightA).toFixed(2),
-          invoiceNumber: row.invoiceNumber
+          if (row.weightC > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              variety: row.variety,
+              grade: "C",
+              unitPrice: row.unitPriceC,
+              quantity: row.weightC,
+              subTotal: (row.unitPriceC * row.weightC).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
+
+          return entries;
         });
 
-        if (row.weightB > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          variety: row.variety,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          grade: 'B',
-          unitPrice: row.unitPriceB,
-          quantity: row.weightB,
-          subTotal: (row.unitPriceB * row.weightB).toFixed(2),
-          invoiceNumber: row.invoiceNumber
-        });
-
-        if (row.weightC > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          variety: row.variety,
-          grade: 'C',
-          unitPrice: row.unitPriceC,
-          quantity: row.weightC,
-          subTotal: (row.unitPriceC * row.weightC).toFixed(2),
-          invoiceNumber: row.invoiceNumber
-        });
-
-        return entries;
-      });
-      console.log('Transformed Results:', transformedResults);
-
-      resolve(transformedResults);
-    });
+        resolve(transformedResults);
+      },
+    );
   });
 };
 
-
-
 exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
   return new Promise((resolve, reject) => {
-    console.log("Officer ID:", officerId);
-    console.log("Date range:", startDate, "to", endDate);
-
     if (!officerId) {
       return reject(new Error("Officer ID is required"));
     }
 
-    // Base query with parameters
     let cropQuery = `
       SELECT DISTINCT
         cg.id,
@@ -307,10 +308,8 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
         ot.officerId = ?
     `;
 
-    // Parameters array, starting with officerId
     const params = [officerId];
 
-    // Add date range filter if provided
     if (startDate) {
       cropQuery += ` AND DATE(dt.date) >= ?`;
       params.push(startDate);
@@ -321,7 +320,6 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
       params.push(endDate);
     }
 
-    // Add ORDER BY clause
     cropQuery += `
       ORDER BY
         cg.cropNameEnglish,
@@ -340,65 +338,17 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
   });
 };
 
-
-
-// exports.getVarietiesByCropId = (officerId, cropId) => {
-//   return new Promise((resolve, reject) => {
-//     if (!officerId || !cropId) {
-//       return reject(new Error("Officer ID and Crop ID are required"));
-//     }
-
-//     // Updated query for new table structure
-//     const varietyQuery = `
-//       SELECT DISTINCT
-//           cv.id,
-//           cv.varietyNameEnglish,
-//           cv.varietyNameSinhala,
-//           cv.varietyNameTamil
-//       FROM 
-//           officertarget ot
-//       INNER JOIN
-//           dailytarget dt ON ot.dailyTargetId = dt.id
-//       INNER JOIN
-//           plant_care.cropvariety cv ON dt.varietyId = cv.id
-//       WHERE
-//           ot.officerId = ?
-//           AND cv.cropGroupId = ?
-//       ORDER BY
-//           cv.varietyNameEnglish,
-//           cv.varietyNameSinhala,
-//           cv.varietyNameTamil
-//     `;
-
-//     db.collectionofficer.query(varietyQuery, [officerId, cropId], (error, results) => {
-//       if (error) {
-//         console.error("Error fetching varieties for officer and crop:", error);
-//         return reject(error);
-//       }
-
-//       const formattedResults = results.map(variety => ({
-//         id: variety.id,
-//         varietyEnglish: variety.varietyNameEnglish,
-//         varietySinhala: variety.varietyNameSinhala,
-//         varietyTamil: variety.varietyNameTamil
-//       }));
-
-//       resolve(formattedResults);
-//     });
-//   });
-// };
-
-exports.getVarietiesByCropId = (officerId, cropId, startDate = null, endDate = null) => {
+exports.getVarietiesByCropId = (
+  officerId,
+  cropId,
+  startDate = null,
+  endDate = null,
+) => {
   return new Promise((resolve, reject) => {
-    console.log("Officer ID:", officerId);
-    console.log("Crop ID:", cropId);
-    console.log("Date range:", startDate, "to", endDate);
-
     if (!officerId || !cropId) {
       return reject(new Error("Officer ID and Crop ID are required"));
     }
 
-    // Base query with date filtering
     let varietyQuery = `
       SELECT DISTINCT
           cv.id,
@@ -418,7 +368,6 @@ exports.getVarietiesByCropId = (officerId, cropId, startDate = null, endDate = n
 
     const params = [officerId, cropId];
 
-    // Add date range filter (same logic as getAllCropNames)
     if (startDate) {
       varietyQuery += ` AND DATE(dt.date) >= ?`;
       params.push(startDate);
@@ -442,21 +391,17 @@ exports.getVarietiesByCropId = (officerId, cropId, startDate = null, endDate = n
         return reject(error);
       }
 
-      const formattedResults = results.map(variety => ({
+      const formattedResults = results.map((variety) => ({
         id: variety.id,
         varietyEnglish: variety.varietyNameEnglish,
         varietySinhala: variety.varietyNameSinhala,
-        varietyTamil: variety.varietyNameTamil
+        varietyTamil: variety.varietyNameTamil,
       }));
 
-      console.log("Varieties fetched successfully:", formattedResults);
       resolve(formattedResults);
     });
   });
 };
-
-
-
 
 exports.getMarketPricesByVarietyId = (varietyId, companycenterId) => {
   return new Promise((resolve, reject) => {
@@ -469,12 +414,16 @@ exports.getMarketPricesByVarietyId = (varietyId, companycenterId) => {
       WHERE mp.varietyId = ? 
       AND mps.companyCenterId = ?;
     `;
-    db.collectionofficer.query(query, [varietyId, companycenterId], (error, results) => {
-      if (error) {
-        return reject(error);  // Reject with error to be handled in the controller
-      }
-      resolve(results);  // Resolve with results
-    });
+    db.collectionofficer.query(
+      query,
+      [varietyId, companycenterId],
+      (error, results) => {
+        if (error) {
+          return reject(error);
+        }
+        resolve(results);
+      },
+    );
   });
 };
 
@@ -488,7 +437,7 @@ exports.getLatestInvoiceNumberDao = (empId, currentDate) => {
         LIMIT 1
       `;
 
-    const searchPattern = `${empId}${currentDate}%`; // Format: EMPIDYYMMDD%
+    const searchPattern = `${empId}${currentDate}%`;
 
     db.collectionofficer.query(query, [searchPattern], (error, results) => {
       if (error) {
@@ -499,15 +448,29 @@ exports.getLatestInvoiceNumberDao = (empId, currentDate) => {
   });
 };
 
-
-//Collection 
-exports.createCollection = (crop, variety, loadIn, routeNumber, buildingNo, streetName, city) => {
-  console.log("hitt")
+exports.createCollection = (
+  crop,
+  variety,
+  loadIn,
+  routeNumber,
+  buildingNo,
+  streetName,
+  city,
+) => {
   return new Promise((resolve, reject) => {
     const sql =
       "INSERT INTO geolocation (crop, variety, loadIn, , routeNumber, buildingNo, streetName, city, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Assigned')";
 
-    const values = [crop, variety, loadIn, , routeNumber, buildingNo, streetName, city];
+    const values = [
+      crop,
+      variety,
+      loadIn,
+      ,
+      routeNumber,
+      buildingNo,
+      streetName,
+      city,
+    ];
 
     db.collectionofficer.query(sql, values, (err, result) => {
       if (err) {
@@ -518,11 +481,10 @@ exports.createCollection = (crop, variety, loadIn, routeNumber, buildingNo, stre
   });
 };
 
-
-
 exports.getAllCropNamesForCollection = () => {
   return new Promise((resolve, reject) => {
-    const query = 'SELECT id, cropNameEnglish, cropNameSinhala, cropNameTamil FROM cropgroup';
+    const query =
+      "SELECT id, cropNameEnglish, cropNameSinhala, cropNameTamil FROM cropgroup";
 
     db.plantcare.query(query, (error, results) => {
       if (error) {
@@ -530,10 +492,8 @@ exports.getAllCropNamesForCollection = () => {
       }
       resolve(results);
     });
-
   });
 };
-
 
 exports.getVarietiesByCropIdCollection = (officerId, cropId) => {
   return new Promise((resolve, reject) => {
@@ -555,34 +515,21 @@ exports.getVarietiesByCropIdCollection = (officerId, cropId) => {
           cv.varietyNameEnglish
     `;
 
-    console.log('Executing SQL Query:', {
-      query: varietyQuery,
-      cropId: cropId
-    });
-
     db.collectionofficer.query(varietyQuery, [cropId], (error, results) => {
       if (error) {
         console.error("Detailed Query Error:", {
           error: error,
           sqlMessage: error.sqlMessage,
           sqlState: error.sqlState,
-          code: error.code
+          code: error.code,
         });
         return reject(error);
       }
-
-      console.log('Query Results:', {
-        rowCount: results.length,
-        firstResult: results[0]
-      });
 
       resolve(results);
     });
   });
 };
-
-
-
 
 exports.getAllUsers = (officerId, nicNumber = null) => {
   return new Promise((resolve, reject) => {
@@ -606,7 +553,6 @@ exports.getAllUsers = (officerId, nicNumber = null) => {
       WHERE activeStatus = 'active'
     `;
 
-    // Add NIC number filter if provided
     const queryParams = [];
     if (nicNumber) {
       userQuery += ` AND NICnumber = ?`;
@@ -619,15 +565,15 @@ exports.getAllUsers = (officerId, nicNumber = null) => {
         return reject(error);
       }
 
-      const formattedUsers = results.map(user => ({
+      const formattedUsers = results.map((user) => ({
         id: user.id,
-        firstName: user.firstName || '',
-        phoneNumber: user.phoneNumber || '',
-        nicNumber: user.NICnumber || '',
+        firstName: user.firstName || "",
+        phoneNumber: user.phoneNumber || "",
+        nicNumber: user.NICnumber || "",
         profileImage: user.profileImage || null,
         farmerQr: user.farmerQr || null,
-        membership: user.membership || '',
-        activeStatus: user.activeStatus || '',
+        membership: user.membership || "",
+        activeStatus: user.activeStatus || "",
         address: {
           buildingNo: user.houseNo || null,
           streetName: user.streetName || null,
@@ -635,7 +581,7 @@ exports.getAllUsers = (officerId, nicNumber = null) => {
           district: user.district || null,
         },
         routeNumber: user.route || null,
-        createdAt: user.created_at || null
+        createdAt: user.created_at || null,
       }));
 
       resolve(formattedUsers);
@@ -643,9 +589,13 @@ exports.getAllUsers = (officerId, nicNumber = null) => {
   });
 };
 
-// DAO method to update user address in the plant_care.users table
-exports.updateUserAddress = (userId, routeNumber, buildingNo, streetName, city) => {
-  console.log(city)
+exports.updateUserAddress = (
+  userId,
+  routeNumber,
+  buildingNo,
+  streetName,
+  city,
+) => {
   return new Promise((resolve, reject) => {
     const sql = `
       UPDATE plant_care.users
@@ -663,22 +613,28 @@ exports.updateUserAddress = (userId, routeNumber, buildingNo, streetName, city) 
       (err, result) => {
         if (err) return reject(err);
         resolve(result);
-      }
+      },
     );
   });
 };
 
-
-
-
-exports.createCollectionRequest = (farmerId, cmId, empId, crop, variety, loadIn, centerId, companyId, scheduleDate) => {
+exports.createCollectionRequest = (
+  farmerId,
+  cmId,
+  empId,
+  crop,
+  variety,
+  loadIn,
+  centerId,
+  companyId,
+  scheduleDate,
+) => {
   return new Promise((resolve, reject) => {
     const today = new Date();
     const year = today.getFullYear().toString().substr(-2);
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
 
-    // Generate the sequence number for the custom ID
     const sequenceSql = `
       SELECT COUNT(*) as count 
       FROM collection_officer.collectionrequest
@@ -689,55 +645,72 @@ exports.createCollectionRequest = (farmerId, cmId, empId, crop, variety, loadIn,
       if (err) return reject(err);
 
       const sequenceNumber = countResults[0].count + 1;
-      const sequenceString = String(sequenceNumber).padStart(5, '0');
+      const sequenceString = String(sequenceNumber).padStart(5, "0");
       const customId = `${empId}${year}${month}${day}${sequenceString}`;
-
-      console.log("Generated customId:", customId); // Debug log
 
       const checkSql = `
         SELECT id, requestId FROM collection_officer.collectionrequest
         WHERE farmerId = ? AND cmId = ? AND centerId = ? AND companyId = ? AND scheduleDate = ?
       `;
 
-      db.plantcare.query(checkSql, [farmerId, cmId, centerId, companyId, scheduleDate], (err, results) => {
-        if (err) return reject(err);
+      db.plantcare.query(
+        checkSql,
+        [farmerId, cmId, centerId, companyId, scheduleDate],
+        (err, results) => {
+          if (err) return reject(err);
 
-        if (results.length > 0) {
-          console.log("Request already exists with ID:", results[0].id, "Request ID:", results[0].requestId);
-          // Return consistent property name (requestIdItem instead of requestId)
-          resolve({
-            requestIdItem: results[0].id,
-            customId: results[0].requestId
-          });
-        } else {
-          const insertSql = `
+          if (results.length > 0) {
+            resolve({
+              requestIdItem: results[0].id,
+              customId: results[0].requestId,
+            });
+          } else {
+            const insertSql = `
             INSERT INTO collection_officer.collectionrequest
             (farmerId, cmId, centerId, companyId, requestId, requestStatus, scheduleDate,cancelStatus, createdAt)
             VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())
           `;
 
-          db.plantcare.query(insertSql, [farmerId, cmId, centerId, companyId, customId, "Not Assigned", scheduleDate], (err, result) => {
-            if (err) return reject(err);
+            db.plantcare.query(
+              insertSql,
+              [
+                farmerId,
+                cmId,
+                centerId,
+                companyId,
+                customId,
+                "Not Assigned",
+                scheduleDate,
+              ],
+              (err, result) => {
+                if (err) return reject(err);
 
-            console.log("Inserted new collection request. ID:", result.insertId, "Custom ID:", customId);
-            resolve({
-              requestIdItem: result.insertId,
-              customId: customId
-            });
-          });
-        }
-      });
+                resolve({
+                  requestIdItem: result.insertId,
+                  customId: customId,
+                });
+              },
+            );
+          }
+        },
+      );
     });
   });
 };
 
-
-
-
-exports.createCollectionRequestItems = (requestId, cropId, varietyId, loadWeight) => {
+exports.createCollectionRequestItems = (
+  requestId,
+  cropId,
+  varietyId,
+  loadWeight,
+) => {
   return new Promise((resolve, reject) => {
     if (!requestId) {
-      return reject(new Error("Invalid requestId: Cannot insert into collectionrequestitems."));
+      return reject(
+        new Error(
+          "Invalid requestId: Cannot insert into collectionrequestitems.",
+        ),
+      );
     }
 
     const sql = `
@@ -746,12 +719,14 @@ exports.createCollectionRequestItems = (requestId, cropId, varietyId, loadWeight
       VALUES (?, ?, ?, ?)
     `;
 
-    db.plantcare.query(sql, [requestId, cropId, varietyId, loadWeight], (err, result) => {
-      if (err) return reject(err);
+    db.plantcare.query(
+      sql,
+      [requestId, cropId, varietyId, loadWeight],
+      (err, result) => {
+        if (err) return reject(err);
 
-      console.log("Inserted collection request item for requestId:", requestId);
-      resolve(result);
-    });
+        resolve(result);
+      },
+    );
   });
 };
-

@@ -4,14 +4,12 @@ const auth = require("../Middlewares/auth.middleware");
 const pensionRequestController = require("../end-point/pension-ep");
 const upload = require("../Middlewares/multer.middleware");
 
-// Check Pension Request Status by NIC
 router.post(
   "/pension-request/check-status-by-nic",
   auth,
   pensionRequestController.checkPensionRequestStatusByNIC,
 );
 
-// Submit Pension Request
 router.post(
   "/pension-request/submit",
   auth,

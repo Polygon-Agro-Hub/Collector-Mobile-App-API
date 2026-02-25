@@ -1,9 +1,7 @@
 const { collectionofficer, marketPlace } = require("../startup/database");
-const db = require('../startup/database');
+const db = require("../startup/database");
 
 exports.getPickupOrders = (officerId) => {
-    console.log("Getting pickup orders for officer ID:", officerId);
-
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is missing or invalid"));
@@ -79,13 +77,10 @@ exports.getPickupOrders = (officerId) => {
                 return reject(error);
             }
 
-            console.log(`Found ${results.length} pickup orders for officer ${officerId}`);
             resolve(results);
         });
     });
 };
-
-
 
 exports.checkCustome = async () => {
     return new Promise((resolve, reject) => {
@@ -100,14 +95,17 @@ exports.checkCustome = async () => {
                 reject(error);
             } else {
                 resolve(results);
-                console.log(results)
             }
         });
     });
 };
 
-
-exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => {
+exports.updatePickupDetails = async (
+    officerId,
+    orderId,
+    signatureUrl,
+    role,
+) => {
     const connection = await db.marketPlace.promise().getConnection();
 
     try {
@@ -119,38 +117,34 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             WHERE invNo = ?
         `;
 
-        const [processOrderResult] = await connection.query(getProcessOrderQuery, [orderId]);
+        const [processOrderResult] = await connection.query(getProcessOrderQuery, [
+            orderId,
+        ]);
 
         if (!processOrderResult || processOrderResult.length === 0) {
-            throw new Error('Order not found with the given invoice number');
+            throw new Error("Order not found with the given invoice number");
         }
 
         const processOrder = processOrderResult[0];
         const processOrderId = processOrder.id;
         const paymentMethod = processOrder.paymentMethod;
 
-        console.log('Process Order Details:', processOrder);
-
-
-        if (paymentMethod === 'Cash') {
+        if (paymentMethod === "Cash") {
             const getOrderAmountQuery = `
                 SELECT fullTotal 
                 FROM market_place.orders 
                 WHERE id = ?
             `;
 
-            const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
-
-            console.log('Order ID used for query:', processOrder.orderId);
+            const [orderResult] = await connection.query(getOrderAmountQuery, [
+                processOrder.orderId,
+            ]);
 
             if (!orderResult || orderResult.length === 0) {
-                throw new Error('Order details not found');
+                throw new Error("Order details not found");
             }
 
             const paymentAmount = orderResult[0].fullTotal;
-            console.log('Payment Amount from orders table:', paymentAmount);
-            console.log('Type of paymentAmount:', typeof paymentAmount);
-            console.log('ProcessOrder ID to update:', processOrderId);
 
             const updateProcessOrderQuery = `
                 UPDATE market_place.processorders 
@@ -162,14 +156,11 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             `;
 
             const [updateResult] = await connection.query(updateProcessOrderQuery, [
-                'Picked up',
+                "Picked up",
                 paymentAmount,
                 1,
-                processOrderId
+                processOrderId,
             ]);
-
-            console.log('Update Result:', updateResult);
-            console.log('Rows affected:', updateResult.affectedRows);
         } else {
             const updateStatusQuery = `
                 UPDATE market_place.processorders 
@@ -181,19 +172,19 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             await connection.query(updateStatusQuery, [processOrderId]);
         }
 
-
         let insertQuery;
         let insertParams;
 
-        if (role === 'Distribution Centre Manager') {
-            if (paymentMethod === 'Cash') {
-
+        if (role === "Distribution Centre Manager") {
+            if (paymentMethod === "Cash") {
                 const getOrderAmountQuery = `
                     SELECT fullTotal 
                     FROM market_place.orders 
                     WHERE id = ?
                 `;
-                const [orderResult] = await connection.query(getOrderAmountQuery, [processOrder.orderId]);
+                const [orderResult] = await connection.query(getOrderAmountQuery, [
+                    processOrder.orderId,
+                ]);
                 const handOverPrice = orderResult[0]?.fullTotal || 0;
 
                 insertQuery = `
@@ -203,7 +194,6 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
                 `;
                 insertParams = [processOrderId, officerId, signatureUrl, handOverPrice];
             } else {
-
                 insertQuery = `
                     INSERT INTO collection_officer.pickuporders 
                     (orderId, orderIssuedOfficer, signature, createdAt) 
@@ -211,8 +201,7 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
                 `;
                 insertParams = [processOrderId, officerId, signatureUrl];
             }
-        } else if (role === 'Distribution Officer') {
-
+        } else if (role === "Distribution Officer") {
             insertQuery = `
                 INSERT INTO collection_officer.pickuporders 
                 (orderId, orderIssuedOfficer, signature, createdAt) 
@@ -220,7 +209,7 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             `;
             insertParams = [processOrderId, officerId, signatureUrl];
         } else {
-            throw new Error('Invalid role for pickup details update');
+            throw new Error("Invalid role for pickup details update");
         }
 
         const [result] = await connection.query(insertQuery, insertParams);
@@ -233,23 +222,18 @@ exports.updatePickupDetails = async (officerId, orderId, signatureUrl, role) => 
             processOrderId: processOrderId,
             signatureUrl: signatureUrl,
             paymentMethod: paymentMethod,
-            message: 'Pickup details updated successfully'
+            message: "Pickup details updated successfully",
         };
     } catch (error) {
         await connection.rollback();
-        console.error('Error in updatePickupDetails DAO:', error);
+        console.error("Error in updatePickupDetails DAO:", error);
         throw error;
     } finally {
         connection.release();
     }
 };
 
-
-
-
-
 exports.getReceivedOrders = (officerId) => {
-    console.log("Getting pickup and driver orders for officer ID:", officerId);
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is missing or invalid"));
@@ -352,20 +336,22 @@ exports.getReceivedOrders = (officerId) => {
             ORDER BY orderCreatedAt DESC
         `;
 
-        db.collectionofficer.query(query, [officerId, officerId, officerId], (error, results) => {
-            if (error) {
-                console.error("Database error:", error);
-                return reject(error);
-            }
-            console.log(`Found ${results.length} cash orders (pickup + driver) for officer ${officerId}`);
-            resolve(results);
-        });
+        db.collectionofficer.query(
+            query,
+            [officerId, officerId, officerId],
+            (error, results) => {
+                if (error) {
+                    console.error("Database error:", error);
+                    return reject(error);
+                }
+
+                resolve(results);
+            },
+        );
     });
 };
 
-
 exports.getReceivedOrderOfficer = (officerId) => {
-    console.log("Getting pickup orders for officer ID:", officerId);
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is missing or invalid"));
@@ -422,7 +408,6 @@ exports.getReceivedOrderOfficer = (officerId) => {
                 return reject(error);
             }
 
-            console.log(`Found ${results.length} cash pickup orders for officer ${officerId}`);
             resolve(results);
         });
     });
@@ -452,23 +437,19 @@ exports.getOfficerByEmpId = (empId) => {
     });
 };
 
-// Simple version - updates transactions one by one
 exports.updateCashReceived = (transactions, officerId, totalAmount) => {
     return new Promise((resolve, reject) => {
-        // Validate input
         if (!transactions || transactions.length === 0) {
             return reject(new Error("No valid transactions provided"));
         }
 
-        // Get connection and start transaction
         db.collectionofficer.getConnection((err, connection) => {
             if (err) {
                 console.error("Error getting connection:", err);
                 return reject(err);
             }
 
-            // Start database transaction
-            connection.beginTransaction(err => {
+            connection.beginTransaction((err) => {
                 if (err) {
                     connection.release();
                     return reject(err);
@@ -478,69 +459,19 @@ exports.updateCashReceived = (transactions, officerId, totalAmount) => {
                 let failed = false;
                 const results = [];
 
-                // Process each transaction
                 transactions.forEach((transaction, index) => {
                     if (failed) return;
 
-                    // First check if already handed over
                     const checkQuery = `
                         SELECT id, handOverOfficer 
                         FROM collection_officer.pickuporders 
                         WHERE id = ?
                     `;
 
-                    connection.query(checkQuery, [transaction.transactionId], (err, checkResults) => {
-                        if (err || failed) {
-                            if (!failed) {
-                                failed = true;
-                                connection.rollback(() => {
-                                    connection.release();
-                                    reject(err);
-                                });
-                            }
-                            return;
-                        }
-
-                        // Check if transaction exists
-                        if (!checkResults || checkResults.length === 0) {
-                            failed = true;
-                            connection.rollback(() => {
-                                connection.release();
-                                reject(new Error(`Transaction ${transaction.transactionId} not found`));
-                            });
-                            return;
-                        }
-
-                        // Check if already handed over
-                        if (checkResults[0].handOverOfficer !== null) {
-                            failed = true;
-                            connection.rollback(() => {
-                                connection.release();
-                                reject(new Error(
-                                    `Transaction ${transaction.transactionId} has already been handed over`
-                                ));
-                            });
-                            return;
-                        }
-
-                        // Update the transaction
-                        const updateQuery = `
-                            UPDATE collection_officer.pickuporders
-                            SET 
-                                handOverOfficer = ?,
-                                handOverPrice = ?,
-                                handOverTime = NOW()
-                            WHERE id = ?
-                            AND handOverOfficer IS NULL
-                        `;
-
-                        const params = [
-                            officerId,
-                            transaction.amount,
-                            transaction.transactionId
-                        ];
-
-                        connection.query(updateQuery, params, (err, updateResult) => {
+                    connection.query(
+                        checkQuery,
+                        [transaction.transactionId],
+                        (err, checkResults) => {
                             if (err || failed) {
                                 if (!failed) {
                                     failed = true;
@@ -552,43 +483,99 @@ exports.updateCashReceived = (transactions, officerId, totalAmount) => {
                                 return;
                             }
 
-                            if (updateResult.affectedRows === 0) {
+                            if (!checkResults || checkResults.length === 0) {
                                 failed = true;
                                 connection.rollback(() => {
                                     connection.release();
-                                    reject(new Error(
-                                        `Failed to update transaction ${transaction.transactionId}`
-                                    ));
+                                    reject(
+                                        new Error(
+                                            `Transaction ${transaction.transactionId} not found`,
+                                        ),
+                                    );
                                 });
                                 return;
                             }
 
-                            results.push({
-                                transactionId: transaction.transactionId,
-                                updated: true
-                            });
+                            if (checkResults[0].handOverOfficer !== null) {
+                                failed = true;
+                                connection.rollback(() => {
+                                    connection.release();
+                                    reject(
+                                        new Error(
+                                            `Transaction ${transaction.transactionId} has already been handed over`,
+                                        ),
+                                    );
+                                });
+                                return;
+                            }
 
-                            completed++;
+                            const updateQuery = `
+                            UPDATE collection_officer.pickuporders
+                            SET 
+                                handOverOfficer = ?,
+                                handOverPrice = ?,
+                                handOverTime = NOW()
+                            WHERE id = ?
+                            AND handOverOfficer IS NULL
+                        `;
 
-                            // If all transactions processed, commit
-                            if (completed === transactions.length) {
-                                connection.commit(err => {
-                                    if (err) {
+                            const params = [
+                                officerId,
+                                transaction.amount,
+                                transaction.transactionId,
+                            ];
+
+                            connection.query(updateQuery, params, (err, updateResult) => {
+                                if (err || failed) {
+                                    if (!failed) {
+                                        failed = true;
                                         connection.rollback(() => {
                                             connection.release();
                                             reject(err);
                                         });
-                                    } else {
-                                        connection.release();
-                                        resolve({
-                                            affectedRows: completed,
-                                            results: results
-                                        });
                                     }
+                                    return;
+                                }
+
+                                if (updateResult.affectedRows === 0) {
+                                    failed = true;
+                                    connection.rollback(() => {
+                                        connection.release();
+                                        reject(
+                                            new Error(
+                                                `Failed to update transaction ${transaction.transactionId}`,
+                                            ),
+                                        );
+                                    });
+                                    return;
+                                }
+
+                                results.push({
+                                    transactionId: transaction.transactionId,
+                                    updated: true,
                                 });
-                            }
-                        });
-                    });
+
+                                completed++;
+
+                                if (completed === transactions.length) {
+                                    connection.commit((err) => {
+                                        if (err) {
+                                            connection.rollback(() => {
+                                                connection.release();
+                                                reject(err);
+                                            });
+                                        } else {
+                                            connection.release();
+                                            resolve({
+                                                affectedRows: completed,
+                                                results: results,
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        },
+                    );
                 });
             });
         });

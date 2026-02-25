@@ -13,7 +13,7 @@ router.get("/health", (req, res) => {
   };
 
   res.status(200).send(data);
-  console.log("✅ Health check");
+
 });
 router.get("/home", (req, res) => {
   res.send("Welcome to the home page");

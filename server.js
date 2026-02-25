@@ -57,14 +57,14 @@ const testConnection = (pool, name) => {
         reject(err);
       } else {
         console.log(`✅ Successfully connected to the MySQL database: ${name}`);
-        connection.release(); // Release the connection back to the pool
+        connection.release();
         resolve();
       }
     });
   });
 };
 
-// Test all database connections sequentially
+
 const checkConnections = async () => {
   console.log("🔄 Testing database connections...\n");
   try {

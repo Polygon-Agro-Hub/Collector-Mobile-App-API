@@ -9,12 +9,11 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Verify connection configuration
 transporter.verify((error) => {
   if (error) {
     console.error('Error with email configuration:', error);
   } else {
-    console.log('✅ Email server is ready to take our messages');
+    console.log(' Email server is ready to take our messages');
   }
 });
 
