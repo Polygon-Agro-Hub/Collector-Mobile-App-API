@@ -1,11 +1,7 @@
 const jwt = require("jsonwebtoken");
 const db = require("../startup/database");
 
-
-
 exports.getTargetForOfficerDao = (officerId) => {
-    console.log("Getting targets for officer ID:", officerId);
-
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is missing or invalid"));
@@ -194,81 +190,10 @@ exports.getTargetForOfficerDao = (officerId) => {
                 o.id ASC
         `;
 
-        // Execute the query
         db.collectionofficer.query(sql, [officerId], (err, results) => {
             if (err) {
-                console.error("Error executing query:", err);
+                console.error("Error in getTargetForOfficerDao:", err);
                 return reject(err);
-            }
-
-            console.log("Targets found (3 days all data + older incomplete):", results.length);
-            if (results.length > 0) {
-                console.log("=== DEBUGGING DATA (3 DAYS ALL + OLDER INCOMPLETE) ===");
-
-                // Log first 3 records for debugging
-                results.slice(0, 3).forEach((row, index) => {
-                    console.log(`Record ${index + 1}:`, {
-                        distributedTargetId: row.distributedTargetId,
-                        distributedTargetItemId: row.distributedTargetItemId,
-                        isComplete: row.isComplete,
-                        createdDate: row.targetCreatedAt,
-                        processOrderId: row.processOrderId,
-                        orderId: row.orderId,
-                        isPackage: row.isPackage,
-                        packageData: {
-                            totalPackages: row.totalPackages,
-                            lockedPackages: row.lockedPackages, // Now included
-                            items: {
-                                total: row.totalPackageItems,      // Now properly numeric
-                                packed: row.packedPackageItems,    // Now properly numeric
-                                pending: row.pendingPackageItems,  // Now properly numeric
-                                status: row.packageItemStatus
-                            }
-                        },
-                        additionalItems: {
-                            total: row.totalAdditionalItems,      // Now properly numeric
-                            packed: row.packedAdditionalItems,    // Now properly numeric
-                            pending: row.pendingAdditionalItems,  // Now properly numeric
-                            status: row.additionalItemStatus
-                        },
-                        overallStatus: row.selectedStatus
-                    });
-                });
-
-                // Status summary
-                const statusCounts = results.reduce((acc, row) => {
-                    acc[row.selectedStatus] = (acc[row.selectedStatus] || 0) + 1;
-                    return acc;
-                }, {});
-                console.log("Status Distribution (3 days all + older incomplete):", statusCounts);
-
-                // Completion status summary
-                const completionCounts = results.reduce((acc, row) => {
-                    const status = row.isComplete === null ? 'NULL' : row.isComplete.toString();
-                    acc[status] = (acc[status] || 0) + 1;
-                    return acc;
-                }, {});
-                console.log("Completion Status Distribution:", completionCounts);
-
-                // Package lock summary
-                const lockCounts = results.reduce((acc, row) => {
-                    if (row.isPackage === 1) {
-                        const lockStatus = `${row.lockedPackages}/${row.totalPackages} locked`;
-                        acc[lockStatus] = (acc[lockStatus] || 0) + 1;
-                    }
-                    return acc;
-                }, {});
-                console.log("Package Lock Distribution:", lockCounts);
-
-                // Date-wise summary
-                const dateCounts = results.reduce((acc, row) => {
-                    const date = new Date(row.targetCreatedAt).toISOString().split('T')[0];
-                    acc[date] = (acc[date] || 0) + 1;
-                    return acc;
-                }, {});
-                console.log("Date-wise Distribution:", dateCounts);
-
-                console.log("=== END DEBUGGING ===");
             }
 
             resolve(results);
@@ -276,13 +201,11 @@ exports.getTargetForOfficerDao = (officerId) => {
     });
 };
 
-
-
 exports.getViewDetailsById = (requestId) => {
     return new Promise((resolve, reject) => {
         db.plantcare.getConnection((connErr, connection) => {
             if (connErr) {
-                console.error('Connection Error:', connErr);
+                console.error("Connection Error:", connErr);
                 return reject(connErr);
             }
 
@@ -311,7 +234,7 @@ exports.getViewDetailsById = (requestId) => {
             connection.query(query, [requestId], (error, results) => {
                 if (error) {
                     connection.release();
-                    console.error('Database Query Error:', error);
+                    console.error("Database Query Error:", error);
                     return reject(error);
                 }
 
@@ -338,50 +261,55 @@ exports.getViewDetailsById = (requestId) => {
                     WHERE ri.requestId = ? 
                 `;
 
-                connection.query(itemsQuery, [requestId], (itemsError, itemsResults) => {
-                    connection.release(); // Always release after the last query
+                connection.query(
+                    itemsQuery,
+                    [requestId],
+                    (itemsError, itemsResults) => {
+                        connection.release();
 
-                    if (itemsError) {
-                        console.error('Database Items Query Error:', itemsError);
-                        return reject(itemsError);
-                    }
+                        if (itemsError) {
+                            console.error("Database Items Query Error:", itemsError);
+                            return reject(itemsError);
+                        }
 
-                    const requestDetails = results[0];
-                    const formattedResponse = {
-                        id: requestDetails.id,
-                        name: requestDetails.firstName || `Farmer ${requestDetails.farmerId}`,
-                        route: requestDetails.farmerRoute || `Route ${requestDetails.farmerId}`,
-                        nic: requestDetails.NICnumber || `NIC ${requestDetails.farmerId}`,
-                        farmerId: requestDetails.farmerId,
-                        scheduleDate: requestDetails.scheduleDate,
-                        requestStatus: requestDetails.requestStatus,
-                        assignedStatus: requestDetails.assignedStatus,
-                        city: requestDetails.city,
-                        streetName: requestDetails.streetName,
-                        houseNo: requestDetails.houseNo,
-                        requestID: requestDetails.reqId,
-                        items: (itemsResults || []).map(item => ({
-                            itemId: item.id,
-                            cropId: item.cropId,
-                            cropName: item.cropNameEnglish,
-                            cropNameSinhala: item.cropNameSinhala,
-                            cropNameTamil: item.cropNameTamil,
-                            varietyNameTamil: item.varietyNameTamil,
-                            varietyNameSinhala: item.varietyNameSinhala,
-                            varietyId: item.varietyId,
-                            varietyName: item.varietyNameEnglish,
-                            loadWeight: item.loadWeight
-                        }))
-                    };
+                        const requestDetails = results[0];
+                        const formattedResponse = {
+                            id: requestDetails.id,
+                            name:
+                                requestDetails.firstName || `Farmer ${requestDetails.farmerId}`,
+                            route:
+                                requestDetails.farmerRoute ||
+                                `Route ${requestDetails.farmerId}`,
+                            nic: requestDetails.NICnumber || `NIC ${requestDetails.farmerId}`,
+                            farmerId: requestDetails.farmerId,
+                            scheduleDate: requestDetails.scheduleDate,
+                            requestStatus: requestDetails.requestStatus,
+                            assignedStatus: requestDetails.assignedStatus,
+                            city: requestDetails.city,
+                            streetName: requestDetails.streetName,
+                            houseNo: requestDetails.houseNo,
+                            requestID: requestDetails.reqId,
+                            items: (itemsResults || []).map((item) => ({
+                                itemId: item.id,
+                                cropId: item.cropId,
+                                cropName: item.cropNameEnglish,
+                                cropNameSinhala: item.cropNameSinhala,
+                                cropNameTamil: item.cropNameTamil,
+                                varietyNameTamil: item.varietyNameTamil,
+                                varietyNameSinhala: item.varietyNameSinhala,
+                                varietyId: item.varietyId,
+                                varietyName: item.varietyNameEnglish,
+                                loadWeight: item.loadWeight,
+                            })),
+                        };
 
-                    console.log('Formatted Response:', formattedResponse);
-                    resolve(formattedResponse);
-                });
+                        resolve(formattedResponse);
+                    },
+                );
             });
         });
     });
 };
-
 
 exports.updateCollectionRequest = async (requestId, scheduleDate) => {
     return new Promise((resolve, reject) => {
@@ -391,29 +319,26 @@ exports.updateCollectionRequest = async (requestId, scheduleDate) => {
         WHERE id = ?
       `;
 
-        db.collectionofficer.query(updateQuery, [scheduleDate, requestId], (err, results) => {
-            if (err) {
-                console.error('Error updating schedule date:', err);
-                reject(new Error('Database query failed'));
-                return;
-            }
+        db.collectionofficer.query(
+            updateQuery,
+            [scheduleDate, requestId],
+            (err, results) => {
+                if (err) {
+                    console.error("Error updating schedule date:", err);
+                    reject(new Error("Database query failed"));
+                    return;
+                }
 
-            // Check if any rows were actually updated
-            // if (results.changedRows === 0) {
-            //   resolve({ success: false, message: 'Schedule date is already up-to-date.' });
-            //   return;
-            // }
-
-            resolve({ success: true, message: 'Schedule date updated successfully.' });
-        });
+                resolve({
+                    success: true,
+                    message: "Schedule date updated successfully.",
+                });
+            },
+        );
     });
 };
 
-
-
 exports.cancelRequest = async (requestId, cancelReason, userId) => {
-    console.log('Cancel Request Function Hit', cancelReason, userId, requestId);
-
     return new Promise((resolve, reject) => {
         const updateQuery = `
             UPDATE collectionrequest 
@@ -424,12 +349,20 @@ exports.cancelRequest = async (requestId, cancelReason, userId) => {
             WHERE id = ?
         `;
 
-        db.collectionofficer.query(updateQuery, [cancelReason, userId, requestId], (err, result) => {
-            if (err) {
-                console.error('Query Error:', err);
-                return reject({ success: false, message: 'Database error', error: err });
-            }
-            resolve({ success: true, message: 'Request cancelled successfully.' });
-        });
+        db.collectionofficer.query(
+            updateQuery,
+            [cancelReason, userId, requestId],
+            (err, result) => {
+                if (err) {
+                    console.error("Query Error:", err);
+                    return reject({
+                        success: false,
+                        message: "Database error",
+                        error: err,
+                    });
+                }
+                resolve({ success: true, message: "Request cancelled successfully." });
+            },
+        );
     });
 };

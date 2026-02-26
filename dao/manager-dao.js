@@ -1,5 +1,5 @@
-const db = require('../startup/database');
-const QRCode = require('qrcode');
+const db = require("../startup/database");
+const QRCode = require("qrcode");
 
 exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
   return new Promise((resolve, reject) => {
@@ -21,7 +21,6 @@ exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
         date ASC;
     `;
 
-
     const params = [collectionOfficerId, fromDate, toDate];
 
     db.query(query, params, (err, results) => {
@@ -29,7 +28,7 @@ exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
         return reject(err);
       }
 
-      const reportData = results.map(row => ({
+      const reportData = results.map((row) => ({
         date: row.date,
         totalPayments: row.totalPayments,
         totalWeight: row.totalWeight ? parseFloat(row.totalWeight) : 0,
@@ -40,10 +39,8 @@ exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
   });
 };
 
-
 exports.checkNICExist = (nic) => {
   return new Promise((resolve, reject) => {
-    console.log("NIC:", nic);
     const sql = `
           SELECT COUNT(*) AS count 
           FROM collectionofficer 
@@ -53,9 +50,8 @@ exports.checkNICExist = (nic) => {
     db.collectionofficer.query(sql, [nic], (err, results) => {
       if (err) {
         return reject(err);
-
       }
-      resolve(results[0].count > 0); // Return true if either NIC or email exists
+      resolve(results[0].count > 0);
     });
   });
 };
@@ -71,32 +67,31 @@ exports.checkEmailExist = (email) => {
       if (err) {
         return reject(err);
       }
-      resolve(results[0].count > 0); // Return true if either NIC or email exists
+      resolve(results[0].count > 0);
     });
   });
 };
 
-
 exports.generateEmpId = (jobRole) => {
   return new Promise((resolve, reject) => {
     try {
-      let prefix = '';
-      let searchPattern = '';
+      let prefix = "";
+      let searchPattern = "";
 
-      // Determine prefix and search pattern based on job role
       if (jobRole === "Collection Officer") {
-        prefix = 'COO';
-        searchPattern = 'COO%';
-      } else if (jobRole === "Distribution Officer" || jobRole === "Distribution Centre Manager") {
-        prefix = 'DIO';
-        searchPattern = 'DIO%';
+        prefix = "COO";
+        searchPattern = "COO%";
+      } else if (
+        jobRole === "Distribution Officer" ||
+        jobRole === "Distribution Centre Manager"
+      ) {
+        prefix = "DIO";
+        searchPattern = "DIO%";
       } else {
-        // Default fallback
-        prefix = 'EMP';
-        searchPattern = 'EMP%';
+        prefix = "EMP";
+        searchPattern = "EMP%";
       }
 
-      // Query to get the latest empId with the specific prefix
       const sql = `
         SELECT empId 
         FROM collectionofficer 
@@ -111,14 +106,12 @@ exports.generateEmpId = (jobRole) => {
           return reject(new Error("Failed to generate empId"));
         }
 
-        let nextNumber = 1; // Default starting number
+        let nextNumber = 1;
 
         if (results && results.length > 0) {
           const lastEmpId = results[0].empId;
-          console.log("Last empId found:", lastEmpId);
 
-          // Extract the numeric part from the empId (e.g., "COO00009" -> "00009")
-          const numericPart = lastEmpId.substring(3); // Remove prefix (COO, DIO, etc.)
+          const numericPart = lastEmpId.substring(3);
           const lastNumber = parseInt(numericPart, 10);
 
           if (!isNaN(lastNumber)) {
@@ -126,11 +119,9 @@ exports.generateEmpId = (jobRole) => {
           }
         }
 
-        // Format the number with leading zeros (5 digits)
-        const formattedNumber = nextNumber.toString().padStart(5, '0');
+        const formattedNumber = nextNumber.toString().padStart(5, "0");
         const newEmpId = `${prefix}${formattedNumber}`;
 
-        console.log(`Generated new empId: ${newEmpId} for role: ${jobRole}`);
         resolve(newEmpId);
       });
     } catch (error) {
@@ -140,14 +131,15 @@ exports.generateEmpId = (jobRole) => {
   });
 };
 
-// Updated createCollectionOfficerPersonal function (no major changes needed)
-exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irmId, jobRole) => {
+exports.createCollectionOfficerPersonal = (
+  officerData,
+  centerId,
+  companyId,
+  irmId,
+  jobRole,
+) => {
   return new Promise((resolve, reject) => {
     try {
-      console.log("Center ID:", centerId, "Company ID:", companyId, "IRM ID:", irmId);
-      console.log("Using empId:", officerData.empId); // This will now be the generated empId
-
-      // SQL query for inserting the officer data
       let sql = `
         INSERT INTO collectionofficer (
           centerId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
@@ -159,7 +151,10 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
       `;
 
-      if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
+      if (
+        jobRole === "Distribution Centre Manager" ||
+        jobRole === "Distribution Officer"
+      ) {
         sql = `
           INSERT INTO collectionofficer (
             distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
@@ -172,7 +167,6 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
         `;
       }
 
-      // Use profileImageUrl instead of officerData.image
       db.collectionofficer.query(
         sql,
         [
@@ -186,7 +180,7 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
           officerData.lastNameSinhala || null,
           officerData.lastNameTamil || null,
           officerData.jobRole,
-          officerData.empId, // This is now the auto-generated empId
+          officerData.empId,
           officerData.empType,
           officerData.phoneCode01,
           officerData.phoneNumber01,
@@ -205,23 +199,29 @@ exports.createCollectionOfficerPersonal = (officerData, centerId, companyId, irm
           officerData.accNumber || null,
           officerData.bankName || null,
           officerData.branchName || null,
-          officerData.profileImageUrl || null, // Use profileImageUrl here
+          officerData.profileImageUrl || null,
         ],
         (err, results) => {
           if (err) {
             console.error("Database query error:", err);
-            return reject(new Error("Failed to insert collection officer into the database."));
+            return reject(
+              new Error(
+                "Failed to insert collection officer into the database.",
+              ),
+            );
           }
-          resolve(results); // Return the query results on success
-        }
+          resolve(results);
+        },
       );
     } catch (error) {
-      console.error("Unexpected error in createCollectionOfficerPersonal:", error);
-      reject(error); // Handle unexpected errors
+      console.error(
+        "Unexpected error in createCollectionOfficerPersonal:",
+        error,
+      );
+      reject(error);
     }
   });
 };
-
 
 exports.getIrmDetails = async (irmId, jobRole) => {
   return new Promise((resolve, reject) => {
@@ -231,7 +231,10 @@ exports.getIrmDetails = async (irmId, jobRole) => {
       WHERE id = ?;
     `;
 
-    if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
+    if (
+      jobRole === "Distribution Centre Manager" ||
+      jobRole === "Distribution Officer"
+    ) {
       sql = `
         SELECT companyId, distributedCenterId AS centerId
         FROM collectionofficer
@@ -244,15 +247,12 @@ exports.getIrmDetails = async (irmId, jobRole) => {
         console.error("Error fetching IRM details:", err);
         return reject(err);
       }
-      resolve(results[0]); // Return the first result (expected to be unique)
+      resolve(results[0]);
     });
   });
 };
 
-
-
 exports.getForCreateId = (role) => {
-  console.log("DAO: getForCreateId", role);
   return new Promise((resolve, reject) => {
     const sql =
       "SELECT empId FROM collectionofficer WHERE empId LIKE ? ORDER BY empId DESC LIMIT 1";
@@ -274,9 +274,10 @@ exports.getForCreateId = (role) => {
   });
 };
 
-
-exports.getFarmerListByCollectionOfficerAndDate = (collectionOfficerId, date) => {
-  // console.log('DAO: getFarmerListByCollectionOfficerAndDate', collectionOfficerId, date);
+exports.getFarmerListByCollectionOfficerAndDate = (
+  collectionOfficerId,
+  date,
+) => {
   return new Promise((resolve, reject) => {
     const query = `
           SELECT DISTINCT
@@ -309,46 +310,20 @@ exports.getFarmerListByCollectionOfficerAndDate = (collectionOfficerId, date) =>
           ORDER BY RFP.id
       `;
 
-    db.collectionofficer.query(query, [collectionOfficerId, date], (error, results) => {
-      if (error) {
-        return reject(error); // Reject with error to be handled in the controller
-      }
-      console.log(`Result of transaction list: ${results.length} records found`);
-      resolve(results); // Resolve with results
-    });
+    db.collectionofficer.query(
+      query,
+      [collectionOfficerId, date],
+      (error, results) => {
+        if (error) {
+          return reject(error);
+        }
+
+        resolve(results);
+      },
+    );
   });
 };
 
-
-// exports.getClaimOfficer = (empID, jobRole,OfficercompanyId) => {
-//   return new Promise((resolve, reject) => {
-//     const sql = `
-//       SELECT 
-//         c.*, 
-//         comp.companyNameEnglish,
-//         comp.companyNameSinhala,
-//         comp.companyNameTamil
-//       FROM 
-//         collectionofficer c 
-//       INNER JOIN 
-//         company comp 
-//       ON 
-//         c.companyId = comp.id 
-//       WHERE 
-//         c.empId = ? 
-//         AND c.jobRole = ? 
-//         AND c.centerId IS NULL 
-//         AND c.irmId IS NULL
-//     `;
-
-//     db.collectionofficer.query(sql, [empID, jobRole], (err, results) => {
-//       if (err) {
-//         return reject(err);
-//       }
-//       resolve(results);
-//     });
-//   });
-// };
 exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
   return new Promise((resolve, reject) => {
     const sql = `
@@ -371,20 +346,21 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
         AND c.companyId = ?
     `;
 
+    db.collectionofficer.query(
+      sql,
+      [empID, jobRole, OfficercompanyId],
+      (err, results) => {
+        if (err) {
+          return reject(err);
+        }
 
-    db.collectionofficer.query(sql, [empID, jobRole, OfficercompanyId], (err, results) => {
-      if (err) {
-        return reject(err);
-      }
-
-
-      resolve(results);
-    });
+        resolve(results);
+      },
+    );
   });
 };
 
 exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
-  console.log("center id ", centerId)
   return new Promise((resolve, reject) => {
     let sql = `
       UPDATE collectionofficer 
@@ -408,17 +384,20 @@ exports.createClaimOfficer = (officerId, irmId, centerId, mangerJobRole) => {
     `;
     }
 
-    db.collectionofficer.query(sql, [irmId, centerId, officerId], (err, results) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(results);
-    });
+    db.collectionofficer.query(
+      sql,
+      [irmId, centerId, officerId],
+      (err, results) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(results);
+      },
+    );
   });
-}
+};
 
 exports.disclaimOfficer = (collectionOfficerId, jobRole) => {
-  console.log("DAO: disclaimOfficer", collectionOfficerId, jobRole);
   return new Promise((resolve, reject) => {
     let sql = `
       UPDATE collectionofficer 
@@ -447,9 +426,13 @@ exports.disclaimOfficer = (collectionOfficerId, jobRole) => {
       resolve(results);
     });
   });
-}
+};
 
-exports.GetFarmerReportDetailsDao = async (userId, createdAtDate, registeredFarmerId) => {
+exports.GetFarmerReportDetailsDao = async (
+  userId,
+  createdAtDate,
+  registeredFarmerId,
+) => {
   const query = `
     SELECT
       fpc.id AS id,
@@ -482,91 +465,69 @@ exports.GetFarmerReportDetailsDao = async (userId, createdAtDate, registeredFarm
       fpc.createdAt DESC
   `;
   return new Promise((resolve, reject) => {
+    db.collectionofficer.query(
+      query,
+      [userId, registeredFarmerId, createdAtDate],
+      (error, results) => {
+        if (error) return reject(error);
+        const transformedResults = results.flatMap((row) => {
+          const entries = [];
 
-    console.log('@@@@@@@@ UserId:', userId);
-    console.log('@@@@@@@@@   registeredFarmerId:', registeredFarmerId);
-    console.log('@@@@@@@@@   createdAtDate:', createdAtDate);
+          if (row.weightA > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              variety: row.variety,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              grade: "A",
+              unitPrice: row.unitPriceA,
+              quantity: row.weightA,
+              subTotal: (row.unitPriceA * row.weightA).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
+          if (row.weightB > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              variety: row.variety,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              grade: "B",
+              unitPrice: row.unitPriceB,
+              quantity: row.weightB,
+              subTotal: (row.unitPriceB * row.weightB).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
+          if (row.weightC > 0)
+            entries.push({
+              id: row.id,
+              cropName: row.cropName,
+              cropNameSinhala: row.cropNameSinhala,
+              cropNameTamil: row.cropNameTamil,
+              variety: row.variety,
+              varietyNameSinhala: row.varietyNameSinhala,
+              varietyNameTamil: row.varietyNameTamil,
+              grade: "C",
+              unitPrice: row.unitPriceC,
+              quantity: row.weightC,
+              subTotal: (row.unitPriceC * row.weightC).toFixed(2),
+              invoiceNumber: row.invoiceNumber,
+            });
+          return entries;
+        });
 
-    db.collectionofficer.query(query, [userId, registeredFarmerId, createdAtDate], (error, results) => {
-      if (error) return reject(error);
-      const transformedResults = results.flatMap(row => {
-        const entries = [];
-
-        if (row.weightA > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          variety: row.variety,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          grade: 'A',
-          unitPrice: row.unitPriceA,
-          quantity: row.weightA,
-          subTotal: (row.unitPriceA * row.weightA).toFixed(2),
-          invoiceNumber: row.invoiceNumber
-        });
-        if (row.weightB > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          variety: row.variety,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          grade: 'B',
-          unitPrice: row.unitPriceB,
-          quantity: row.weightB,
-          subTotal: (row.unitPriceB * row.weightB).toFixed(2),
-          invoiceNumber: row.invoiceNumber
-        });
-        if (row.weightC > 0) entries.push({
-          id: row.id,
-          cropName: row.cropName,
-          cropNameSinhala: row.cropNameSinhala,
-          cropNameTamil: row.cropNameTamil,
-          variety: row.variety,
-          varietyNameSinhala: row.varietyNameSinhala,
-          varietyNameTamil: row.varietyNameTamil,
-          grade: 'C',
-          unitPrice: row.unitPriceC,
-          quantity: row.weightC,
-          subTotal: (row.unitPriceC * row.weightC).toFixed(2),
-          invoiceNumber: row.invoiceNumber
-        });
-        return entries;
-      });
-      console.log('Transformed Results:', transformedResults);
-      resolve(transformedResults);
-    });
+        resolve(transformedResults);
+      },
+    );
   });
 };
 
-
-
-//get the collection officer list for the manager and the daos for the monthly report of a collection officer
-// exports.getCollectionOfficers = async (managerId) => {
-//   console.log("manager id", managerId)
-//   const sql = `
-//     SELECT 
-//       empId, 
-//       CONCAT(firstNameEnglish, ' ', lastNameEnglish) AS fullNameEnglish,
-//       CONCAT(firstNameSinhala, ' ', lastNameSinhala) AS fullNameSinhala,
-//       CONCAT(firstNameTamil, ' ', lastNameTamil) AS fullNameTamil,
-//       phoneNumber01 AS phoneNumber1,
-//       phoneNumber02 AS phoneNumber2,
-//       id AS collectionOfficerId,
-//       jobRole,
-//       status,
-//       image
-//     FROM collectionofficer
-//     WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ?
-//   `;
-//   return db.collectionofficer.promise().query(sql, [managerId]);
-// };
-
 exports.getCollectionOfficers = async (managerId) => {
-  console.log("manager id", managerId)
   const sql = `
     SELECT 
       empId, 
@@ -587,40 +548,12 @@ exports.getCollectionOfficers = async (managerId) => {
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
 
-
-
-// exports.getCollectionOfficersReciever = async (managerId, companycenterId, varietyId, grade) => {
-//   console.log("manager id:", managerId, "companycenterId:", companycenterId, "varietyId:", varietyId, "grade:", grade);
-
-//   const sql = `
-//     SELECT DISTINCT
-//       co.empId, 
-//       CONCAT(co.firstNameEnglish, ' ', co.lastNameEnglish) AS fullNameEnglish,
-//       CONCAT(co.firstNameSinhala, ' ', co.lastNameSinhala) AS fullNameSinhala,
-//       CONCAT(co.firstNameTamil, ' ', co.lastNameTamil) AS fullNameTamil,
-//       co.phoneNumber01 AS phoneNumber1,
-//       co.phoneNumber02 AS phoneNumber2,
-//       co.id AS collectionOfficerId,
-//       co.jobRole,
-//       co.status,
-//       co.image
-//     FROM collectionofficer co
-//     INNER JOIN officertarget ot ON co.id = ot.officerId
-//     INNER JOIN dailytarget dt ON ot.dailyTargetId = dt.id
-//     WHERE co.jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
-//       AND co.irmId = ?
-//       AND co.status = 'Approved'
-//       AND dt.companyCenterId = ?
-//       AND dt.varietyId = ?
-//       AND dt.grade = ?
-//       AND DATE(dt.date) = CURDATE()
-//   `;
-
-//   return db.collectionofficer.promise().query(sql, [managerId, companycenterId, varietyId, grade]);
-// };
-
-exports.getCollectionOfficersReciever = async (managerId, companycenterId, varietyId, grade) => {
-  console.log("manager id:", managerId, "companycenterId:", companycenterId, "varietyId:", varietyId, "grade:", grade);
+exports.getCollectionOfficersReciever = async (
+  managerId,
+  companycenterId,
+  varietyId,
+  grade,
+) => {
   const sql = `
     SELECT DISTINCT
       co.empId, 
@@ -647,13 +580,12 @@ exports.getCollectionOfficersReciever = async (managerId, companycenterId, varie
       AND ot.target > 0
       AND ot.target > ot.complete
   `;
-  return db.collectionofficer.promise().query(sql, [managerId, companycenterId, varietyId, grade]);
+  return db.collectionofficer
+    .promise()
+    .query(sql, [managerId, companycenterId, varietyId, grade]);
 };
 
-
-
 exports.getCollectionOfficersList = async (managerId) => {
-  console.log("manager id", managerId)
   const sql = `
     SELECT 
       empId, 
@@ -672,9 +604,6 @@ exports.getCollectionOfficersList = async (managerId) => {
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
 
-
-
-
 exports.getOfficerDetails = async (empId) => {
   const sql = `
     SELECT 
@@ -689,9 +618,11 @@ exports.getOfficerDetails = async (empId) => {
   return db.collectionofficer.promise().query(sql, [empId]);
 };
 
-
-
-exports.getFarmerPaymentsSummary = async ({ collectionOfficerId, fromDate, toDate }) => {
+exports.getFarmerPaymentsSummary = async ({
+  collectionOfficerId,
+  fromDate,
+  toDate,
+}) => {
   const sql = `
     SELECT 
       DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30')) AS date, 
@@ -707,11 +638,13 @@ exports.getFarmerPaymentsSummary = async ({ collectionOfficerId, fromDate, toDat
     GROUP BY 
       DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30'));
   `;
-  return db.collectionofficer.promise().query(sql, [collectionOfficerId, fromDate, toDate]);
+  return db.collectionofficer
+    .promise()
+    .query(sql, [collectionOfficerId, fromDate, toDate]);
 };
 
 exports.getOfficerOnlineStatus = async (collectionOfficerId) => {
-  return new Promise((resolve, reject) => {  // Wrap the query in a Promise
+  return new Promise((resolve, reject) => {
     const sql = `
       SELECT 
         OnlineStatus
@@ -723,14 +656,14 @@ exports.getOfficerOnlineStatus = async (collectionOfficerId) => {
 
     db.collectionofficer.query(sql, [collectionOfficerId], (err, results) => {
       if (err) {
-        reject(new Error('Database query failed'));  // Reject the promise in case of error
+        reject(new Error("Database query failed"));
         return;
       }
 
       if (results.length > 0) {
-        resolve(results[0]);  // Resolve the promise if data is found
+        resolve(results[0]);
       } else {
-        resolve(null);  // Resolve with null if no data is found
+        resolve(null);
       }
     });
   });

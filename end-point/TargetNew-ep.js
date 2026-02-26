@@ -1,6 +1,6 @@
-const TargetDAO = require('../dao/TargetNew-dao');
+const TargetDAO = require("../dao/TargetNew-dao");
 
-const targetValidation = require('../Validations/Target-validation');
+const targetValidation = require("../Validations/Target-validation");
 
 exports.getDailyTargetsForOfficer = async (req, res) => {
   try {
@@ -9,7 +9,7 @@ exports.getDailyTargetsForOfficer = async (req, res) => {
     if (!officerId || isNaN(officerId)) {
       return res.status(400).json({
         success: false,
-        message: "Valid officer ID is required"
+        message: "Valid officer ID is required",
       });
     }
 
@@ -17,17 +17,16 @@ exports.getDailyTargetsForOfficer = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: dailyTargets
+      data: dailyTargets,
     });
   } catch (error) {
     console.error("Error fetching daily targets:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch daily targets"
+      message: error.message || "Failed to fetch daily targets",
     });
   }
 };
-
 
 exports.getTargetForOfficerManagerView = async (req, res) => {
   try {
@@ -36,7 +35,7 @@ exports.getTargetForOfficerManagerView = async (req, res) => {
     if (!officerId || isNaN(officerId)) {
       return res.status(400).json({
         success: false,
-        message: "Valid officer ID is required"
+        message: "Valid officer ID is required",
       });
     }
 
@@ -44,61 +43,59 @@ exports.getTargetForOfficerManagerView = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: dailyTargets
+      data: dailyTargets,
     });
   } catch (error) {
     console.error("Error fetching daily targets:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch daily targets"
+      message: error.message || "Failed to fetch daily targets",
     });
   }
 };
-
 
 exports.getCenterTarget = async (req, res) => {
   try {
     const centerId = req.user.centerId;
 
-    console.log('centerId', centerId)
-
     if (!centerId || isNaN(centerId)) {
       return res.status(400).json({
         success: false,
-        message: "Valid center ID is required"
+        message: "Valid center ID is required",
       });
     }
 
     const targets = await TargetDAO.getCenterTarget(centerId);
-    console.log('targets', targets)
 
     res.status(200).json({
       success: true,
-      data: targets
+      data: targets,
     });
   } catch (error) {
     console.error("Error in getCenterTargets:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to get center targets"
+      message: error.message || "Failed to get center targets",
     });
   }
 };
 
-
-
 exports.transferTarget = async (req, res) => {
-  // Validate request body
   const { error } = targetValidation.transferSchema.validate(req.body);
   if (error) {
     return res.status(400).json({ error: error.details[0].message });
   }
 
   const { fromOfficerId, toOfficerId, varietyId, grade, amount } = req.body;
-  console.log('from officer---', fromOfficerId);
 
   try {
-    const result = await TargetDAO.transferTargetDAO(fromOfficerId, toOfficerId, varietyId, grade, amount);
+    const result = await TargetDAO.transferTargetDAO(
+      fromOfficerId,
+      toOfficerId,
+      varietyId,
+      grade,
+      amount,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -106,17 +103,21 @@ exports.transferTarget = async (req, res) => {
 };
 
 exports.receiveTarget = async (req, res) => {
-  // Validate request body
   const { error } = targetValidation.transferSchema.validate(req.body);
   if (error) {
     return res.status(400).json({ error: error.details[0].message });
   }
 
   const { fromOfficerId, toOfficerId, varietyId, grade, amount } = req.body;
-  console.log('from officer---', fromOfficerId);
 
   try {
-    const result = await TargetDAO.receiveTargetDAO(fromOfficerId, toOfficerId, varietyId, grade, amount);
+    const result = await TargetDAO.receiveTargetDAO(
+      fromOfficerId,
+      toOfficerId,
+      varietyId,
+      grade,
+      amount,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -124,9 +125,6 @@ exports.receiveTarget = async (req, res) => {
 };
 
 exports.ManagertransferTarget = async (req, res) => {
-  console.log('recieved pass target', req.body);
-
-  // Validate request body
   const { error } = targetValidation.managerTransferSchema.validate(req.body);
   if (error) {
     return res.status(400).json({ error: error.details[0].message });
@@ -136,7 +134,13 @@ exports.ManagertransferTarget = async (req, res) => {
   const fromOfficerId = req.user.id;
 
   try {
-    const result = await TargetDAO.transferTargetDAO(fromOfficerId, toOfficerId, varietyId, grade, amount);
+    const result = await TargetDAO.transferTargetDAO(
+      fromOfficerId,
+      toOfficerId,
+      varietyId,
+      grade,
+      amount,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -144,7 +148,6 @@ exports.ManagertransferTarget = async (req, res) => {
 };
 
 exports.ManagereceiveTarget = async (req, res) => {
-  // Validate request body
   const { error } = targetValidation.managerReceiveSchema.validate(req.body);
   if (error) {
     return res.status(400).json({ error: error.details[0].message });
@@ -153,34 +156,40 @@ exports.ManagereceiveTarget = async (req, res) => {
   const { fromOfficerId, varietyId, grade, amount } = req.body;
   const toOfficerId = req.user.id;
 
-  console.log('recieved pass target', req.body);
-
   try {
-    const result = await TargetDAO.receiveTargetDAO(fromOfficerId, toOfficerId, varietyId, grade, amount);
+    const result = await TargetDAO.receiveTargetDAO(
+      fromOfficerId,
+      toOfficerId,
+      varietyId,
+      grade,
+      amount,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-
 exports.getDailyTarget = async (req, res) => {
   const { officerId, varietyId, grade } = req.params;
-  console.log('getDailyTarget', req.params);
 
   if (!officerId || !varietyId) {
-    return res.status(400).json({ error: "Missing required parameters: officerId and varietyId" });
+    return res
+      .status(400)
+      .json({ error: "Missing required parameters: officerId and varietyId" });
   }
 
   try {
-    const targets = await TargetDAO.getDailyTargetByOfficerAndVariety(officerId, varietyId, grade);
+    const targets = await TargetDAO.getDailyTargetByOfficerAndVariety(
+      officerId,
+      varietyId,
+      grade,
+    );
     res.status(200).json({ status: "success", data: targets });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
-
-
 
 exports.getOfficerTaskSummary = async (req, res) => {
   try {
@@ -188,20 +197,20 @@ exports.getOfficerTaskSummary = async (req, res) => {
     if (!officerId) {
       return res.status(400).json({ error: "Officer ID is required" });
     }
-    console.log("Fetching task summary for Officer ID:-----------", officerId);
 
     const taskSummary = await TargetDAO.getOfficerSummaryDao(officerId);
 
     if (!taskSummary) {
-      return res.status(404).json({ message: "No tasks found for this officer." });
+      return res
+        .status(404)
+        .json({ message: "No tasks found for this officer." });
     }
 
-    const { totalTasks, completedTasks, totalTarget, totalComplete } = taskSummary;
+    const { totalTasks, completedTasks, totalTarget, totalComplete } =
+      taskSummary;
 
-    // Calculate percentage based on total target vs total complete
-    const percentage = totalTarget > 0
-      ? Math.round((totalComplete / totalTarget) * 100)
-      : 0;
+    const percentage =
+      totalTarget > 0 ? Math.round((totalComplete / totalTarget) * 100) : 0;
 
     res.status(200).json({
       success: true,
@@ -210,7 +219,7 @@ exports.getOfficerTaskSummary = async (req, res) => {
       completedTasks,
       totalTarget,
       totalComplete,
-      completionPercentage: `${percentage}%`
+      completionPercentage: `${percentage}%`,
     });
   } catch (error) {
     console.error("Error fetching task summary:", error);
@@ -218,32 +227,33 @@ exports.getOfficerTaskSummary = async (req, res) => {
   }
 };
 
-
-
 exports.getOfficerTaskSummaryManagerView = async (req, res) => {
   try {
     const { collectionOfficerId } = req.params;
-    console.log('officerId', collectionOfficerId);
 
     if (!collectionOfficerId) {
       return res.status(400).json({ error: "Officer ID is required" });
     }
 
-    console.log("Fetching task summary for Officer ID:", collectionOfficerId);
-
-    // Fetch summary data from DAO
-    const taskSummary = await TargetDAO.getOfficerSummaryDaoManager(collectionOfficerId);
+    const taskSummary =
+      await TargetDAO.getOfficerSummaryDaoManager(collectionOfficerId);
 
     if (!taskSummary) {
-      return res.status(404).json({ message: "No tasks found for this officer." });
+      return res
+        .status(404)
+        .json({ message: "No tasks found for this officer." });
     }
 
-    const { totalTasks, completedTasks, totalTarget, totalComplete, gradesAssigned } = taskSummary;
+    const {
+      totalTasks,
+      completedTasks,
+      totalTarget,
+      totalComplete,
+      gradesAssigned,
+    } = taskSummary;
 
-    // Calculate percentage based on total target vs total complete
-    const percentage = totalTarget > 0
-      ? Math.round((totalComplete / totalTarget) * 100)
-      : 0;
+    const percentage =
+      totalTarget > 0 ? Math.round((totalComplete / totalTarget) * 100) : 0;
 
     res.status(200).json({
       success: true,
@@ -253,7 +263,7 @@ exports.getOfficerTaskSummaryManagerView = async (req, res) => {
       totalTarget,
       totalComplete,
       gradesAssigned,
-      completionPercentage: `${percentage}%`
+      completionPercentage: `${percentage}%`,
     });
   } catch (error) {
     console.error("Error fetching task summary:", error);

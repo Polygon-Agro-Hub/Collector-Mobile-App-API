@@ -18,7 +18,6 @@ exports.getOfficerByEmpId = (empId) => {
         return resolve(null);
       }
 
-      console.log("Results:", results);
       resolve(results);
     });
   });
@@ -26,7 +25,8 @@ exports.getOfficerByEmpId = (empId) => {
 
 exports.getOfficerByEmpIdChangePass = (officerId) => {
   return new Promise((resolve, reject) => {
-    const sql = "SELECT id, empId, password FROM collectionofficer WHERE id = ?";
+    const sql =
+      "SELECT id, empId, password FROM collectionofficer WHERE id = ?";
 
     db.collectionofficer.query(sql, [officerId], (err, results) => {
       if (err) {
@@ -39,20 +39,19 @@ exports.getOfficerByEmpIdChangePass = (officerId) => {
         return resolve([]);
       }
 
-      console.log("Results:", results);
       resolve(results);
     });
   });
 };
 
-
 exports.getOfficerPasswordById = (id, jobRole) => {
   return new Promise((resolve, reject) => {
     let sql;
 
-    // Determine which center table to join based on job role
-    if (jobRole === "Collection Officer" || jobRole === "Collection Centre Manager") {
-      // For Collection roles, join with collectioncenter table using centerId
+    if (
+      jobRole === "Collection Officer" ||
+      jobRole === "Collection Centre Manager"
+    ) {
       sql = `SELECT co.*, 
                     cod.companyNameEnglish AS companyNameEnglish, 
                     cod.companyNameSinhala AS companyNameSinhala, 
@@ -67,9 +66,10 @@ exports.getOfficerPasswordById = (id, jobRole) => {
              LEFT JOIN
                 collectioncenter cc ON co.centerId = cc.id
              WHERE co.id = ?`;
-    } else if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
-      console.log("hit")
-      // For Distribution roles, join with distributedcenter table using distributedCenterId
+    } else if (
+      jobRole === "Distribution Centre Manager" ||
+      jobRole === "Distribution Officer"
+    ) {
       sql = `SELECT co.*, 
                     cod.companyNameEnglish AS companyNameEnglish, 
                     cod.companyNameSinhala AS companyNameSinhala, 
@@ -85,8 +85,6 @@ exports.getOfficerPasswordById = (id, jobRole) => {
                 distributedcenter dc ON co.distributedCenterId = dc.id
              WHERE co.id = ?`;
     } else {
-      // For other roles or when jobRole is undefined/null, use a simpler query
-      // that should work for most cases
       sql = `SELECT co.*, 
                     cod.companyNameEnglish AS companyNameEnglish, 
                     cod.companyNameSinhala AS companyNameSinhala, 
@@ -98,39 +96,38 @@ exports.getOfficerPasswordById = (id, jobRole) => {
              WHERE co.id = ?`;
     }
 
-    console.log("Executing SQL for officer ID:", id, "with job role:", jobRole);
-
     db.collectionofficer.query(sql, [id], (err, results) => {
-      console.log("hitt", results)
       if (err) {
         console.error("Database query error:", err);
         return reject(new Error("Database error"));
       }
       if (results.length === 0) {
-        console.warn(`No officer found with ID: ${id} and job role: ${jobRole}`);
+        console.warn(
+          `No officer found with ID: ${id} and job role: ${jobRole}`,
+        );
         return reject(new Error("Officer not found", err));
       }
 
-      console.log("Officer found:", results[0]);
       resolve(results);
     });
   });
 };
 
-
 exports.updateLoginStatus = (collectionOfficerId, status) => {
   return new Promise((resolve, reject) => {
     const sql = "UPDATE collectionofficer SET OnlineStatus = ? WHERE id = ?";
-    db.collectionofficer.query(sql, [status, collectionOfficerId], (err, results) => {
-      if (err) {
-        return reject(new Error("Database error"));
-      }
-      resolve(results);
-      console.log(results)
-    })
-  })
-}
-
+    db.collectionofficer.query(
+      sql,
+      [status, collectionOfficerId],
+      (err, results) => {
+        if (err) {
+          return reject(new Error("Database error"));
+        }
+        resolve(results);
+      },
+    );
+  });
+};
 
 exports.updatePasswordInDatabase = (officerId, hashedPassword) => {
   return new Promise((resolve, reject) => {
@@ -146,8 +143,8 @@ exports.updatePasswordInDatabase = (officerId, hashedPassword) => {
         if (err) {
           return reject("Database error while updating password");
         }
-        resolve(); // Password updated successfully
-      }
+        resolve();
+      },
     );
   });
 };
@@ -167,18 +164,17 @@ exports.getProfileById = (userId) => {
 
     db.collectionofficer.query(sql, [userId], (err, results) => {
       if (err) {
-        return reject(new Error('Database error: ' + err));
+        return reject(new Error("Database error: " + err));
       }
 
       if (results.length === 0) {
-        return reject(new Error('User not found'));
+        return reject(new Error("User not found"));
       }
 
       resolve(results[0]);
     });
   });
 };
-
 
 exports.getUserDetailsById = (userId) => {
   return new Promise((resolve, reject) => {
@@ -201,31 +197,32 @@ exports.getUserDetailsById = (userId) => {
 
     db.collectionofficer.query(sql, [userId], (err, results) => {
       if (err) {
-        return reject(new Error('Database error: ' + err));
+        return reject(new Error("Database error: " + err));
       }
       if (results.length === 0) {
-        return reject(new Error('User not found'));
+        return reject(new Error("User not found"));
       }
       resolve(results[0]);
     });
   });
 };
 
-
 exports.updatePhoneNumberById = (userId, phoneNumber, phoneNumber02) => {
-  console.log("DAO: updatePhoneNumberById", phoneNumber02);
   return new Promise((resolve, reject) => {
-    const query = 'UPDATE collectionofficer SET phoneNumber01 = ?, phoneNumber02 =? WHERE id = ?';
-    db.collectionofficer.query(query, [phoneNumber, phoneNumber02, userId], (error, results) => {
-      if (error) {
-        return reject(new Error('Database error: ' + error));
-      }
-      resolve(results);
-      console.log("DAO: updatePhoneNumberById", results);
-    });
+    const query =
+      "UPDATE collectionofficer SET phoneNumber01 = ?, phoneNumber02 =? WHERE id = ?";
+    db.collectionofficer.query(
+      query,
+      [phoneNumber, phoneNumber02, userId],
+      (error, results) => {
+        if (error) {
+          return reject(new Error("Database error: " + error));
+        }
+        resolve(results);
+      },
+    );
   });
 };
-
 
 exports.getQRCodeByOfficerId = (officerId) => {
   return new Promise((resolve, reject) => {
@@ -237,14 +234,13 @@ exports.getQRCodeByOfficerId = (officerId) => {
 
     db.collectionofficer.query(query, [officerId], (error, results) => {
       if (error) {
-        console.error('Error fetching officer QR code from DB:', error);
-        return reject(new Error('Database query failed'));
+        console.error("Error fetching officer QR code from DB:", error);
+        return reject(new Error("Database query failed"));
       }
       resolve(results);
     });
   });
 };
-
 
 exports.getOfficerDetailsById = (officerId, jobRole) => {
   return new Promise((resolve, reject) => {
@@ -275,7 +271,10 @@ exports.getOfficerDetailsById = (officerId, jobRole) => {
       WHERE 
         co.id = ?;
     `;
-    if (jobRole === "Distribution Centre Manager" || jobRole === "Distribution Officer") {
+    if (
+      jobRole === "Distribution Centre Manager" ||
+      jobRole === "Distribution Officer"
+    ) {
       sql = `
        SELECT 
         co.*, 
@@ -300,7 +299,7 @@ exports.getOfficerDetailsById = (officerId, jobRole) => {
         company com ON co.companyId = com.id
       WHERE 
         co.id = ?;
-      `
+      `;
     }
 
     db.collectionofficer.query(sql, [officerId], (err, results) => {
@@ -313,13 +312,10 @@ exports.getOfficerDetailsById = (officerId, jobRole) => {
         return reject(new Error("Officer not found"));
       }
 
-      resolve(results[0]); // Return the first result as the officer details
+      resolve(results[0]);
     });
   });
 };
-
-
-
 
 exports.getClaimStatusByUserId = (userId) => {
   return new Promise((resolve, reject) => {
@@ -327,35 +323,33 @@ exports.getClaimStatusByUserId = (userId) => {
 
     db.collectionofficer.query(sql, [userId], (err, results) => {
       if (err) {
-        console.error('Error fetching claim status:', err);
-        reject(new Error('Database query failed'));
+        console.error("Error fetching claim status:", err);
+        reject(new Error("Database query failed"));
         return;
       }
 
       if (results.length > 0) {
         resolve(results[0].claimStatus);
       } else {
-        resolve(null);  // No result found
+        resolve(null);
       }
     });
   });
 };
-
 
 exports.updateOnlineStatusWithSocket = async (empId, status) => {
   return new Promise((resolve, reject) => {
     const sql = `UPDATE collectionofficer SET onlineStatus = ? WHERE empId = ?`;
     db.collectionofficer.query(sql, [status, empId], (err, results) => {
       if (err) {
-        console.error('Error updating online status:', err);
-        reject(new Error('Database query failed'));
+        console.error("Error updating online status:", err);
+        reject(new Error("Database query failed"));
         return;
       }
       resolve(null);
     });
   });
-}
-
+};
 
 exports.getUserProfileImage = async (userId) => {
   return new Promise((resolve, reject) => {
@@ -375,18 +369,19 @@ exports.getUserProfileImage = async (userId) => {
 exports.updateUserProfileImage = async (userId, profileImageUrl) => {
   return new Promise((resolve, reject) => {
     const sql = "UPDATE collectionofficer SET image = ? WHERE id = ?";
-    db.collectionofficer.query(sql, [profileImageUrl, userId], (err, result) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(result);
-        console.log(result);
-      }
-    });
+    db.collectionofficer.query(
+      sql,
+      [profileImageUrl, userId],
+      (err, result) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      },
+    );
   });
 };
-
-
 
 exports.getPassword = (id) => {
   return new Promise((resolve, reject) => {
@@ -401,17 +396,12 @@ exports.getPassword = (id) => {
     db.collectionofficer.query(sql, [id], (err, results) => {
       if (err) {
         console.error("Database error:", err);
-        return reject(new Error('Database error'));
+        return reject(new Error("Database error"));
       }
 
       if (results.length === 0) {
-        return reject(new Error('User not found'));
+        return reject(new Error("User not found"));
       }
-
-
-      console.log("Raw DB result:", JSON.stringify(results[0]).substring(0, 200) + "...");
-      console.log("Image exists:", results[0].image ? "Yes" : "No");
-
 
       resolve(results[0]);
     });
