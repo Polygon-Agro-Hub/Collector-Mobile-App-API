@@ -1,68 +1,64 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const emailService = require('../services/emailService');
+const emailService = require("../services/emailService");
 
-// Send test email
-router.post('/send-test-email', async (req, res) => {
+router.post("/send-test-email", async (req, res) => {
   try {
     const { email } = req.body;
-    console.log(email)
 
-    await emailService.sendEmail(
-      email,
-      'Welcome to AgroWorld',
-      'welcom',
-      {
-        name: 'New User',
-        message: 'Thank you for registering with AgroWorld!',
-        year: new Date().getFullYear(),
-        title: 'Welcome Email'
-      }
-    );
+    await emailService.sendEmail(email, "Welcome to AgroWorld", "welcom", {
+      name: "New User",
+      message: "Thank you for registering with AgroWorld!",
+      year: new Date().getFullYear(),
+      title: "Welcome Email",
+    });
 
-    res.json({ success: true, message: 'Email sent successfully' });
+    res.json({ success: true, message: "Email sent successfully" });
   } catch (error) {
-    console.error('Error sending email:', error);
-    res.status(500).json({ success: false, message: 'Failed to send email' });
+    console.error("Error sending email:", error);
+    res.status(500).json({ success: false, message: "Failed to send email" });
   }
 });
 
-router.post('/send-pdf-email', async (req, res) => {
+router.post("/send-pdf-email", async (req, res) => {
   try {
-    const emailsData = req.body; // Expecting an array of objects
+    const emailsData = req.body;
 
     if (!Array.isArray(emailsData) || emailsData.length === 0) {
-      return res.status(400).json({ success: false, message: 'No email data provided' });
+      return res
+        .status(400)
+        .json({ success: false, message: "No email data provided" });
     }
 
-    // Loop through each email object and send
     for (const item of emailsData) {
       const { email, pdfBase64, fileName } = item;
 
       if (!email || !pdfBase64) {
-        console.warn('Skipping invalid item:', item);
-        continue; // skip invalid entries
+        console.warn("Skipping invalid item:", item);
+        continue;
       }
 
-      const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+      const pdfBuffer = Buffer.from(pdfBase64, "base64");
 
       await emailService.sendEmail(
         email,
-        'Your AgroWorld Invoice',
-        'welcom',
-        { message: 'Thank you for your order!' },
-        [{
-          filename: fileName || 'invoice.pdf',
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }]
+        "Your AgroWorld Invoice",
+        "welcom",
+        { message: "Thank you for your order!" },
+        [
+          {
+            filename: fileName || "invoice.pdf",
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          },
+        ],
       );
     }
 
-    res.json({ success: true, message: 'All emails sent successfully' });
+    res.json({ success: true, message: "All emails sent successfully" });
   } catch (error) {
-    console.error('Error sending PDF emails:', error);
-    res.status(500).json({ success: false, message: 'Failed to send emails' });
+    console.error("Error sending PDF emails:", error);
+    res.status(500).json({ success: false, message: "Failed to send emails" });
   }
 });
 

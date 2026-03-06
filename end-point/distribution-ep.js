@@ -1,109 +1,82 @@
-const distributionDao = require('../dao/distribution-dao');
-const asyncHandler = require('express-async-handler');
-const { replaceOrderPackageSchema } = require('../Validations/distribution-validation');
-const emailService = require('../services/emailService');
-const pdfService = require('../services/pdfService');
-
+const distributionDao = require("../dao/distribution-dao");
+const asyncHandler = require("express-async-handler");
+const {
+    replaceOrderPackageSchema,
+} = require("../Validations/distribution-validation");
+const emailService = require("../services/emailService");
+const pdfService = require("../services/pdfService");
 
 exports.getOfficerTarget = async (req, res) => {
-    console.log("getOfficerTarget called");
     try {
-        // Get officerId from the decoded token (set by auth middleware)
-        const officerId = req.user.id; // Assuming your auth middleware sets req.user
+        const officerId = req.user.id;
 
-        console.log("Officer ID from token:", officerId);
-
-        // Validate officerId
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid officer ID provided'
+                message: "Invalid officer ID provided",
             });
         }
 
-        // Get targets from DAO
         const targets = await distributionDao.getTargetForOfficerDao(officerId);
-
-        console.log("target----------", targets)
-
-        // console.log("nwxsjklowcd", targets)
 
         res.status(200).json({
             success: true,
-            message: 'Officer targets retrieved successfully',
-            data: targets
+            message: "Officer targets retrieved successfully",
+            data: targets,
         });
     } catch (error) {
-        console.error('Error getting officer targets:', error);
+        console.error("Error getting officer targets:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve officer targets',
-            error: error.message
+            message: "Failed to retrieve officer targets",
+            error: error.message,
         });
     }
 };
 
-
-
 exports.getOrderData = async (req, res) => {
-    console.log("getOrderData called");
     try {
         const { orderId } = req.params;
-        const officerId = req.user.id; // For authorization check if needed
+        const officerId = req.user.id;
 
-        console.log("Order ID:", orderId);
-
-        // Validate orderId
         if (!orderId || isNaN(orderId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid order ID provided'
+                message: "Invalid order ID provided",
             });
         }
 
-        // Get order data from DAO
         const orderData = await distributionDao.getOrderDataDao(orderId);
 
-        console.log("Order Data:", JSON.stringify(orderData, null, 2));
-
-        // Extract and display different item arrays
         const additionalItems = orderData.additionalItems || [];
         const packageItems = orderData.packageData?.items || [];
 
-        console.log("Additional Items:", additionalItems);
-        console.log("Package Items:", packageItems);
-
-        // Combine all items if needed
         const allItems = [...additionalItems, ...packageItems];
-        console.log("All Items Combined:", allItems);
 
-        // You can also structure the response to include separate item arrays
         const responseData = {
             ...orderData,
             itemsSummary: {
                 additionalItems: additionalItems,
                 packageItems: packageItems,
                 allItems: allItems,
-                totalItemCount: allItems.length
-            }
+                totalItemCount: allItems.length,
+            },
         };
 
         res.status(200).json({
             success: true,
-            message: 'Order data retrieved successfully',
-            data: responseData
+            message: "Order data retrieved successfully",
+            data: responseData,
         });
     } catch (error) {
-        console.error('Error getting order data:', error);
+        console.error("Error getting order data:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to retrieve order data',
-            error: error.message
+            message: "Failed to retrieve order data",
+            error: error.message,
         });
     }
 };
-
-
 
 exports.updateOrderItems = async (req, res) => {
     try {
@@ -111,85 +84,72 @@ exports.updateOrderItems = async (req, res) => {
         const { packageItems = [], additionalItems = [], isComplete } = req.body;
         const officerId = req.user.id;
 
-        console.log("iscomplete======================", isComplete);
-        console.log("packageItems received:", JSON.stringify(packageItems, null, 2));
-        console.log("additionalItems received:", JSON.stringify(additionalItems, null, 2));
-
-        // Validate input
         if (!orderId || isNaN(orderId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid order ID'
+                message: "Invalid order ID",
             });
         }
 
-        // **FIX: Flatten package items structure**
         let flattenedPackageItems = [];
         if (packageItems.length > 0) {
-            // Check if packageItems is nested (has packageId and items) or flat
-            if (packageItems[0] && packageItems[0].packageId && packageItems[0].items) {
-                // Nested structure - flatten it
+            if (
+                packageItems[0] &&
+                packageItems[0].packageId &&
+                packageItems[0].items
+            ) {
                 flattenedPackageItems = packageItems.reduce((acc, packageGroup) => {
                     return acc.concat(packageGroup.items);
                 }, []);
             } else {
-                // Already flat structure
                 flattenedPackageItems = packageItems;
             }
 
-            console.log("Flattened package items:", JSON.stringify(flattenedPackageItems, null, 2));
-
             await distributionDao.updatePackageItems(flattenedPackageItems);
-            console.log(`Updated ${flattenedPackageItems.length} package items for order ${orderId}`);
         }
 
-        // Update additional items if any
         if (additionalItems.length > 0) {
             await distributionDao.updateAdditionalItems(additionalItems);
-            console.log(`Updated ${additionalItems.length} additional items for order ${orderId}`);
         }
 
-        // Check if any updates were made
         if (flattenedPackageItems.length === 0 && additionalItems.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'No items provided for update'
+                message: "No items provided for update",
             });
         }
 
-        // Handle isComplete = 1 case
         if (isComplete === 1) {
             try {
-                await distributionDao.updateDistributedTargetComplete(orderId, officerId);
-                console.log(`Updated distributedtargetitems for completed order ${orderId}`);
+                await distributionDao.updateDistributedTargetComplete(
+                    orderId,
+                    officerId,
+                );
             } catch (error) {
-                console.error('Error updating distributed target items:', error);
-                // Don't fail the entire request, but log the error
+                console.error("Error updating distributed target items:", error);
             }
         }
 
         res.status(200).json({
             success: true,
-            message: 'Order items updated successfully',
+            message: "Order items updated successfully",
             updated: {
                 packageItems: flattenedPackageItems.length,
                 additionalItems: additionalItems.length,
-                isComplete: isComplete
-            }
+                isComplete: isComplete,
+            },
         });
-
     } catch (error) {
-        console.error('Error updating order items:', error);
+        console.error("Error updating order items:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update order items',
-            error: error.message
+            message: "Failed to update order items",
+            error: error.message,
         });
     }
 };
 
 exports.getAllRetailItems = asyncHandler(async (req, res) => {
-    console.log("Fetching Retail Items...");
     try {
         const { orderId } = req.params;
         if (!orderId) {
@@ -202,12 +162,9 @@ exports.getAllRetailItems = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: "No Retail Items found" });
         }
 
-        // Additional filter to ensure only Retail items (double-check)
-        const retailItems = items.filter(item => item.category === 'Retail');
+        const retailItems = items.filter((item) => item.category === "Retail");
 
         res.status(200).json(retailItems);
-        console.log("Retail Items fetched successfully:", retailItems.length, "items");
-        console.log("Filtered retail items:", retailItems);
     } catch (error) {
         console.error("Error fetching Retail Items:", error);
         res.status(500).json({ message: "Failed to fetch Retail Items" });
@@ -215,41 +172,25 @@ exports.getAllRetailItems = asyncHandler(async (req, res) => {
 });
 
 exports.replaceOrderPackage = async (req, res) => {
-    console.log("Replace order package request data:", req.body);
-    console.log("User info:", req.user);
-
     try {
-        // Get user information
         const userId = req.user.id;
         const empId = req.user.empId;
         const userRole = req.user.role;
 
-        console.log("Debug user permissions:", {
-            userId,
-            empId,
-            userRole,
-            empIdExists: !!empId,
-            empIdType: typeof empId
-        });
-
-        // Enhanced role validation
         let isDIO = false;
         let isDCM = false;
 
-        // Check empId format
-        if (empId && typeof empId === 'string') {
-            isDIO = empId.toUpperCase().startsWith('DIO');
-            isDCM = empId.toUpperCase().startsWith('DCM');
+        if (empId && typeof empId === "string") {
+            isDIO = empId.toUpperCase().startsWith("DIO");
+            isDCM = empId.toUpperCase().startsWith("DCM");
         }
 
-        // Alternative: Check by userRole if empId format doesn't match
         if (!isDIO && !isDCM && userRole) {
             const roleUpper = userRole.toUpperCase();
-            isDIO = roleUpper.includes('DIO') || roleUpper === 'DISTRICT_OFFICER';
-            isDCM = roleUpper.includes('DCM') || roleUpper === 'DIVISIONAL_MANAGER';
+            isDIO = roleUpper.includes("DIO") || roleUpper === "DISTRICT_OFFICER";
+            isDCM = roleUpper.includes("DCM") || roleUpper === "DIVISIONAL_MANAGER";
         }
 
-        // More flexible validation - you can customize this based on your needs
         const hasPermission = isDIO || isDCM;
 
         if (!hasPermission) {
@@ -258,51 +199,47 @@ exports.replaceOrderPackage = async (req, res) => {
                 empId,
                 userRole,
                 isDIO,
-                isDCM
+                isDCM,
             });
 
             return res.status(403).json({
                 success: false,
                 message: `Unauthorized: User role '${userRole}' with empId '${empId}' does not have permission to create replacement requests`,
-                debug: process.env.NODE_ENV === 'development' ? {
-                    empId,
-                    userRole,
-                    isDIO,
-                    isDCM
-                } : undefined
+                debug:
+                    process.env.NODE_ENV === "development"
+                        ? {
+                            empId,
+                            userRole,
+                            isDIO,
+                            isDCM,
+                        }
+                        : undefined,
             });
         }
 
-        // ... rest of your existing code remains the same
-
-        // Validate request body using the schema
-        const { error, value } = replaceOrderPackageSchema.validate(req.body, { abortEarly: false });
+        const { error, value } = replaceOrderPackageSchema.validate(req.body, {
+            abortEarly: false,
+        });
 
         if (error) {
-            const errorMessages = error.details.map(detail => detail.message);
+            const errorMessages = error.details.map((detail) => detail.message);
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
-                errors: errorMessages
+                message: "Validation failed",
+                errors: errorMessages,
             });
         }
 
-        const { orderPackageId, productType, replaceId, productId, qty, price, status } = value;
-
-        console.log("Validated replace request data:", {
+        const {
             orderPackageId,
-            replaceId,
             productType,
+            replaceId,
             productId,
             qty,
             price,
             status,
-            requestedBy: userId,
-            userRole: userRole,
-            permissions: isDIO ? 'DIO - Full access' : 'DCM - Limited access'
-        });
+        } = value;
 
-        // Call DAO to handle the replacement request with role information
         const result = await distributionDao.createReplaceRequestDao({
             orderPackageId,
             productType,
@@ -310,132 +247,119 @@ exports.replaceOrderPackage = async (req, res) => {
             productId: productId !== null ? productId : null,
             qty,
             price: parseFloat(price),
-            status: 'Not Approved',
+            status: "Not Approved",
             requestedBy: userId,
             userId: userId,
             empId: empId,
             isDIO: isDIO,
-            isDCM: isDCM
+            isDCM: isDCM,
         });
-
-        console.log("Database insertion result:", result);
 
         res.status(200).json({
             success: true,
-            message: 'Replacement request created successfully',
+            message: "Replacement request created successfully",
             data: result,
             requestedBy: {
                 userId: userId,
                 empId: empId,
                 role: userRole,
-                permissions: isDIO ? 'DIO - Full access' : 'DCM - Limited access'
-            }
+                permissions: isDIO ? "DIO - Full access" : "DCM - Limited access",
+            },
         });
     } catch (error) {
-        console.error('Error creating replacement request:', error);
+        console.error("Error creating replacement request:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to create replacement request',
-            error: error.message
+            message: "Failed to create replacement request",
+            error: error.message,
         });
     }
 };
-
-
-
 
 exports.updateDistributedTarget = async (req, res) => {
     try {
-        const { orderId } = req.params; // Changed from orderId to orderId
+        const { orderId } = req.params;
         const { targetItemIds = [] } = req.body;
         const officerId = req.user.id;
 
-        // Validate input
         if (!orderId || isNaN(orderId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid process order ID'
+                message: "Invalid process order ID",
             });
         }
 
-        // Call DAO to update distributed target items
-        const updateResults = await distributionDao.updateDistributedTargetItems(targetItemIds, orderId);
+        const updateResults = await distributionDao.updateDistributedTargetItems(
+            targetItemIds,
+            orderId,
+        );
 
         res.status(200).json({
             success: true,
-            message: 'Distributed target items updated successfully',
+            message: "Distributed target items updated successfully",
             updated: {
                 targetItems: updateResults.updatedItems,
-                targets: updateResults.updatedTargets
-            }
+                targets: updateResults.updatedTargets,
+            },
         });
-
     } catch (error) {
-        console.error('Error updating distributed target items:', error);
+        console.error("Error updating distributed target items:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update distributed target items',
-            error: error.message
+            message: "Failed to update distributed target items",
+            error: error.message,
         });
     }
 };
-
-////////////
-
 
 exports.getDistributionTarget = async (req, res) => {
     try {
         const officerId = req.user.id;
-        console.log("Officer ID from token:", officerId);
 
         const targets = await distributionDao.getDistributionTargets(officerId);
-        console.log("Distribution targets found:", targets.length);
 
         if (targets.length === 0) {
             return res.status(200).json({
                 success: true,
                 data: [],
-                message: 'No targets found for this user'
+                message: "No targets found for this user",
             });
         }
 
-        const formattedTargets = targets.map(target => ({
+        const formattedTargets = targets.map((target) => ({
             id: target.id,
             companyCenterId: target.companycenterId,
             userId: target.userId,
             target: target.target,
             completed: target.complete,
-            completionPercentage: parseFloat(target.completionPercentage).toFixed(2) + '%',
-            createdAt: target.createdAt
+            completionPercentage:
+                parseFloat(target.completionPercentage).toFixed(2) + "%",
+            createdAt: target.createdAt,
         }));
 
         res.status(200).json({
             success: true,
-            data: formattedTargets
+            data: formattedTargets,
         });
     } catch (error) {
-        console.error('Error getting distribution targets:', error);
+        console.error("Error getting distribution targets:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to get distribution targets',
-            error: error.message
+            message: "Failed to get distribution targets",
+            error: error.message,
         });
     }
 };
-
 
 exports.updateoutForDelivery = async (req, res) => {
     try {
         const { orderIds } = req.body;
         const userId = req.user.id;
 
-        console.log("orderIds======================", orderIds);
-        console.log("userId======================", userId);
-
         if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid or empty order IDs array'
+                message: "Invalid or empty order IDs array",
             });
         }
 
@@ -443,7 +367,7 @@ exports.updateoutForDelivery = async (req, res) => {
             if (!orderId || isNaN(orderId)) {
                 return res.status(400).json({
                     success: false,
-                    message: `Invalid order ID: ${orderId}`
+                    message: `Invalid order ID: ${orderId}`,
                 });
             }
         }
@@ -456,20 +380,20 @@ exports.updateoutForDelivery = async (req, res) => {
 
         for (const orderId of orderIds) {
             try {
-                // Update order status
-                const updateResult = await distributionDao.updateoutForDelivery(orderId, userId);
+                const updateResult = await distributionDao.updateoutForDelivery(
+                    orderId,
+                    userId,
+                );
 
                 results.push({
                     orderId: orderId,
                     success: true,
-                    affectedRows: updateResult.orderUpdate.affectedRows
+                    affectedRows: updateResult.orderUpdate.affectedRows,
                 });
                 successCount++;
 
-                // Send email with PDF invoice if customer email exists
                 if (updateResult.orderInfo && updateResult.orderInfo.customerEmail) {
                     try {
-                        // Prepare data for PDF template
                         const invoiceData = {
                             invoiceNumber: updateResult.orderInfo.invNo,
                             totalAmount: updateResult.orderInfo.totalAmount,
@@ -479,11 +403,11 @@ exports.updateoutForDelivery = async (req, res) => {
                                     firstName: updateResult.orderInfo.firstName,
                                     lastName: updateResult.orderInfo.lastName,
                                     phoneNumber: updateResult.orderInfo.phoneNumber,
-                                    buildingType: updateResult.orderInfo.buildingType
+                                    buildingType: updateResult.orderInfo.buildingType,
                                 },
                                 paymentMethod: updateResult.orderInfo.paymentMethod,
                                 createdAt: updateResult.orderInfo.createdAt,
-                                scheduleDate: updateResult.orderInfo.scheduleDate
+                                scheduleDate: updateResult.orderInfo.scheduleDate,
                             },
                             customerData: {
                                 email: updateResult.orderInfo.customerEmail,
@@ -494,42 +418,42 @@ exports.updateoutForDelivery = async (req, res) => {
                                     buildingName: updateResult.orderInfo.buildingName,
                                     unitNo: updateResult.orderInfo.unitNo,
                                     streetName: updateResult.orderInfo.streetName,
-                                    city: updateResult.orderInfo.city
-                                }
-                            }
+                                    city: updateResult.orderInfo.city,
+                                },
+                            },
                         };
 
-                        // Generate PDF
                         const pdfBuffer = await pdfService.generateInvoicePDF(invoiceData);
 
-                        // Send email with PDF attachment
                         await emailService.sendEmail(
                             updateResult.orderInfo.customerEmail,
                             `Order ${updateResult.orderInfo.invNo} - ${updateResult.status}`,
-                            'welcom',
+                            "welcom",
                             invoiceData,
-                            [{
-                                filename: `Invoice_${updateResult.orderInfo.invNo}.pdf`,
-                                content: pdfBuffer,
-                                contentType: 'application/pdf'
-                            }]
+                            [
+                                {
+                                    filename: `Invoice_${updateResult.orderInfo.invNo}.pdf`,
+                                    content: pdfBuffer,
+                                    contentType: "application/pdf",
+                                },
+                            ],
                         );
 
                         emailSuccessCount++;
-                        console.log(`✅ Invoice email sent to ${updateResult.orderInfo.customerEmail} for order ${orderId}`);
                     } catch (emailError) {
                         emailErrorCount++;
-                        console.error(`❌ Failed to send email for order ${orderId}:`, emailError);
+                        console.error(
+                            `❌ Failed to send email for order ${orderId}:`,
+                            emailError,
+                        );
                     }
                 }
-
-                console.log(`✅ Successfully updated order ${orderId} to ${updateResult.status}`);
             } catch (error) {
                 console.error(`❌ Failed to update order ${orderId}:`, error);
                 results.push({
                     orderId: orderId,
                     success: false,
-                    error: error.message
+                    error: error.message,
                 });
                 errorCount++;
             }
@@ -537,23 +461,22 @@ exports.updateoutForDelivery = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `Updated ${successCount} orders${errorCount > 0 ? `, ${errorCount} failed` : ''}. Invoices sent: ${emailSuccessCount}${emailErrorCount > 0 ? `, ${emailErrorCount} email failures` : ''}`,
+            message: `Updated ${successCount} orders${errorCount > 0 ? `, ${errorCount} failed` : ""}. Invoices sent: ${emailSuccessCount}${emailErrorCount > 0 ? `, ${emailErrorCount} email failures` : ""}`,
             results: results,
             summary: {
                 total: orderIds.length,
                 successful: successCount,
                 failed: errorCount,
                 emailsSent: emailSuccessCount,
-                emailsFailed: emailErrorCount
-            }
+                emailsFailed: emailErrorCount,
+            },
         });
-
     } catch (error) {
-        console.error('❌ Error updating order status:', error);
+        console.error("❌ Error updating order status:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update order status',
-            error: error.message
+            message: "Failed to update order status",
+            error: error.message,
         });
     }
 };

@@ -3,12 +3,11 @@ const router = express.Router();
 const DistributionEp = require('../end-point/distribution-ep');
 const auth = require('../Middlewares/auth.middleware');
 
-// Get collection requests, with optional filters
+
 router.get('/officer-target', auth, DistributionEp.getOfficerTarget);
 
 router.get('/order-data/:orderId', auth, DistributionEp.getOrderData);
 
-// In your distribution routes file (distribution-rt.js)
 router.put('/update-order/:orderId', auth, DistributionEp.updateOrderItems);
 
 router.get('/all-retail-items/:orderId', auth, DistributionEp.getAllRetailItems);
@@ -19,7 +18,6 @@ router.get("/get-distribution-target", auth, DistributionEp.getDistributionTarge
 
 router.put('/update-outForDelivery', auth, DistributionEp.updateoutForDelivery);
 
-// Add this route to your router file
 router.put('/update-distributed-target/:orderId', auth, DistributionEp.updateDistributedTarget);
 
 module.exports = router;

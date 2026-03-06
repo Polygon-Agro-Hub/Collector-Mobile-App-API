@@ -3,14 +3,9 @@ const asyncHandler = require("express-async-handler");
 const uploadFileToS3 = require("../Middlewares/s3upload");
 
 exports.getPickupOrders = async (req, res) => {
-    console.log("pickup oreders called");
     try {
-        // Get officerId from the decoded token (set by auth middleware)
-        const officerId = req.user.id; // Assuming your auth middleware sets req.user
+        const officerId = req.user.id;
 
-        console.log("Officer ID from token:", officerId);
-
-        // Validate officerId
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
@@ -18,10 +13,7 @@ exports.getPickupOrders = async (req, res) => {
             });
         }
 
-        // Get pickup from DAO
         const pickup = await pickupDao.getPickupOrders(officerId);
-
-        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,
@@ -58,7 +50,7 @@ exports.updatePickupDetails = async (req, res) => {
         const { orderId } = req.body;
         const officerId = req.user.id;
         const role = req.user.role;
-        const signatureFile = req.file; // From multer
+        const signatureFile = req.file;
 
         if (!orderId) {
             return res.status(400).json({
@@ -74,7 +66,6 @@ exports.updatePickupDetails = async (req, res) => {
             });
         }
 
-        // Validate file type
         const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
         if (!allowedTypes.includes(signatureFile.mimetype)) {
             return res.status(400).json({
@@ -83,22 +74,18 @@ exports.updatePickupDetails = async (req, res) => {
             });
         }
 
-        // Upload signature to S3/R2
         const signatureUrl = await uploadFileToS3(
             signatureFile.buffer,
             signatureFile.originalname,
             "pickup-signatures",
         );
 
-        // Call the DAO to insert the pickupDetails into the database
         const pickupDetails = await pickupDao.updatePickupDetails(
             officerId,
             orderId,
             signatureUrl,
-            role
+            role,
         );
-
-        console.log("Pickup details updated:", pickupDetails);
 
         return res.status(201).json({
             status: "success",
@@ -134,14 +121,9 @@ exports.updatePickupDetails = async (req, res) => {
 };
 
 exports.getReceivedOrders = async (req, res) => {
-    console.log("pickup oreders called");
     try {
-        // Get officerId from the decoded token (set by auth middleware)
-        const officerId = req.user.id; // Assuming your auth middleware sets req.user
+        const officerId = req.user.id;
 
-        console.log("Officer ID from token:", officerId);
-
-        // Validate officerId
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
@@ -149,10 +131,7 @@ exports.getReceivedOrders = async (req, res) => {
             });
         }
 
-        // Get pickup from DAO
         const pickup = await pickupDao.getReceivedOrders(officerId);
-
-        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,
@@ -170,14 +149,9 @@ exports.getReceivedOrders = async (req, res) => {
 };
 
 exports.getReceivedOrderOfficer = async (req, res) => {
-    console.log("pickup oreders called");
     try {
-        // Get officerId from the decoded token (set by auth middleware)
-        const officerId = req.user.id; // Assuming your auth middleware sets req.user
+        const officerId = req.user.id;
 
-        console.log("Officer ID from token:", officerId);
-
-        // Validate officerId
         if (!officerId || isNaN(officerId)) {
             return res.status(400).json({
                 success: false,
@@ -185,10 +159,7 @@ exports.getReceivedOrderOfficer = async (req, res) => {
             });
         }
 
-        // Get pickup from DAO
         const pickup = await pickupDao.getReceivedOrderOfficer(officerId);
-
-        console.log("pickup----------", pickup);
 
         res.status(200).json({
             success: true,

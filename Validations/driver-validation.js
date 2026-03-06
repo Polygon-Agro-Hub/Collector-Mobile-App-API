@@ -1,8 +1,7 @@
 const Joi = require('joi');
 
-// Create validation schema for driver with vehicle
 exports.driverWithVehicleSchema = Joi.object({
-  // Personal Details
+
   firstNameEnglish: Joi.string().required(),
   firstNameSinhala: Joi.string().required(),
   firstNameTamil: Joi.string().required(),
@@ -10,19 +9,17 @@ exports.driverWithVehicleSchema = Joi.object({
   lastNameSinhala: Joi.string().required(),
   lastNameTamil: Joi.string().required(),
 
-  // Contact Details
   nic: Joi.string().required().max(13),
   email: Joi.string().required(),
   phoneCode01: Joi.string().required(),
   phoneNumber01: Joi.string().required(),
   phoneCode02: Joi.string(),
   phoneNumber02: Joi.string().allow('').optional(),
-  // Employment Details
+
   empId: Joi.string().required(),
   empType: Joi.string().required(),
-  jobRole: Joi.string(), // Added jobRole field
+  jobRole: Joi.string(),
 
-  // Address Details
   houseNumber: Joi.string().required(),
   streetName: Joi.string().required(),
   city: Joi.string().required(),
@@ -30,25 +27,23 @@ exports.driverWithVehicleSchema = Joi.object({
   province: Joi.string().required(),
   country: Joi.string().required(),
 
-  // Additional Details
-  languages: Joi.string(), // Make this optional
-  preferredLanguages: Joi.string(), // Added preferredLanguages field
 
-  // Bank Details
+  languages: Joi.string(),
+  preferredLanguages: Joi.string(),
+
+
   accHolderName: Joi.string().required(),
-  accNumber: Joi.string().required(), // Changed from number to string to accommodate non-numeric characters
+  accNumber: Joi.string().required(),
   bankName: Joi.string().required(),
   branchName: Joi.string().required(),
 
-  // Vehicle Details
   licNo: Joi.string().required(),
   insNo: Joi.string().required(),
   insExpDate: Joi.date().required(),
   vType: Joi.string().required(),
-  vCapacity: Joi.string().required(), // Changed from number to string
+  vCapacity: Joi.string().required(),
   vRegNo: Joi.string().required(),
 
-  // Image fields
   profileImage: Joi.string().allow('', null),
   licFrontImg: Joi.string().allow('', null),
   licBackImg: Joi.string().allow('', null),
