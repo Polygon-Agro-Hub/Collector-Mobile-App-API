@@ -1,6 +1,5 @@
 const Joi = require('joi');
 
-// Validation schema for individual price item
 exports.priceItemSchema = Joi.object({
   prices: Joi.array().items(
     Joi.object({
