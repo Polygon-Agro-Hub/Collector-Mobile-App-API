@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../Middlewares/auth.middleware');
+const authenticate = require('../middleware/auth.middleware');
 const dmanagerEp = require('../end-point/distributionManger-ep');
 const TargetEP = require('../end-point/Target-ep');
-const upload = require('../Middlewares/multer.middleware');
-const auth = require('../Middlewares/auth.middleware');
+const upload = require('../middleware/multer.middleware');
+const auth = require('../middleware/auth.middleware');
 
 // Get distribution center targets 
 router.get("/get-dcenter-target", authenticate, dmanagerEp.getDCenterTarget);

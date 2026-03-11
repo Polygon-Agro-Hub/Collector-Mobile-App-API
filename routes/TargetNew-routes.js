@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../Middlewares/auth.middleware");
+const authMiddleware = require("../middleware/auth.middleware");
 const TargetEP = require("../end-point/TargetNew-ep");
 
 router.get("/officer", authMiddleware, TargetEP.getTargetForOfficerManagerView);

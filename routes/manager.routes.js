@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const authenticate = require("../Middlewares/auth.middleware");
+const authenticate = require("../middleware/auth.middleware");
 const managerEp = require("../end-point/manager-ep");
 const TargetEP = require("../end-point/Target-ep");
-const upload = require("../Middlewares/multer.middleware");
+const upload = require("../middleware/multer.middleware");
 const driverEp = require("../end-point/Driver-ep");
 
 // Route to get collection officers under a specific manager

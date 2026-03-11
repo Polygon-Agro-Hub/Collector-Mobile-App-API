@@ -1,6 +1,6 @@
 const pickupDao = require("../dao/pickUp-dao");
 const asyncHandler = require("express-async-handler");
-const uploadFileToS3 = require("../Middlewares/s3upload");
+const uploadFileToS3 = require("../middleware/s3upload");
 
 exports.getPickupOrders = async (req, res) => {
     try {

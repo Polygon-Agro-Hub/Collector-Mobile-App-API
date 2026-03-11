@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const DistributionEp = require('../end-point/distribution-ep');
-const auth = require('../Middlewares/auth.middleware');
+const auth = require('../middleware/auth.middleware');
 
 
 router.get('/officer-target', auth, DistributionEp.getOfficerTarget);

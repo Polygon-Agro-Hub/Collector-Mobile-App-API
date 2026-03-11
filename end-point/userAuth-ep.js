@@ -1,10 +1,9 @@
 const jwt = require("jsonwebtoken");
 const userAuthDao = require("../dao/userAuth-dao");
 const bcrypt = require("bcrypt");
-const { loginSchema } = require("../Validations/Auth-validations");
-const { Socket } = require("socket.io");
-const uploadFileToS3 = require("../Middlewares/s3upload");
-const delectfilesOnS3 = require("../Middlewares/s3delete");
+const { loginSchema } = require("../validation/auth-validation");
+const uploadFileToS3 = require("../middleware/s3upload");
+const delectfilesOnS3 = require("../middleware/s3delete");
 
 exports.loginUser = async (req, res) => {
   try {

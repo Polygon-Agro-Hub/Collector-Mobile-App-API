@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const CollectionEp = require('../end-point/collection-ep');
-const auth = require('../Middlewares/auth.middleware');
+const auth = require('../middleware/auth.middleware');
 
 // Get collection requests
 router.get('/all-collectionrequest', auth, CollectionEp.getAllCollectionRequest);

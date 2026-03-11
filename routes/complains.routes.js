@@ -4,7 +4,7 @@ const router = express.Router();
 const ComplaintEp = require('../end-point/complaint-ep')
 
 
-const auth = require('../Middlewares/auth.middleware');
+const auth = require('../middleware/auth.middleware');
 
 router.post('/farmer-complaint', auth, ComplaintEp.createFarmerComplaint);
 

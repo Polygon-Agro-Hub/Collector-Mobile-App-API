@@ -1,7 +1,7 @@
 const express = require("express");
-const auth = require("../Middlewares/auth.middleware");
+const auth = require("../middleware/auth.middleware");
 const router = express.Router();
-const upload = require("../Middlewares/multer.middleware");
+const upload = require("../middleware/multer.middleware");
 
 const pickupEp = require("../end-point/pickUp-ep");
 

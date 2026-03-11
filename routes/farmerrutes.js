@@ -1,5 +1,5 @@
 const express = require('express');
-const auth = require('../Middlewares/auth.middleware');
+const auth = require('../middleware/auth.middleware');
 const router = express.Router();
 
 const farmerEp = require('../end-point/farmer-ep');

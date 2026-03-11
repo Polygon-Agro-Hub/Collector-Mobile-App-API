@@ -2,7 +2,7 @@ const distributionDao = require("../dao/distribution-dao");
 const asyncHandler = require("express-async-handler");
 const {
     replaceOrderPackageSchema,
-} = require("../Validations/distribution-validation");
+} = require("../validation/distribution-validation");
 const emailService = require("../services/emailService");
 const pdfService = require("../services/pdfService");
 

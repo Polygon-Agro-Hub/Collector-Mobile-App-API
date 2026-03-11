@@ -1,6 +1,6 @@
 const driverDao = require('../dao/Driver-dao');
-const uploadFileToS3 = require('../Middlewares/s3upload'); // Adjust path as needed
-const { driverWithVehicleSchema } = require('../Validations/driver-validation');
+const uploadFileToS3 = require('../middleware/s3upload'); 
+const { driverWithVehicleSchema } = require('../validation/driver-validation');
 
 exports.createDriverWithVehicle = async (req, res) => {
   try {

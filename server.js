@@ -21,7 +21,6 @@ const distributionManager = require("./routes/distibutionManager.routes");
 const pickupRoute = require("./routes/pickup.routes");
 const pensionRoute = require("./routes/pension.routes");
 
-const socketIo = require("socket.io");
 require("dotenv").config();
 
 const mainApp = express();
@@ -100,8 +99,6 @@ mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
 mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
 mainApp.use(`${basePathMain}/api/pension`, pensionRoute);
-
-const basePathStatus = "/agro-api/collection-status";
 
 const PORT = process.env.PORT || 3000;
 

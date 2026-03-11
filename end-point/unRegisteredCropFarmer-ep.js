@@ -1,9 +1,7 @@
-const jwt = require("jsonwebtoken");
 const cropDetailsDao = require("../dao/unRegisteredCropFarmer-dao");
 const { collectionofficer } = require("../startup/database");
-const { cropDetailsSchema } = require("../Validations/crop-validations");
-const s3middleware = require("../Middlewares/s3upload");
-const asyncHandler = require("express-async-handler");
+const { cropDetailsSchema } = require("../validation/crop-validations");
+const s3middleware = require("../middleware/s3upload");
 
 exports.addCropDetails = async (req, res) => {
   const { crops, farmerId, invoiceNumber } = req.body;
