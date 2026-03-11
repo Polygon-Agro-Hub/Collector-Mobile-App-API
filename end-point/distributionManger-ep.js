@@ -1,7 +1,7 @@
-const targetDDao = require("../dao/distributionManager-dao");
+const targetDDao = require("../dao/distribution-manager-dao");
 const jwt = require("jsonwebtoken");
 const Joi = require("joi");
-const distributionofficerDao = require("../dao/distributionManager-dao");
+const distributionofficerDao = require("../dao/distribution-manager-dao");
 const asyncHandler = require("express-async-handler");
 
 exports.getDCenterTarget = async (req, res) => {

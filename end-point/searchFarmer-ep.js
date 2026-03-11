@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const searchFarmerDao = require("../dao/searchFarmer-dao");
+const searchFarmerDao = require("../dao/search-farmer-dao");
 
 exports.getAllUsers = async (req, res) => {
     try {

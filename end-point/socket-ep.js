@@ -1,4 +1,4 @@
-const userDao = require("../dao/userAuth-dao");
+const userDao = require("../dao/user-auth-dao");
 const userSockets = new Map();
 
 exports.handleConnection = (socket) => {

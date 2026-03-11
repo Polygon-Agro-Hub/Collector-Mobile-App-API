@@ -1,4 +1,4 @@
-const db = require('../startup/database'); // Adjust the path as needed
+const db = require('../startup/database'); 
 
 exports.createDriverWithVehicle = (officerData, centerId, companyId, irmId) => {
   return new Promise((resolve, reject) => {
@@ -37,7 +37,7 @@ exports.createDriverWithVehicle = (officerData, centerId, companyId, irmId) => {
             officerData.lastNameEnglish,
             officerData.lastNameSinhala || null,
             officerData.lastNameTamil || null,
-            'Driver', // Set job role as Driver
+            'Driver', 
             officerData.empId,
             officerData.empType,
             officerData.phoneCode01,

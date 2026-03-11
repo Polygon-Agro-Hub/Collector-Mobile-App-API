@@ -1,4 +1,3 @@
-const jwt = require("jsonwebtoken");
 const db = require("../startup/database");
 
 exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {

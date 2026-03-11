@@ -1,4 +1,4 @@
-const marketPriceDAO = require("../dao/marketPrice-dao");
+const marketPriceDAO = require("../dao/market-price-dao");
 const marketPriceRequestSchema = require("../validation/market-price-validation");
 
 exports.insertMarketPriceRequestBatch = async (req, res) => {

@@ -1,8 +1,7 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
+const qrGenerateEp = require("../end-point/qrGenerate-ep");
 
-const qrGenerateEp = require('../end-point/qrGenerate-ep')
-
-router.post('/getUserData', qrGenerateEp.getUserData);
+router.post("/getUserData", qrGenerateEp.getUserData);
 
 module.exports = router;

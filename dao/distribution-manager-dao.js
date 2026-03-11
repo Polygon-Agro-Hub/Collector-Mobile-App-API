@@ -1,8 +1,8 @@
 const db = require("../startup/database");
 
 exports.getDCenterTarget = (irmId = null) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
             SELECT 
                 co.id,
                 co.irmId,
@@ -228,21 +228,21 @@ exports.getDCenterTarget = (irmId = null) => {
                 o.id ASC
         `;
 
-        const queryParams = irmId ? [irmId, irmId] : [];
-        db.collectionofficer.query(sql, queryParams, (err, results) => {
-            if (err) {
-                console.error("Error executing query:", err);
-                return reject(err);
-            }
+    const queryParams = irmId ? [irmId, irmId] : [];
+    db.collectionofficer.query(sql, queryParams, (err, results) => {
+      if (err) {
+        console.error("Error executing query:", err);
+        return reject(err);
+      }
 
-            resolve(results);
-        });
+      resolve(results);
     });
+  });
 };
 
 exports.getOfficerDetailsById = (officerId) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
       SELECT 
         co.*, 
         co.empId,
@@ -268,24 +268,24 @@ exports.getOfficerDetailsById = (officerId) => {
         co.id = ?;
     `;
 
-        db.collectionofficer.query(sql, [officerId], (err, results) => {
-            if (err) {
-                console.error("Database error:", err.message);
-                return reject(new Error("Database error"));
-            }
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return reject(new Error("Database error"));
+      }
 
-            if (results.length === 0) {
-                return reject(new Error("Officer not found"));
-            }
+      if (results.length === 0) {
+        return reject(new Error("Officer not found"));
+      }
 
-            resolve(results[0]);
-        });
+      resolve(results[0]);
     });
+  });
 };
 
 exports.getAllReplaceRequests = (managerId) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
             SELECT 
                 rr.id,
                 rr.orderPackageId,
@@ -345,27 +345,27 @@ exports.getAllReplaceRequests = (managerId) => {
             LIMIT 1000
         `;
 
-        db.marketPlace.query(sql, [managerId], (err, results) => {
-            if (err) {
-                console.error("Database error details:", {
-                    message: err.message,
-                    sql: err.sql,
-                    code: err.code,
-                    errno: err.errno,
-                });
-                return reject(
-                    new Error("Database error while fetching pending replace requests"),
-                );
-            }
-
-            resolve(results);
+    db.marketPlace.query(sql, [managerId], (err, results) => {
+      if (err) {
+        console.error("Database error details:", {
+          message: err.message,
+          sql: err.sql,
+          code: err.code,
+          errno: err.errno,
         });
+        return reject(
+          new Error("Database error while fetching pending replace requests"),
+        );
+      }
+
+      resolve(results);
     });
+  });
 };
 
 exports.getRetailItemsExcludingUserExclusions = (orderId) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
             SELECT 
                 mi.id,
                 mi.varietyId,
@@ -393,37 +393,37 @@ exports.getRetailItemsExcludingUserExclusions = (orderId) => {
                 mi.displayName ASC
         `;
 
-        db.marketPlace.query(sql, [orderId], (err, results) => {
-            if (err) {
-                console.error("Database error details:", {
-                    message: err.message,
-                    sql: err.sql,
-                    code: err.code,
-                    errno: err.errno,
-                });
-                return reject(new Error("Database error while fetching retail items"));
-            }
-
-            const formattedResults = results.map((item) => ({
-                id: item.id,
-                varietyId: item.varietyId,
-                displayName: item.displayName,
-                category: item.category,
-                normalPrice: parseFloat(item.normalPrice || 0),
-                discountedPrice: item.discountedPrice
-                    ? parseFloat(item.discountedPrice)
-                    : null,
-                unitType: item.unitType,
-            }));
-
-            resolve(formattedResults);
+    db.marketPlace.query(sql, [orderId], (err, results) => {
+      if (err) {
+        console.error("Database error details:", {
+          message: err.message,
+          sql: err.sql,
+          code: err.code,
+          errno: err.errno,
         });
+        return reject(new Error("Database error while fetching retail items"));
+      }
+
+      const formattedResults = results.map((item) => ({
+        id: item.id,
+        varietyId: item.varietyId,
+        displayName: item.displayName,
+        category: item.category,
+        normalPrice: parseFloat(item.normalPrice || 0),
+        discountedPrice: item.discountedPrice
+          ? parseFloat(item.discountedPrice)
+          : null,
+        unitType: item.unitType,
+      }));
+
+      resolve(formattedResults);
     });
+  });
 };
 
 exports.getOrdreReplace = (id) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
       SELECT 
         rr.replceId,
         rr.id,
@@ -444,65 +444,65 @@ exports.getOrdreReplace = (id) => {
                rr.price ASC, rr.status ASC, rr.userId ASC
     `;
 
-        db.marketPlace.query(sql, [id], (err, results) => {
-            if (err) {
-                console.error("Database error details:", {
-                    message: err.message,
-                    sql: err.sql,
-                    code: err.code,
-                    errno: err.errno,
-                });
-                return reject(
-                    new Error("Database error while fetching replace request data"),
-                );
-            }
-
-            const formattedResults = results.map((item) => ({
-                replceId: item.replceId,
-                id: item.id,
-                orderPackageId: item.orderPackageId,
-                productType: item.productType,
-                productId: item.productId,
-                qty: parseInt(item.qty || 0),
-                price: parseFloat(item.price || 0),
-                status: item.status,
-                userId: item.userId,
-                createdAt: item.createdAt,
-
-                displayName: item.displayName,
-            }));
-
-            resolve(formattedResults);
+    db.marketPlace.query(sql, [id], (err, results) => {
+      if (err) {
+        console.error("Database error details:", {
+          message: err.message,
+          sql: err.sql,
+          code: err.code,
+          errno: err.errno,
         });
+        return reject(
+          new Error("Database error while fetching replace request data"),
+        );
+      }
+
+      const formattedResults = results.map((item) => ({
+        replceId: item.replceId,
+        id: item.id,
+        orderPackageId: item.orderPackageId,
+        productType: item.productType,
+        productId: item.productId,
+        qty: parseInt(item.qty || 0),
+        price: parseFloat(item.price || 0),
+        status: item.status,
+        userId: item.userId,
+        createdAt: item.createdAt,
+
+        displayName: item.displayName,
+      }));
+
+      resolve(formattedResults);
     });
+  });
 };
 
 exports.approveReplaceRequest = (params) => {
-    return new Promise((resolve, reject) => {
-        const { replaceRequestId, newProductId, quantity, price } = params;
+  return new Promise((resolve, reject) => {
+    const { replaceRequestId, newProductId, quantity, price } = params;
 
-        if (!replaceRequestId || !newProductId || !quantity || !price) {
-            return reject(
-                new Error(
-                    "Missing required parameters: replaceRequestId, newProductId, quantity, price",
-                ),
-            );
+    if (!replaceRequestId || !newProductId || !quantity || !price) {
+      return reject(
+        new Error(
+          "Missing required parameters: replaceRequestId, newProductId, quantity, price",
+        ),
+      );
+    }
+
+    db.marketPlace.getConnection((err, connection) => {
+      if (err) {
+        console.error("Failed to get connection from pool:", err);
+        return reject(new Error("Failed to get database connection"));
+      }
+
+      connection.beginTransaction((err) => {
+        if (err) {
+          console.error("Transaction begin error:", err);
+          connection.release();
+          return reject(new Error("Failed to start transaction"));
         }
 
-        db.marketPlace.getConnection((err, connection) => {
-            if (err) {
-                console.error("Failed to get connection from pool:", err);
-                return reject(new Error("Failed to get database connection"));
-            }
-
-            connection.beginTransaction((err) => {
-                if (err) {
-                    console.error("Transaction begin error:", err);
-                    connection.release();
-                    return reject(new Error("Failed to start transaction"));
-                }
-
-                const getReplaceRequestSql = `
+        const getReplaceRequestSql = `
                     SELECT 
                         rr.id,
                         rr.replceId,
@@ -518,76 +518,76 @@ exports.approveReplaceRequest = (params) => {
                     WHERE rr.id = ?
                 `;
 
-                connection.query(
-                    getReplaceRequestSql,
-                    [replaceRequestId],
-                    (err, replaceResults) => {
-                        if (err) {
-                            console.error("Get replace request error:", err);
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(new Error("Failed to get replace request details"));
-                            });
-                        }
+        connection.query(
+          getReplaceRequestSql,
+          [replaceRequestId],
+          (err, replaceResults) => {
+            if (err) {
+              console.error("Get replace request error:", err);
+              return connection.rollback(() => {
+                connection.release();
+                reject(new Error("Failed to get replace request details"));
+              });
+            }
 
-                        if (replaceResults.length === 0) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(
-                                    new Error(
-                                        `Replace request not found with id: ${replaceRequestId}`,
-                                    ),
-                                );
-                            });
-                        }
+            if (replaceResults.length === 0) {
+              return connection.rollback(() => {
+                connection.release();
+                reject(
+                  new Error(
+                    `Replace request not found with id: ${replaceRequestId}`,
+                  ),
+                );
+              });
+            }
 
-                        const replaceRequest = replaceResults[0];
+            const replaceRequest = replaceResults[0];
 
-                        if (replaceRequest.status === "Approved") {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(new Error("Replace request is already approved"));
-                            });
-                        }
+            if (replaceRequest.status === "Approved") {
+              return connection.rollback(() => {
+                connection.release();
+                reject(new Error("Replace request is already approved"));
+              });
+            }
 
-                        const getOrderPackageItemsSql = `
+            const getOrderPackageItemsSql = `
                         SELECT id, productType, productId, qty, price 
                         FROM market_place.orderpackageitems 
                         WHERE id = ?
                     `;
 
-                        connection.query(
-                            getOrderPackageItemsSql,
-                            [replaceRequest.replceId],
-                            (err, itemsResults) => {
-                                if (err) {
-                                    console.error("Get order package items error:", err);
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        reject(new Error("Failed to get order package items"));
-                                    });
-                                }
+            connection.query(
+              getOrderPackageItemsSql,
+              [replaceRequest.replceId],
+              (err, itemsResults) => {
+                if (err) {
+                  console.error("Get order package items error:", err);
+                  return connection.rollback(() => {
+                    connection.release();
+                    reject(new Error("Failed to get order package items"));
+                  });
+                }
 
-                                if (itemsResults.length === 0) {
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        reject(
-                                            new Error(
-                                                `No order package item found with id: ${replaceRequest.replceId}`,
-                                            ),
-                                        );
-                                    });
-                                }
+                if (itemsResults.length === 0) {
+                  return connection.rollback(() => {
+                    connection.release();
+                    reject(
+                      new Error(
+                        `No order package item found with id: ${replaceRequest.replceId}`,
+                      ),
+                    );
+                  });
+                }
 
-                                const orderPackageItem = itemsResults[0];
+                const orderPackageItem = itemsResults[0];
 
-                                if (
-                                    orderPackageItem.productId !== replaceRequest.oldProductId
-                                ) {
-                                    console.log(`WARNING: Product ID mismatch detected!`);
-                                }
+                if (
+                  orderPackageItem.productId !== replaceRequest.oldProductId
+                ) {
+                  console.log(`WARNING: Product ID mismatch detected!`);
+                }
 
-                                const updateReplaceRequestSql = `
+                const updateReplaceRequestSql = `
                                 UPDATE market_place.replacerequest 
                                 SET 
                                     productId = ?,
@@ -597,19 +597,19 @@ exports.approveReplaceRequest = (params) => {
                                 WHERE id = ?
                             `;
 
-                                connection.query(
-                                    updateReplaceRequestSql,
-                                    [newProductId, quantity, price, replaceRequest.id],
-                                    (err, updateReplaceResult) => {
-                                        if (err) {
-                                            console.error("Update replace request error:", err);
-                                            return connection.rollback(() => {
-                                                connection.release();
-                                                reject(new Error("Failed to update replace request"));
-                                            });
-                                        }
+                connection.query(
+                  updateReplaceRequestSql,
+                  [newProductId, quantity, price, replaceRequest.id],
+                  (err, updateReplaceResult) => {
+                    if (err) {
+                      console.error("Update replace request error:", err);
+                      return connection.rollback(() => {
+                        connection.release();
+                        reject(new Error("Failed to update replace request"));
+                      });
+                    }
 
-                                        const insertPrevDefineProductSql = `
+                    const insertPrevDefineProductSql = `
                                         INSERT INTO market_place.prevdefineproduct 
                                         (orderPackageId, replceId, productType, productId, qty, price)
                                         SELECT ?, ?, productType, productId, qty, price
@@ -621,29 +621,29 @@ exports.approveReplaceRequest = (params) => {
                                         )
                                     `;
 
-                                        connection.query(
-                                            insertPrevDefineProductSql,
-                                            [
-                                                replaceRequest.orderPackageId,
-                                                replaceRequest.replceId,
-                                                orderPackageItem.id,
-                                                replaceRequest.orderPackageId,
-                                                replaceRequest.replceId,
-                                            ],
-                                            (err, insertPrevDefineResult) => {
-                                                if (err) {
-                                                    console.error("Insert prevdefineproduct error:", err);
-                                                    return connection.rollback(() => {
-                                                        connection.release();
-                                                        reject(
-                                                            new Error(
-                                                                "Failed to insert into prevdefineproduct",
-                                                            ),
-                                                        );
-                                                    });
-                                                }
+                    connection.query(
+                      insertPrevDefineProductSql,
+                      [
+                        replaceRequest.orderPackageId,
+                        replaceRequest.replceId,
+                        orderPackageItem.id,
+                        replaceRequest.orderPackageId,
+                        replaceRequest.replceId,
+                      ],
+                      (err, insertPrevDefineResult) => {
+                        if (err) {
+                          console.error("Insert prevdefineproduct error:", err);
+                          return connection.rollback(() => {
+                            connection.release();
+                            reject(
+                              new Error(
+                                "Failed to insert into prevdefineproduct",
+                              ),
+                            );
+                          });
+                        }
 
-                                                const updateOrderPackageItemsSql = `
+                        const updateOrderPackageItemsSql = `
                                                 UPDATE market_place.orderpackageitems 
                                                 SET 
                                                     productId = ?,
@@ -652,116 +652,116 @@ exports.approveReplaceRequest = (params) => {
                                                 WHERE id = ?
                                             `;
 
-                                                connection.query(
-                                                    updateOrderPackageItemsSql,
-                                                    [newProductId, quantity, price, orderPackageItem.id],
-                                                    (err, updateItemsResult) => {
-                                                        if (err) {
-                                                            console.error(
-                                                                "Update order package items error:",
-                                                                err,
-                                                            );
-                                                            return connection.rollback(() => {
-                                                                connection.release();
-                                                                reject(
-                                                                    new Error(
-                                                                        "Failed to update order package items",
-                                                                    ),
-                                                                );
-                                                            });
-                                                        }
+                        connection.query(
+                          updateOrderPackageItemsSql,
+                          [newProductId, quantity, price, orderPackageItem.id],
+                          (err, updateItemsResult) => {
+                            if (err) {
+                              console.error(
+                                "Update order package items error:",
+                                err,
+                              );
+                              return connection.rollback(() => {
+                                connection.release();
+                                reject(
+                                  new Error(
+                                    "Failed to update order package items",
+                                  ),
+                                );
+                              });
+                            }
 
-                                                        const updateOrderPackageSql = `
+                            const updateOrderPackageSql = `
                                                         UPDATE market_place.orderpackage 
                                                         SET isLock = 0
                                                         WHERE id = ?
                                                     `;
 
-                                                        connection.query(
-                                                            updateOrderPackageSql,
-                                                            [replaceRequest.orderPackageId],
-                                                            (err, updatePackageResult) => {
-                                                                if (err) {
-                                                                    console.error(
-                                                                        "Update order package error:",
-                                                                        err,
-                                                                    );
-                                                                    return connection.rollback(() => {
-                                                                        connection.release();
-                                                                        reject(
-                                                                            new Error(
-                                                                                "Failed to update order package",
-                                                                            ),
-                                                                        );
-                                                                    });
-                                                                }
+                            connection.query(
+                              updateOrderPackageSql,
+                              [replaceRequest.orderPackageId],
+                              (err, updatePackageResult) => {
+                                if (err) {
+                                  console.error(
+                                    "Update order package error:",
+                                    err,
+                                  );
+                                  return connection.rollback(() => {
+                                    connection.release();
+                                    reject(
+                                      new Error(
+                                        "Failed to update order package",
+                                      ),
+                                    );
+                                  });
+                                }
 
-                                                                connection.commit((err) => {
-                                                                    if (err) {
-                                                                        console.error(
-                                                                            "Transaction commit error:",
-                                                                            err,
-                                                                        );
-                                                                        return connection.rollback(() => {
-                                                                            connection.release();
-                                                                            reject(
-                                                                                new Error(
-                                                                                    "Failed to commit transaction",
-                                                                                ),
-                                                                            );
-                                                                        });
-                                                                    }
+                                connection.commit((err) => {
+                                  if (err) {
+                                    console.error(
+                                      "Transaction commit error:",
+                                      err,
+                                    );
+                                    return connection.rollback(() => {
+                                      connection.release();
+                                      reject(
+                                        new Error(
+                                          "Failed to commit transaction",
+                                        ),
+                                      );
+                                    });
+                                  }
 
-                                                                    connection.release();
+                                  connection.release();
 
-                                                                    resolve({
-                                                                        success: true,
-                                                                        message:
-                                                                            "Replace request approved successfully",
-                                                                        data: {
-                                                                            replaceRequestId: replaceRequestId,
-                                                                            replceId: replaceRequest.replceId,
-                                                                            orderPackageId:
-                                                                                replaceRequest.orderPackageId,
-                                                                            oldProductId: orderPackageItem.productId,
-                                                                            newProductId: newProductId,
-                                                                            oldQuantity: orderPackageItem.qty,
-                                                                            newQuantity: quantity,
-                                                                            oldPrice: orderPackageItem.price,
-                                                                            newPrice: price,
-                                                                            updatedTables: [
-                                                                                "replacerequest",
-                                                                                "prevdefineproduct (inserted)",
-                                                                                "orderpackageitems",
-                                                                                "orderpackage",
-                                                                            ],
-                                                                        },
-                                                                    });
-                                                                });
-                                                            },
-                                                        );
-                                                    },
-                                                );
-                                            },
-                                        );
+                                  resolve({
+                                    success: true,
+                                    message:
+                                      "Replace request approved successfully",
+                                    data: {
+                                      replaceRequestId: replaceRequestId,
+                                      replceId: replaceRequest.replceId,
+                                      orderPackageId:
+                                        replaceRequest.orderPackageId,
+                                      oldProductId: orderPackageItem.productId,
+                                      newProductId: newProductId,
+                                      oldQuantity: orderPackageItem.qty,
+                                      newQuantity: quantity,
+                                      oldPrice: orderPackageItem.price,
+                                      newPrice: price,
+                                      updatedTables: [
+                                        "replacerequest",
+                                        "prevdefineproduct (inserted)",
+                                        "orderpackageitems",
+                                        "orderpackage",
+                                      ],
                                     },
-                                );
-                            },
+                                  });
+                                });
+                              },
+                            );
+                          },
                         );
-                    },
+                      },
+                    );
+                  },
                 );
-            });
-        });
+              },
+            );
+          },
+        );
+      });
     });
+  });
 };
 
 exports.getDistributionOfficerTarget = (officerId) => {
-    return new Promise((resolve, reject) => {
-        if (!officerId) {
-            return reject(new Error("Officer ID is missing or invalid"));
-        }
+  return new Promise((resolve, reject) => {
+    if (!officerId) {
+      return reject(new Error("Officer ID is missing or invalid"));
+    }
 
-        const sql = `
+    const sql = `
             SELECT 
                 dt.id AS distributedTargetId,
                 dt.companycenterId,
@@ -985,20 +985,20 @@ exports.getDistributionOfficerTarget = (officerId) => {
                 o.id ASC
         `;
 
-        db.collectionofficer.query(sql, [officerId], (err, results) => {
-            if (err) {
-                console.error("Error executing query:", err);
-                return reject(err);
-            }
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Error executing query:", err);
+        return reject(err);
+      }
 
-            resolve(results);
-        });
+      resolve(results);
     });
+  });
 };
 
 exports.getAllDistributionOfficer = async (managerId) => {
-    try {
-        const managerQuery = `
+  try {
+    const managerQuery = `
       SELECT 
         id,
         centerId,
@@ -1017,7 +1017,7 @@ exports.getAllDistributionOfficer = async (managerId) => {
       WHERE id = ?
     `;
 
-        const officersQuery = `
+    const officersQuery = `
       SELECT 
         id,
         centerId,
@@ -1036,116 +1036,116 @@ exports.getAllDistributionOfficer = async (managerId) => {
       WHERE irmId = ? AND status = 'Approved'
     `;
 
-        const [managerRows] = await db.collectionofficer
-            .promise()
-            .query(managerQuery, [managerId]);
-        const [officerRows] = await db.collectionofficer
-            .promise()
-            .query(officersQuery, [managerId]);
+    const [managerRows] = await db.collectionofficer
+      .promise()
+      .query(managerQuery, [managerId]);
+    const [officerRows] = await db.collectionofficer
+      .promise()
+      .query(officersQuery, [managerId]);
 
-        const allData = [];
+    const allData = [];
 
-        if (managerRows.length > 0) {
-            allData.push(managerRows[0]);
-        }
-
-        allData.push(...officerRows);
-
-        return allData;
-    } catch (error) {
-        console.error("Error in getAllDistributionOfficer DAO:", error);
-        throw error;
+    if (managerRows.length > 0) {
+      allData.push(managerRows[0]);
     }
+
+    allData.push(...officerRows);
+
+    return allData;
+  } catch (error) {
+    console.error("Error in getAllDistributionOfficer DAO:", error);
+    throw error;
+  }
 };
 
 exports.targetPass = async (params) => {
-    try {
-        const {
-            assigneeOfficerId,
-            targetItems,
-            invoiceNumbers,
-            processOrderId,
-            officerId,
-        } = params;
+  try {
+    const {
+      assigneeOfficerId,
+      targetItems,
+      invoiceNumbers,
+      processOrderId,
+      officerId,
+    } = params;
 
-        if (!officerId) {
-            return {
-                success: false,
-                message: "officerId is required",
-            };
-        }
+    if (!officerId) {
+      return {
+        success: false,
+        message: "officerId is required",
+      };
+    }
 
-        if (!assigneeOfficerId) {
-            return {
-                success: false,
-                message: "assigneeOfficerId is required",
-            };
-        }
+    if (!assigneeOfficerId) {
+      return {
+        success: false,
+        message: "assigneeOfficerId is required",
+      };
+    }
 
-        if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
-            return {
-                success: false,
-                message: "processOrderId must be a non-empty array",
-            };
-        }
+    if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
+      return {
+        success: false,
+        message: "processOrderId must be a non-empty array",
+      };
+    }
 
-        let sourceOfficerId;
-        let targetOfficerId;
+    let sourceOfficerId;
+    let targetOfficerId;
 
-        if (typeof officerId === "number" || !isNaN(parseInt(officerId))) {
-            sourceOfficerId = parseInt(officerId);
-        } else {
-            const sourceQuery = `
+    if (typeof officerId === "number" || !isNaN(parseInt(officerId))) {
+      sourceOfficerId = parseInt(officerId);
+    } else {
+      const sourceQuery = `
                 SELECT id FROM collection_officer.collectionofficer
                 WHERE empId = ? 
                 LIMIT 1
             `;
-            const sourceResult = await db.collectionofficer
-                .promise()
-                .query(sourceQuery, [officerId]);
+      const sourceResult = await db.collectionofficer
+        .promise()
+        .query(sourceQuery, [officerId]);
 
-            if (!sourceResult[0] || sourceResult[0].length === 0) {
-                return {
-                    success: false,
-                    message: `Source officer not found with code: ${officerId}`,
-                };
-            }
+      if (!sourceResult[0] || sourceResult[0].length === 0) {
+        return {
+          success: false,
+          message: `Source officer not found with code: ${officerId}`,
+        };
+      }
 
-            sourceOfficerId = parseInt(sourceResult[0][0].id);
-        }
+      sourceOfficerId = parseInt(sourceResult[0][0].id);
+    }
 
-        if (
-            typeof assigneeOfficerId === "number" ||
-            !isNaN(parseInt(assigneeOfficerId))
-        ) {
-            targetOfficerId = parseInt(assigneeOfficerId);
-        } else {
-            const assigneeQuery = `
+    if (
+      typeof assigneeOfficerId === "number" ||
+      !isNaN(parseInt(assigneeOfficerId))
+    ) {
+      targetOfficerId = parseInt(assigneeOfficerId);
+    } else {
+      const assigneeQuery = `
                 SELECT id FROM collection_officer.collectionofficer 
                 WHERE empId = ? 
                 LIMIT 1
             `;
-            const assigneeResult = await db.collectionofficer
-                .promise()
-                .query(assigneeQuery, [assigneeOfficerId]);
+      const assigneeResult = await db.collectionofficer
+        .promise()
+        .query(assigneeQuery, [assigneeOfficerId]);
 
-            if (!assigneeResult[0] || assigneeResult[0].length === 0) {
-                return {
-                    success: false,
-                    message: `Assignee officer not found with code: ${assigneeOfficerId}`,
-                };
-            }
+      if (!assigneeResult[0] || assigneeResult[0].length === 0) {
+        return {
+          success: false,
+          message: `Assignee officer not found with code: ${assigneeOfficerId}`,
+        };
+      }
 
-            targetOfficerId = parseInt(assigneeResult[0][0].id);
-        }
+      targetOfficerId = parseInt(assigneeResult[0][0].id);
+    }
 
-        const today = new Date();
+    const today = new Date();
 
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const istDate = new Date(today.getTime() + istOffset);
-        const todayStr = istDate.toISOString().split("T")[0];
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(today.getTime() + istOffset);
+    const todayStr = istDate.toISOString().split("T")[0];
 
-        const sourceTargetQuery = `
+    const sourceTargetQuery = `
             SELECT id, userId, target, complete, createdAt, companycenterId 
             FROM collection_officer.distributedtarget 
             WHERE userId = ? 
@@ -1154,26 +1154,26 @@ exports.targetPass = async (params) => {
             LIMIT 1
         `;
 
-        const sourceTargetResult = await db.collectionofficer
-            .promise()
-            .query(sourceTargetQuery, [sourceOfficerId]);
+    const sourceTargetResult = await db.collectionofficer
+      .promise()
+      .query(sourceTargetQuery, [sourceOfficerId]);
 
-        const sourceRows = sourceTargetResult[0];
+    const sourceRows = sourceTargetResult[0];
 
-        if (!sourceRows || sourceRows.length === 0) {
-            return {
-                success: false,
-                message: `Source officer (userId: ${sourceOfficerId}) has no target record for today. Please create a target first.`,
-            };
-        }
+    if (!sourceRows || sourceRows.length === 0) {
+      return {
+        success: false,
+        message: `Source officer (userId: ${sourceOfficerId}) has no target record for today. Please create a target first.`,
+      };
+    }
 
-        const sourceTargetId = parseInt(sourceRows[0].id);
-        const sourceUserId = sourceRows[0].userId;
-        const sourceTargetCount = sourceRows[0].target;
-        const sourceComplete = sourceRows[0].complete;
-        const sourceCreatedAt = sourceRows[0].createdAt;
+    const sourceTargetId = parseInt(sourceRows[0].id);
+    const sourceUserId = sourceRows[0].userId;
+    const sourceTargetCount = sourceRows[0].target;
+    const sourceComplete = sourceRows[0].complete;
+    const sourceCreatedAt = sourceRows[0].createdAt;
 
-        const assigneeTargetQuery = `
+    const assigneeTargetQuery = `
             SELECT id, userId, target, complete, createdAt 
             FROM collection_officer.distributedtarget 
             WHERE userId = ? 
@@ -1182,213 +1182,213 @@ exports.targetPass = async (params) => {
             LIMIT 1
         `;
 
-        const assigneeTargetResult = await db.collectionofficer
-            .promise()
-            .query(assigneeTargetQuery, [targetOfficerId]);
+    const assigneeTargetResult = await db.collectionofficer
+      .promise()
+      .query(assigneeTargetQuery, [targetOfficerId]);
 
-        const assigneeRows = assigneeTargetResult[0];
+    const assigneeRows = assigneeTargetResult[0];
 
-        let assigneeTargetId;
-        let assigneeUserId;
-        let assigneeTargetCount;
-        let assigneeComplete;
-        let assigneeCreatedAt;
+    let assigneeTargetId;
+    let assigneeUserId;
+    let assigneeTargetCount;
+    let assigneeComplete;
+    let assigneeCreatedAt;
 
-        if (!assigneeRows || assigneeRows.length === 0) {
-            const getCompanyCenterQuery = `
+    if (!assigneeRows || assigneeRows.length === 0) {
+      const getCompanyCenterQuery = `
                 SELECT companycenterId 
                 FROM collection_officer.distributedtarget 
                 WHERE userId = ? 
                 ORDER BY id DESC 
                 LIMIT 1
             `;
-            const companyCenterResult = await db.collectionofficer
-                .promise()
-                .query(getCompanyCenterQuery, [targetOfficerId]);
+      const companyCenterResult = await db.collectionofficer
+        .promise()
+        .query(getCompanyCenterQuery, [targetOfficerId]);
 
-            let companycenterId;
-            if (companyCenterResult[0] && companyCenterResult[0].length > 0) {
-                companycenterId = companyCenterResult[0][0].companycenterId;
-            } else {
-                companycenterId = sourceRows[0].companycenterId || null;
-            }
+      let companycenterId;
+      if (companyCenterResult[0] && companyCenterResult[0].length > 0) {
+        companycenterId = companyCenterResult[0][0].companycenterId;
+      } else {
+        companycenterId = sourceRows[0].companycenterId || null;
+      }
 
-            const createTargetQuery = `
+      const createTargetQuery = `
                 INSERT INTO collection_officer.distributedtarget 
                 (companycenterId, userId, target, complete, createdAt) 
                 VALUES (?, ?, 0, 0, NOW())
             `;
 
-            const createResult = await db.collectionofficer
-                .promise()
-                .query(createTargetQuery, [companycenterId, targetOfficerId]);
+      const createResult = await db.collectionofficer
+        .promise()
+        .query(createTargetQuery, [companycenterId, targetOfficerId]);
 
-            assigneeTargetId = parseInt(createResult[0].insertId);
-            assigneeUserId = targetOfficerId;
-            assigneeTargetCount = 0;
-            assigneeComplete = 0;
-            assigneeCreatedAt = new Date();
-        } else {
-            assigneeTargetId = parseInt(assigneeRows[0].id);
-            assigneeUserId = assigneeRows[0].userId;
-            assigneeTargetCount = assigneeRows[0].target;
-            assigneeComplete = assigneeRows[0].complete;
-            assigneeCreatedAt = assigneeRows[0].createdAt;
-        }
+      assigneeTargetId = parseInt(createResult[0].insertId);
+      assigneeUserId = targetOfficerId;
+      assigneeTargetCount = 0;
+      assigneeComplete = 0;
+      assigneeCreatedAt = new Date();
+    } else {
+      assigneeTargetId = parseInt(assigneeRows[0].id);
+      assigneeUserId = assigneeRows[0].userId;
+      assigneeTargetCount = assigneeRows[0].target;
+      assigneeComplete = assigneeRows[0].complete;
+      assigneeCreatedAt = assigneeRows[0].createdAt;
+    }
 
-        const transferCount = processOrderId.length;
+    const transferCount = processOrderId.length;
 
-        if (sourceTargetCount < transferCount) {
-            return {
-                success: false,
-                message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}`,
-            };
-        }
+    if (sourceTargetCount < transferCount) {
+      return {
+        success: false,
+        message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}`,
+      };
+    }
 
-        const newSourceTarget = sourceTargetCount - transferCount;
-        const updateSourceQuery = `
+    const newSourceTarget = sourceTargetCount - transferCount;
+    const updateSourceQuery = `
             UPDATE collection_officer.distributedtarget 
             SET target = ? 
             WHERE id = ? AND DATE(createdAt) = CURDATE()
         `;
 
-        const sourceUpdateResult = await db.collectionofficer
-            .promise()
-            .query(updateSourceQuery, [newSourceTarget, sourceTargetId]);
+    const sourceUpdateResult = await db.collectionofficer
+      .promise()
+      .query(updateSourceQuery, [newSourceTarget, sourceTargetId]);
 
-        const newAssigneeTarget = assigneeTargetCount + transferCount;
-        const updateAssigneeQuery = `
+    const newAssigneeTarget = assigneeTargetCount + transferCount;
+    const updateAssigneeQuery = `
             UPDATE collection_officer.distributedtarget 
             SET target = ? 
             WHERE id = ? AND DATE(createdAt) = CURDATE()
         `;
 
-        const assigneeUpdateResult = await db.collectionofficer
-            .promise()
-            .query(updateAssigneeQuery, [newAssigneeTarget, assigneeTargetId]);
+    const assigneeUpdateResult = await db.collectionofficer
+      .promise()
+      .query(updateAssigneeQuery, [newAssigneeTarget, assigneeTargetId]);
 
-        const results = [];
-        const errors = [];
+    const results = [];
+    const errors = [];
 
-        for (const orderId of processOrderId) {
-            try {
-                const orderIdInt = parseInt(orderId);
+    for (const orderId of processOrderId) {
+      try {
+        const orderIdInt = parseInt(orderId);
 
-                const checkOrderQuery = `
+        const checkOrderQuery = `
                     SELECT id, targetId, orderId 
                     FROM collection_officer.distributedtargetitems 
                     WHERE orderId = ?
                 `;
 
-                const existingRecords = await db.collectionofficer
-                    .promise()
-                    .query(checkOrderQuery, [orderIdInt]);
-                const existingRows = existingRecords[0];
+        const existingRecords = await db.collectionofficer
+          .promise()
+          .query(checkOrderQuery, [orderIdInt]);
+        const existingRows = existingRecords[0];
 
-                if (!existingRows || existingRows.length === 0) {
-                    errors.push(`No records found for order ID: ${orderIdInt}`);
-                    continue;
-                }
+        if (!existingRows || existingRows.length === 0) {
+          errors.push(`No records found for order ID: ${orderIdInt}`);
+          continue;
+        }
 
-                if (existingRows[0].targetId !== sourceTargetId) {
-                    errors.push(
-                        `Order ID ${orderIdInt} does not belong to source officer (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`,
-                    );
-                    continue;
-                }
+        if (existingRows[0].targetId !== sourceTargetId) {
+          errors.push(
+            `Order ID ${orderIdInt} does not belong to source officer (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`,
+          );
+          continue;
+        }
 
-                const updateItemsQuery = `
+        const updateItemsQuery = `
                     UPDATE collection_officer.distributedtargetitems 
                     SET targetId = ? 
                     WHERE orderId = ?
                 `;
 
-                const updateResult = await db.collectionofficer
-                    .promise()
-                    .query(updateItemsQuery, [assigneeTargetId, orderIdInt]);
+        const updateResult = await db.collectionofficer
+          .promise()
+          .query(updateItemsQuery, [assigneeTargetId, orderIdInt]);
 
-                if (updateResult[0].affectedRows === 0) {
-                    errors.push(`No records updated for order ID: ${orderIdInt}`);
-                    continue;
-                }
+        if (updateResult[0].affectedRows === 0) {
+          errors.push(`No records updated for order ID: ${orderIdInt}`);
+          continue;
+        }
 
-                const updatedRecordsQuery = `
+        const updatedRecordsQuery = `
                     SELECT id, targetId, orderId 
                     FROM collection_officer.distributedtargetitems 
                     WHERE orderId = ?
                     ORDER BY id ASC
                 `;
 
-                const updatedRecords = await db.collectionofficer
-                    .promise()
-                    .query(updatedRecordsQuery, [orderIdInt]);
-                const updatedRows = updatedRecords[0];
+        const updatedRecords = await db.collectionofficer
+          .promise()
+          .query(updatedRecordsQuery, [orderIdInt]);
+        const updatedRows = updatedRecords[0];
 
-                results.push({
-                    orderId: orderIdInt,
-                    previousTargetId: sourceTargetId,
-                    newTargetId: assigneeTargetId,
-                    affectedRows: updateResult[0].affectedRows,
-                    updatedRecords: updatedRows,
-                });
-            } catch (orderError) {
-                console.error(`Error processing order ID ${orderId}:`, orderError);
-                errors.push(
-                    `Failed to process order ID ${orderId}: ${orderError.message}`,
-                );
-            }
-        }
-
-        const response = {
-            success: results.length > 0,
-            message:
-                results.length > 0
-                    ? "Target passed successfully"
-                    : "No targets were passed",
-            data: {
-                sourceOfficer: {
-                    officerId: officerId,
-                    targetId: sourceTargetId,
-                    previousTarget: sourceTargetCount,
-                    newTarget: newSourceTarget,
-                    reduced: transferCount,
-                },
-                assigneeOfficer: {
-                    officerId: assigneeOfficerId,
-                    targetId: assigneeTargetId,
-                    previousTarget: assigneeTargetCount,
-                    newTarget: newAssigneeTarget,
-                    increased: transferCount,
-                },
-                transferredOrders: {
-                    successful: results.length,
-                    total: processOrderId.length,
-                    failed: errors.length,
-                },
-                targetItems: targetItems,
-                invoiceNumbers: invoiceNumbers,
-                results: results,
-            },
-        };
-
-        if (errors.length > 0) {
-            response.errors = errors;
-            response.message += ` (${errors.length} error(s) occurred)`;
-        }
-
-        return response;
-    } catch (error) {
-        console.error("Error in targetPass DAO:", error);
-        return {
-            success: false,
-            message: "Database operation failed",
-            error: error.message,
-        };
+        results.push({
+          orderId: orderIdInt,
+          previousTargetId: sourceTargetId,
+          newTargetId: assigneeTargetId,
+          affectedRows: updateResult[0].affectedRows,
+          updatedRecords: updatedRows,
+        });
+      } catch (orderError) {
+        console.error(`Error processing order ID ${orderId}:`, orderError);
+        errors.push(
+          `Failed to process order ID ${orderId}: ${orderError.message}`,
+        );
+      }
     }
+
+    const response = {
+      success: results.length > 0,
+      message:
+        results.length > 0
+          ? "Target passed successfully"
+          : "No targets were passed",
+      data: {
+        sourceOfficer: {
+          officerId: officerId,
+          targetId: sourceTargetId,
+          previousTarget: sourceTargetCount,
+          newTarget: newSourceTarget,
+          reduced: transferCount,
+        },
+        assigneeOfficer: {
+          officerId: assigneeOfficerId,
+          targetId: assigneeTargetId,
+          previousTarget: assigneeTargetCount,
+          newTarget: newAssigneeTarget,
+          increased: transferCount,
+        },
+        transferredOrders: {
+          successful: results.length,
+          total: processOrderId.length,
+          failed: errors.length,
+        },
+        targetItems: targetItems,
+        invoiceNumbers: invoiceNumbers,
+        results: results,
+      },
+    };
+
+    if (errors.length > 0) {
+      response.errors = errors;
+      response.message += ` (${errors.length} error(s) occurred)`;
+    }
+
+    return response;
+  } catch (error) {
+    console.error("Error in targetPass DAO:", error);
+    return {
+      success: false,
+      message: "Database operation failed",
+      error: error.message,
+    };
+  }
 };
 
 exports.getOfficerDetails = async (empId) => {
-    const sql = `
+  const sql = `
     SELECT 
       firstNameEnglish AS firstName, 
       lastNameEnglish AS lastName, 
@@ -1398,15 +1398,15 @@ exports.getOfficerDetails = async (empId) => {
     WHERE 
       empId = ?;
   `;
-    return db.collectionofficer.promise().query(sql, [empId]);
+  return db.collectionofficer.promise().query(sql, [empId]);
 };
 
 exports.getDistributionPaymentsSummary = async ({
-    collectionOfficerId,
-    fromDate,
-    toDate,
+  collectionOfficerId,
+  fromDate,
+  toDate,
 }) => {
-    const sql = `
+  const sql = `
     SELECT 
         DATE(CONVERT_TZ(dti.completeTime, '+00:00', '+05:30')) AS date,
         COUNT(dti.id) AS completedOrders,
@@ -1436,14 +1436,14 @@ exports.getDistributionPaymentsSummary = async ({
     ORDER BY 
         DATE(CONVERT_TZ(dti.completeTime, '+00:00', '+05:30'));
     `;
-    return db.collectionofficer
-        .promise()
-        .query(sql, [collectionOfficerId, fromDate, toDate]);
+  return db.collectionofficer
+    .promise()
+    .query(sql, [collectionOfficerId, fromDate, toDate]);
 };
 
 exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
-    try {
-        const query = `
+  try {
+    const query = `
             SELECT 
                 COUNT(*) AS totalTasks,
                 SUM(CASE WHEN complete >= target THEN 1 ELSE 0 END) AS completedTasks,
@@ -1453,38 +1453,38 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
             WHERE userId = ? AND target > 0;
         `;
 
-        const [results] = await db.collectionofficer
-            .promise()
-            .query(query, [collectionOfficerId]);
+    const [results] = await db.collectionofficer
+      .promise()
+      .query(query, [collectionOfficerId]);
 
-        if (!results || results.length === 0) {
-            return {
-                totalTasks: 0,
-                completedTasks: 0,
-                totalComplete: 0,
-                totalTarget: 0,
-            };
-        }
-
-        return {
-            totalTasks: parseInt(results[0].totalTasks) || 0,
-            completedTasks: parseInt(results[0].completedTasks) || 0,
-            totalComplete: parseInt(results[0].totalComplete) || 0,
-            totalTarget: parseInt(results[0].totalTarget) || 0,
-        };
-    } catch (error) {
-        console.error("Database error in getOfficerSummaryDao:", error);
-        throw new Error(`Database operation failed: ${error.message}`);
+    if (!results || results.length === 0) {
+      return {
+        totalTasks: 0,
+        completedTasks: 0,
+        totalComplete: 0,
+        totalTarget: 0,
+      };
     }
+
+    return {
+      totalTasks: parseInt(results[0].totalTasks) || 0,
+      completedTasks: parseInt(results[0].completedTasks) || 0,
+      totalComplete: parseInt(results[0].totalComplete) || 0,
+      totalTarget: parseInt(results[0].totalTarget) || 0,
+    };
+  } catch (error) {
+    console.error("Database error in getOfficerSummaryDao:", error);
+    throw new Error(`Database operation failed: ${error.message}`);
+  }
 };
 
 exports.getOrderById = async (orderId) => {
-    let connection;
+  let connection;
 
-    try {
-        connection = await db.marketPlace.promise().getConnection();
+  try {
+    connection = await db.marketPlace.promise().getConnection();
 
-        const orderSql = `
+    const orderSql = `
             SELECT
                 o.id AS orderId,
                 o.userId,
@@ -1511,25 +1511,25 @@ exports.getOrderById = async (orderId) => {
             WHERE o.id = ?
         `;
 
-        const [orderResults] = await connection.execute(orderSql, [orderId]);
+    const [orderResults] = await connection.execute(orderSql, [orderId]);
 
-        if (orderResults.length === 0) {
-            return { message: "No order found with the given ID" };
-        }
+    if (orderResults.length === 0) {
+      return { message: "No order found with the given ID" };
+    }
 
-        const order = orderResults[0];
+    const order = orderResults[0];
 
-        let finalIsPackage = 0;
-        let processOrderId = null;
-        let invoiceNumber = null;
-        let orderStatus = null;
-        let reportStatus = null;
-        let paymentMethod = null;
+    let finalIsPackage = 0;
+    let processOrderId = null;
+    let invoiceNumber = null;
+    let orderStatus = null;
+    let reportStatus = null;
+    let paymentMethod = null;
 
-        if (order.orderApp === "Marketplace") {
-            finalIsPackage = order.orderIsPackage || 0;
+    if (order.orderApp === "Marketplace") {
+      finalIsPackage = order.orderIsPackage || 0;
 
-            const processOrderSql = `
+      const processOrderSql = `
                 SELECT 
                     id AS processOrderId,
                     invNo AS invoiceNumber,
@@ -1540,20 +1540,20 @@ exports.getOrderById = async (orderId) => {
                 WHERE orderId = ?
             `;
 
-            const [processOrderResults] = await connection.execute(processOrderSql, [
-                orderId,
-            ]);
+      const [processOrderResults] = await connection.execute(processOrderSql, [
+        orderId,
+      ]);
 
-            if (processOrderResults.length > 0) {
-                const processOrder = processOrderResults[0];
-                processOrderId = processOrder.processOrderId;
-                invoiceNumber = processOrder.invoiceNumber;
-                orderStatus = processOrder.status;
-                paymentMethod = processOrder.paymentMethod;
-                reportStatus = processOrder.reportStatus;
-            }
-        } else if (order.orderApp === "Dash") {
-            const processOrderSql = `
+      if (processOrderResults.length > 0) {
+        const processOrder = processOrderResults[0];
+        processOrderId = processOrder.processOrderId;
+        invoiceNumber = processOrder.invoiceNumber;
+        orderStatus = processOrder.status;
+        paymentMethod = processOrder.paymentMethod;
+        reportStatus = processOrder.reportStatus;
+      }
+    } else if (order.orderApp === "Dash") {
+      const processOrderSql = `
                 SELECT 
                     id AS processOrderId,
                     invNo AS invoiceNumber,
@@ -1564,43 +1564,43 @@ exports.getOrderById = async (orderId) => {
                 WHERE orderId = ?
             `;
 
-            const [processOrderResults] = await connection.execute(processOrderSql, [
-                orderId,
-            ]);
+      const [processOrderResults] = await connection.execute(processOrderSql, [
+        orderId,
+      ]);
 
-            if (processOrderResults.length > 0) {
-                const processOrder = processOrderResults[0];
-                processOrderId = processOrder.processOrderId;
-                invoiceNumber = processOrder.invoiceNumber;
-                orderStatus = processOrder.status;
-                paymentMethod = processOrder.paymentMethod;
-                reportStatus = processOrder.reportStatus;
+      if (processOrderResults.length > 0) {
+        const processOrder = processOrderResults[0];
+        processOrderId = processOrder.processOrderId;
+        invoiceNumber = processOrder.invoiceNumber;
+        orderStatus = processOrder.status;
+        paymentMethod = processOrder.paymentMethod;
+        reportStatus = processOrder.reportStatus;
 
-                const packageCheckSql = `
+        const packageCheckSql = `
                     SELECT COUNT(*) as packageCount
                     FROM orderpackage 
                     WHERE orderId = ?
                 `;
 
-                const [packageCheckResults] = await connection.execute(
-                    packageCheckSql,
-                    [processOrderId],
-                );
+        const [packageCheckResults] = await connection.execute(
+          packageCheckSql,
+          [processOrderId],
+        );
 
-                if (packageCheckResults[0].packageCount > 0) {
-                    finalIsPackage = 1;
-                } else {
-                    finalIsPackage = 0;
-                }
-            }
+        if (packageCheckResults[0].packageCount > 0) {
+          finalIsPackage = 1;
+        } else {
+          finalIsPackage = 0;
         }
+      }
+    }
 
-        const buildingType = order.orderBuildingType || order.userBuildingType;
+    const buildingType = order.orderBuildingType || order.userBuildingType;
 
-        let formattedAddress = "";
+    let formattedAddress = "";
 
-        if (buildingType === "House") {
-            const addressSql = `
+    if (buildingType === "House") {
+      const addressSql = `
                 SELECT
                     houseNo,
                     streetName,
@@ -1609,24 +1609,24 @@ exports.getOrderById = async (orderId) => {
                 WHERE orderId = ?
             `;
 
-            const [addressResults] = await connection.execute(addressSql, [orderId]);
+      const [addressResults] = await connection.execute(addressSql, [orderId]);
 
-            if (addressResults[0]) {
-                const addr = addressResults[0];
-                formattedAddress =
-                    `${addr.houseNo || ""}, ${addr.streetName || ""}, ${addr.city || ""}`.trim();
+      if (addressResults[0]) {
+        const addr = addressResults[0];
+        formattedAddress =
+          `${addr.houseNo || ""}, ${addr.streetName || ""}, ${addr.city || ""}`.trim();
 
-                formattedAddress = formattedAddress
-                    .replace(/^,\s*/, "")
-                    .replace(/,\s*$/, "")
-                    .replace(/,\s*,/g, ",")
-                    .replace(/\s+/g, " ")
-                    .trim();
-            } else {
-                console.log(" No house address found for orderId:", orderId);
-            }
-        } else if (buildingType === "Apartment") {
-            const addressSql = `
+        formattedAddress = formattedAddress
+          .replace(/^,\s*/, "")
+          .replace(/,\s*$/, "")
+          .replace(/,\s*,/g, ",")
+          .replace(/\s+/g, " ")
+          .trim();
+      } else {
+        console.log(" No house address found for orderId:", orderId);
+      }
+    } else if (buildingType === "Apartment") {
+      const addressSql = `
                 SELECT
                     buildingNo,
                     buildingName,
@@ -1639,30 +1639,30 @@ exports.getOrderById = async (orderId) => {
                 WHERE orderId = ?
             `;
 
-            const [addressResults] = await connection.execute(addressSql, [orderId]);
+      const [addressResults] = await connection.execute(addressSql, [orderId]);
 
-            if (addressResults[0]) {
-                const addr = addressResults[0];
+      if (addressResults[0]) {
+        const addr = addressResults[0];
 
-                const addressParts = [];
+        const addressParts = [];
 
-                if (addr.buildingName) addressParts.push(addr.buildingName);
-                if (addr.buildingNo) addressParts.push(addr.buildingNo);
-                if (addr.unitNo) addressParts.push(`Unit ${addr.unitNo}`);
-                if (addr.floorNo) addressParts.push(`Floor ${addr.floorNo}`);
-                if (addr.houseNo) addressParts.push(addr.houseNo);
-                if (addr.streetName) addressParts.push(addr.streetName);
-                if (addr.city) addressParts.push(addr.city);
+        if (addr.buildingName) addressParts.push(addr.buildingName);
+        if (addr.buildingNo) addressParts.push(addr.buildingNo);
+        if (addr.unitNo) addressParts.push(`Unit ${addr.unitNo}`);
+        if (addr.floorNo) addressParts.push(`Floor ${addr.floorNo}`);
+        if (addr.houseNo) addressParts.push(addr.houseNo);
+        if (addr.streetName) addressParts.push(addr.streetName);
+        if (addr.city) addressParts.push(addr.city);
 
-                formattedAddress = addressParts.join(", ");
-            } else {
-                console.log(" No apartment address found for orderId:", orderId);
-            }
-        } else {
-            console.log(" Unknown building type:", buildingType);
-        }
+        formattedAddress = addressParts.join(", ");
+      } else {
+        console.log(" No apartment address found for orderId:", orderId);
+      }
+    } else {
+      console.log(" Unknown building type:", buildingType);
+    }
 
-        const additionalItemsSql = `
+    const additionalItemsSql = `
             SELECT
                 oai.qty,
                 oai.productId,
@@ -1673,25 +1673,25 @@ exports.getOrderById = async (orderId) => {
             WHERE oai.orderId = ?
         `;
 
-        const [additionalItemsResults] = await connection.execute(
-            additionalItemsSql,
-            [orderId],
-        );
+    const [additionalItemsResults] = await connection.execute(
+      additionalItemsSql,
+      [orderId],
+    );
 
-        const additionalItems = additionalItemsResults
-            .filter((item) => item.productId !== null && item.productId !== undefined)
-            .map((item) => ({
-                productId: item.productId,
-                qty: parseFloat(item.qty) || 0,
-                unit: item.unit || "",
-                price: parseFloat(item.price) || 0,
-                discount: parseFloat(item.itemDiscount) || 0,
-            }));
+    const additionalItems = additionalItemsResults
+      .filter((item) => item.productId !== null && item.productId !== undefined)
+      .map((item) => ({
+        productId: item.productId,
+        qty: parseFloat(item.qty) || 0,
+        unit: item.unit || "",
+        price: parseFloat(item.price) || 0,
+        discount: parseFloat(item.itemDiscount) || 0,
+      }));
 
-        let allPackages = [];
+    let allPackages = [];
 
-        if (finalIsPackage === 1 && processOrderId) {
-            const packagesSql = `
+    if (finalIsPackage === 1 && processOrderId) {
+      const packagesSql = `
                 SELECT
                     op.id AS orderPackageId,
                     op.packageId,
@@ -1709,12 +1709,12 @@ exports.getOrderById = async (orderId) => {
                 ORDER BY op.id ASC
             `;
 
-            const [packagesResults] = await connection.execute(packagesSql, [
-                processOrderId,
-            ]);
+      const [packagesResults] = await connection.execute(packagesSql, [
+        processOrderId,
+      ]);
 
-            for (const packageData of packagesResults) {
-                const packageItemsSql = `
+      for (const packageData of packagesResults) {
+        const packageItemsSql = `
                     SELECT
                         opi.id,
                         opi.orderPackageId,
@@ -1736,51 +1736,51 @@ exports.getOrderById = async (orderId) => {
                     ORDER BY opi.id ASC
                 `;
 
-                const [packageItemsResults] = await connection.execute(
-                    packageItemsSql,
-                    [packageData.orderPackageId],
-                );
+        const [packageItemsResults] = await connection.execute(
+          packageItemsSql,
+          [packageData.orderPackageId],
+        );
 
-                const packageItems = packageItemsResults.map((item) => ({
-                    id: item.id,
-                    orderPackageId: item.orderPackageId,
-                    productType: item.productType,
-                    productTypeName: item.productTypeName,
-                    productId: item.productId,
-                    productDisplayName: item.productDisplayName || "N/A",
-                    varietyId: item.varietyId,
-                    category: item.category,
-                    normalPrice: item.normalPrice,
-                    discountedPrice: item.discountedPrice,
-                    qty: parseFloat(item.qty) || 0,
-                    price: parseFloat(item.price) || 0,
-                    isPacked: item.isPacked,
-                }));
+        const packageItems = packageItemsResults.map((item) => ({
+          id: item.id,
+          orderPackageId: item.orderPackageId,
+          productType: item.productType,
+          productTypeName: item.productTypeName,
+          productId: item.productId,
+          productDisplayName: item.productDisplayName || "N/A",
+          varietyId: item.varietyId,
+          category: item.category,
+          normalPrice: item.normalPrice,
+          discountedPrice: item.discountedPrice,
+          qty: parseFloat(item.qty) || 0,
+          price: parseFloat(item.price) || 0,
+          isPacked: item.isPacked,
+        }));
 
-                const packageInfo = {
-                    packageId: packageData.packageId,
-                    orderPackageId: packageData.orderPackageId,
-                    displayName: packageData.packageDisplayName,
-                    productPrice: parseFloat(packageData.packagePrice) || 0,
-                    packingFee: parseFloat(packageData.packagePackingFee) || 0,
-                    serviceFee: parseFloat(packageData.packageServiceFee) || 0,
-                    status: packageData.packageStatus,
-                    packingStatus: packageData.packingStatus,
-                    isLock: packageData.isLock,
-                    packageCreatedAt: packageData.packageCreatedAt,
-                    packageItems: packageItems,
-                };
+        const packageInfo = {
+          packageId: packageData.packageId,
+          orderPackageId: packageData.orderPackageId,
+          displayName: packageData.packageDisplayName,
+          productPrice: parseFloat(packageData.packagePrice) || 0,
+          packingFee: parseFloat(packageData.packagePackingFee) || 0,
+          serviceFee: parseFloat(packageData.packageServiceFee) || 0,
+          status: packageData.packageStatus,
+          packingStatus: packageData.packingStatus,
+          isLock: packageData.isLock,
+          packageCreatedAt: packageData.packageCreatedAt,
+          packageItems: packageItems,
+        };
 
-                allPackages.push(packageInfo);
-            }
-        }
+        allPackages.push(packageInfo);
+      }
+    }
 
-        let enhancedAdditionalItems = [];
-        if (additionalItems.length > 0) {
-            const productIds = additionalItems.map((item) => item.productId);
-            const placeholders = productIds.map(() => "?").join(",");
+    let enhancedAdditionalItems = [];
+    if (additionalItems.length > 0) {
+      const productIds = additionalItems.map((item) => item.productId);
+      const placeholders = productIds.map(() => "?").join(",");
 
-            const productDetailsSql = `
+      const productDetailsSql = `
                 SELECT
                     mi.id,
                     mi.displayName,
@@ -1792,83 +1792,83 @@ exports.getOrderById = async (orderId) => {
                 WHERE mi.id IN (${placeholders})
             `;
 
-            const [productResults] = await connection.execute(
-                productDetailsSql,
-                productIds,
-            );
+      const [productResults] = await connection.execute(
+        productDetailsSql,
+        productIds,
+      );
 
-            enhancedAdditionalItems = additionalItems.map((item) => {
-                const productDetail = productResults.find(
-                    (p) => p.id === item.productId,
-                );
-                return {
-                    ...item,
-                    displayName: productDetail
-                        ? productDetail.displayName
-                        : "Unknown Product",
-                    varietyId: productDetail ? productDetail.varietyId : null,
-                    category: productDetail ? productDetail.category : null,
-                    normalPrice: productDetail ? productDetail.normalPrice : null,
-                    discountedPrice: productDetail ? productDetail.discountedPrice : null,
-                };
-            });
-        }
-
-        const result = {
-            orderId: order.orderId,
-            userId: order.userId,
-            orderApp: order.orderApp,
-            scheduleType: order.sheduleType,
-            scheduleDate: order.sheduleDate,
-            scheduleTime: order.sheduleTime,
-            createdAt: order.createdAt,
-            total: parseFloat(order.total) || 0,
-            discount: parseFloat(order.discount) || 0,
-            fullTotal: parseFloat(order.fullTotal) || 0,
-            isPackage: finalIsPackage,
-            isCoupon: order.isCoupon,
-            couponValue:
-                order.orderApp === "Marketplace"
-                    ? parseFloat(order.couponValue) || 0
-                    : null,
-            customerInfo: {
-                title: order.title,
-                firstName: order.firstName,
-                lastName: order.lastName,
-                phoneNumber: order.phoneNumber,
-                buildingType: buildingType,
-                email: order.email,
-            },
-            fullAddress: formattedAddress,
-            orderStatus: {
-                processOrderId: processOrderId,
-                invoiceNumber: invoiceNumber,
-                status: orderStatus,
-                paymentMethod: paymentMethod,
-                reportStatus: reportStatus,
-            },
-            additionalItems: enhancedAdditionalItems,
-            packages: allPackages,
+      enhancedAdditionalItems = additionalItems.map((item) => {
+        const productDetail = productResults.find(
+          (p) => p.id === item.productId,
+        );
+        return {
+          ...item,
+          displayName: productDetail
+            ? productDetail.displayName
+            : "Unknown Product",
+          varietyId: productDetail ? productDetail.varietyId : null,
+          category: productDetail ? productDetail.category : null,
+          normalPrice: productDetail ? productDetail.normalPrice : null,
+          discountedPrice: productDetail ? productDetail.discountedPrice : null,
         };
-
-        return result;
-    } catch (err) {
-        console.error("Database error:", err);
-        throw err;
-    } finally {
-        if (connection) {
-            connection.release();
-        }
+      });
     }
+
+    const result = {
+      orderId: order.orderId,
+      userId: order.userId,
+      orderApp: order.orderApp,
+      scheduleType: order.sheduleType,
+      scheduleDate: order.sheduleDate,
+      scheduleTime: order.sheduleTime,
+      createdAt: order.createdAt,
+      total: parseFloat(order.total) || 0,
+      discount: parseFloat(order.discount) || 0,
+      fullTotal: parseFloat(order.fullTotal) || 0,
+      isPackage: finalIsPackage,
+      isCoupon: order.isCoupon,
+      couponValue:
+        order.orderApp === "Marketplace"
+          ? parseFloat(order.couponValue) || 0
+          : null,
+      customerInfo: {
+        title: order.title,
+        firstName: order.firstName,
+        lastName: order.lastName,
+        phoneNumber: order.phoneNumber,
+        buildingType: buildingType,
+        email: order.email,
+      },
+      fullAddress: formattedAddress,
+      orderStatus: {
+        processOrderId: processOrderId,
+        invoiceNumber: invoiceNumber,
+        status: orderStatus,
+        paymentMethod: paymentMethod,
+        reportStatus: reportStatus,
+      },
+      additionalItems: enhancedAdditionalItems,
+      packages: allPackages,
+    };
+
+    return result;
+  } catch (err) {
+    console.error("Database error:", err);
+    throw err;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 };
 
 exports.getDataCustomerId = async (customerId) => {
-    let connection;
+  let connection;
 
-    try {
-        connection = await db.marketPlace.promise().getConnection();
+  try {
+    connection = await db.marketPlace.promise().getConnection();
 
-        const customerSql = `
+    const customerSql = `
             SELECT 
                 id,
                 cusId,
@@ -1884,130 +1884,130 @@ exports.getDataCustomerId = async (customerId) => {
             WHERE id = ?
         `;
 
-        const [customerResults] = await connection.execute(customerSql, [
-            customerId,
-        ]);
+    const [customerResults] = await connection.execute(customerSql, [
+      customerId,
+    ]);
 
-        if (customerResults.length === 0) {
-            return { message: "No customer found with this ID" };
-        }
+    if (customerResults.length === 0) {
+      return { message: "No customer found with this ID" };
+    }
 
-        const customer = customerResults[0];
+    const customer = customerResults[0];
 
-        if (customer.phoneCode && customer.phoneNumber) {
-            customer.phoneNumber = `${customer.phoneCode}${customer.phoneNumber}`;
-        } else if (customer.phoneNumber && !customer.phoneCode) {
-            customer.phoneNumber = customer.phoneNumber;
-        } else if (customer.phoneCode && !customer.phoneNumber) {
-            customer.phoneNumber = `${customer.phoneCode}`;
-        } else {
-            customer.phoneNumber = "";
-        }
+    if (customer.phoneCode && customer.phoneNumber) {
+      customer.phoneNumber = `${customer.phoneCode}${customer.phoneNumber}`;
+    } else if (customer.phoneNumber && !customer.phoneCode) {
+      customer.phoneNumber = customer.phoneNumber;
+    } else if (customer.phoneCode && !customer.phoneNumber) {
+      customer.phoneNumber = `${customer.phoneCode}`;
+    } else {
+      customer.phoneNumber = "";
+    }
 
-        delete customer.phoneCode;
+    delete customer.phoneCode;
 
-        const buildingType = customer.buildingType.toLowerCase();
+    const buildingType = customer.buildingType.toLowerCase();
 
-        const buildingSql = `
+    const buildingSql = `
             SELECT * FROM ${buildingType}
             WHERE customerId = ?
         `;
 
-        const [buildingResults] = await connection.execute(buildingSql, [
-            customerId,
-        ]);
+    const [buildingResults] = await connection.execute(buildingSql, [
+      customerId,
+    ]);
 
-        const result = {
-            ...customer,
-            buildingDetails: buildingResults.length > 0 ? buildingResults[0] : null,
-        };
+    const result = {
+      ...customer,
+      buildingDetails: buildingResults.length > 0 ? buildingResults[0] : null,
+    };
 
-        return result;
-    } catch (err) {
-        console.error("Database error:", err);
-        throw err;
-    } finally {
-        if (connection) {
-            connection.release();
-        }
+    return result;
+  } catch (err) {
+    console.error("Database error:", err);
+    throw err;
+  } finally {
+    if (connection) {
+      connection.release();
     }
+  }
 };
 
 exports.getAllCity = async () => {
-    return new Promise((resolve, reject) => {
-        const query = `
+  return new Promise((resolve, reject) => {
+    const query = `
         SELECT id, city, charge,   createdAt
         FROM deliverycharge
       
         ORDER BY city ASC
         `;
 
-        db.collectionofficer.query(query, (error, results) => {
-            if (error) {
-                console.error("Error fetching packages:", error);
-                reject(error);
-            } else {
-                resolve(results);
-            }
-        });
+    db.collectionofficer.query(query, (error, results) => {
+      if (error) {
+        console.error("Error fetching packages:", error);
+        reject(error);
+      } else {
+        resolve(results);
+      }
     });
+  });
 };
 
 exports.getOrderMarketplaceOrdash = async (orderId) => {
-    let connection;
-    try {
-        connection = await db.marketPlace.promise().getConnection();
+  let connection;
+  try {
+    connection = await db.marketPlace.promise().getConnection();
 
-        const [orderRows] = await connection.execute(
-            "SELECT * FROM orders WHERE id = ?",
-            [orderId],
+    const [orderRows] = await connection.execute(
+      "SELECT * FROM orders WHERE id = ?",
+      [orderId],
+    );
+
+    if (orderRows.length === 0) {
+      return {
+        error: true,
+        message: "Order not found",
+      };
+    }
+
+    const order = orderRows[0];
+
+    let orderResponse = {
+      ...order,
+      couponValue: null,
+      isPackage: 0,
+    };
+
+    if (order.orderApp === "Marketplace") {
+      orderResponse.couponValue = order.couponValue || null;
+    } else if (order.orderApp === "Dash") {
+      const [processOrderRows] = await connection.execute(
+        "SELECT id FROM processorders WHERE orderId = ?",
+        [orderId],
+      );
+
+      if (processOrderRows.length > 0) {
+        const processOrderId = processOrderRows[0].id;
+
+        const [packageRows] = await connection.execute(
+          "SELECT COUNT(*) as packageCount FROM orderpackage WHERE orderId = ?",
+          [processOrderId],
         );
 
-        if (orderRows.length === 0) {
-            return {
-                error: true,
-                message: "Order not found",
-            };
-        }
-
-        const order = orderRows[0];
-
-        let orderResponse = {
-            ...order,
-            couponValue: null,
-            isPackage: 0,
-        };
-
-        if (order.orderApp === "Marketplace") {
-            orderResponse.couponValue = order.couponValue || null;
-        } else if (order.orderApp === "Dash") {
-            const [processOrderRows] = await connection.execute(
-                "SELECT id FROM processorders WHERE orderId = ?",
-                [orderId],
-            );
-
-            if (processOrderRows.length > 0) {
-                const processOrderId = processOrderRows[0].id;
-
-                const [packageRows] = await connection.execute(
-                    "SELECT COUNT(*) as packageCount FROM orderpackage WHERE orderId = ?",
-                    [processOrderId],
-                );
-
-                const packageCount = packageRows[0].packageCount;
-                orderResponse.isPackage = packageCount > 0 ? 1 : 0;
-            } else {
-                orderResponse.isPackage = 0;
-            }
-        }
-
-        return orderResponse;
-    } catch (error) {
-        console.error("Database error in getOrderMarketplaceOrdash:", error);
-        throw error;
-    } finally {
-        if (connection) {
-            connection.release();
-        }
+        const packageCount = packageRows[0].packageCount;
+        orderResponse.isPackage = packageCount > 0 ? 1 : 0;
+      } else {
+        orderResponse.isPackage = 0;
+      }
     }
+
+    return orderResponse;
+  } catch (error) {
+    console.error("Database error in getOrderMarketplaceOrdash:", error);
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 };

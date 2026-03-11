@@ -1,4 +1,4 @@
-const cropDetailsDao = require("../dao/unRegisteredCropFarmer-dao");
+const cropDetailsDao = require("../dao/unregistered-crop-farmer-dao");
 const { collectionofficer } = require("../startup/database");
 const { cropDetailsSchema } = require("../validation/crop-validations");
 const s3middleware = require("../middleware/s3upload");

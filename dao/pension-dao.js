@@ -76,7 +76,7 @@ exports.submitPensionRequestDAO = (pensionData) => {
       query,
       [
         pensionData.userId,
-        pensionData.officerId, 
+        pensionData.officerId,
         pensionData.fullName,
         pensionData.nic,
         pensionData.nicFront,

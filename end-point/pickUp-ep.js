@@ -1,4 +1,4 @@
-const pickupDao = require("../dao/pickUp-dao");
+const pickupDao = require("../dao/pick-up-dao");
 const asyncHandler = require("express-async-handler");
 const uploadFileToS3 = require("../middleware/s3upload");
 

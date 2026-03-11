@@ -8,29 +8,29 @@ const driverEp = require("../end-point/Driver-ep");
 
 // Route to get collection officers under a specific manager
 router.get(
-    "/collection-officers",
-    authenticate,
-    managerEp.getCollectionOfficers,
+  "/collection-officers",
+  authenticate,
+  managerEp.getCollectionOfficers,
 );
 
 router.get(
-    "/collection-officers-recieve/:varietyId/:grade",
-    authenticate,
-    managerEp.getCollectionOfficersReciever,
+  "/collection-officers-recieve/:varietyId/:grade",
+  authenticate,
+  managerEp.getCollectionOfficersReciever,
 );
 
 router.get(
-    "/collection-officerslist",
-    authenticate,
-    managerEp.getCollectionOfficersList,
+  "/collection-officerslist",
+  authenticate,
+  managerEp.getCollectionOfficersList,
 );
 
 //Route to add a collection officer
 router.post(
-    "/collection-officer/add",
-    authenticate,
-    upload.single("image"),
-    managerEp.createCollectionOfficer,
+  "/collection-officer/add",
+  authenticate,
+  upload.single("image"),
+  managerEp.createCollectionOfficer,
 );
 
 // Route to fetch farmer payments summary
@@ -44,14 +44,14 @@ router.get("/generate-empId/:role", managerEp.getForCreateId);
 
 // Define the route for fetching farmer transaction list
 router.get(
-    "/transaction-list",
-    managerEp.getFarmerListByCollectionOfficerAndDate,
+  "/transaction-list",
+  managerEp.getFarmerListByCollectionOfficerAndDate,
 );
 
 router.get(
-    "/my-collection",
-    authenticate,
-    managerEp.getFarmerListByCollectionOfficerAndDateForManager,
+  "/my-collection",
+  authenticate,
+  managerEp.getFarmerListByCollectionOfficerAndDateForManager,
 );
 
 router.post("/get-claim-officer", authenticate, managerEp.getClaimOfficer);
@@ -62,8 +62,8 @@ router.post("/disclaim-officer", managerEp.disclaimOfficer);
 
 //Route for the farmers transcation details for the manager report
 router.get(
-    "/transaction-details/:userId/:createdAt/:farmerId",
-    managerEp.GetFarmerReportDetails,
+  "/transaction-details/:userId/:createdAt/:farmerId",
+  managerEp.GetFarmerReportDetails,
 );
 
 //target routes
@@ -75,37 +75,36 @@ router.post("/create-daily-target", authenticate, TargetEP.addDailyTarget);
 router.get("/get-daily-target", authenticate, TargetEP.getAllDailyTarget);
 
 router.get(
-    "/download-daily-target",
-    authenticate,
-    TargetEP.downloadDailyTarget,
+  "/download-daily-target",
+  authenticate,
+  TargetEP.downloadDailyTarget,
 );
 
 router.get("/targets", TargetEP.getAllTargets);
 
 router.get(
-    "/get-officer-online/:collectionOfficerId",
-    managerEp.getofficeronline,
+  "/get-officer-online/:collectionOfficerId",
+  managerEp.getofficeronline,
 );
-
-// ------------- Driver Routes ------------- //
 
 router.post("/driver/add", authenticate, driverEp.createDriverWithVehicle);
+
 router.get(
-    "/driver/check-phone/:phoneNumber",
-    authenticate,
-    driverEp.checkPhoneExists,
+  "/driver/check-phone/:phoneNumber",
+  authenticate,
+  driverEp.checkPhoneExists,
 );
 
 router.get(
-    "/driver/check-nic/:nicNumber",
-    authenticate,
-    driverEp.checkNicExists,
+  "/driver/check-nic/:nicNumber",
+  authenticate,
+  driverEp.checkNicExists,
 );
 
 router.get(
-    "/driver/check-email/:email",
-    authenticate,
-    driverEp.checkemailExists,
+  "/driver/check-email/:email",
+  authenticate,
+  driverEp.checkemailExists,
 );
 
 module.exports = router;

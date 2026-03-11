@@ -1,4 +1,4 @@
-const qrGenerate = require("../dao/qrGenerate-dao");
+const qrGenerate = require("../dao/qr-generate-dao");
 
 exports.getUserData = async (req, res) => {
   const qrData = req.body.qrData;

@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
 const ComplaintEp = require('../end-point/complaint-ep')
-
 
 const auth = require('../middleware/auth.middleware');
 

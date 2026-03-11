@@ -1,17 +1,12 @@
-const {
-    plantcare,
-    collectionofficer,
-    marketPlace,
-    dash,
-} = require("../startup/database");
+const { collectionofficer } = require("../startup/database");
 
 exports.getOfficerDailyTargets = (officerId) => {
-    return new Promise((resolve, reject) => {
-        if (!officerId) {
-            return reject(new Error("Officer ID is required"));
-        }
+  return new Promise((resolve, reject) => {
+    if (!officerId) {
+      return reject(new Error("Officer ID is required"));
+    }
 
-        const sql = `
+    const sql = `
           SELECT
               ot.id AS officerTargetId,
               dt.id AS dailyTargetId,
@@ -42,41 +37,41 @@ exports.getOfficerDailyTargets = (officerId) => {
               dt.date DESC, dt.id DESC
       `;
 
-        collectionofficer.query(sql, [officerId], (err, results) => {
-            if (err) {
-                console.error("Database error:", err);
-                return reject(err);
-            }
+    collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return reject(err);
+      }
 
-            const formattedResults = results.map((target) => ({
-                officerTargetId: target.officerTargetId,
-                dailyTargetId: target.dailyTargetId,
-                centerId: target.centerId,
-                varietyId: target.varietyId,
-                varietyNameEnglish: target.varietyNameEnglish,
-                varietyNameSinhala: target.varietyNameSinhala,
-                varietyNameTamil: target.varietyNameTamil,
-                grade: target.grade,
-                dailyTarget: parseFloat(target.dailyTarget) || 0,
-                officerTarget: parseFloat(target.officerTarget) || 0,
-                complete: parseFloat(target.complete) || 0,
-                todo: Math.max(0, parseFloat(target.todo) || 0),
-                targetDate: target.targetDate,
-                assignStatus: target.assignStatus,
-            }));
+      const formattedResults = results.map((target) => ({
+        officerTargetId: target.officerTargetId,
+        dailyTargetId: target.dailyTargetId,
+        centerId: target.centerId,
+        varietyId: target.varietyId,
+        varietyNameEnglish: target.varietyNameEnglish,
+        varietyNameSinhala: target.varietyNameSinhala,
+        varietyNameTamil: target.varietyNameTamil,
+        grade: target.grade,
+        dailyTarget: parseFloat(target.dailyTarget) || 0,
+        officerTarget: parseFloat(target.officerTarget) || 0,
+        complete: parseFloat(target.complete) || 0,
+        todo: Math.max(0, parseFloat(target.todo) || 0),
+        targetDate: target.targetDate,
+        assignStatus: target.assignStatus,
+      }));
 
-            resolve(formattedResults);
-        });
+      resolve(formattedResults);
     });
+  });
 };
 
 exports.getCenterTarget = (centerId) => {
-    return new Promise((resolve, reject) => {
-        if (!centerId) {
-            return reject(new Error("Center ID is required"));
-        }
+  return new Promise((resolve, reject) => {
+    if (!centerId) {
+      return reject(new Error("Center ID is required"));
+    }
 
-        const sql = `
+    const sql = `
           SELECT 
               dt.varietyId,
               cv.varietyNameEnglish,
@@ -100,42 +95,42 @@ exports.getCenterTarget = (centerId) => {
               dt.varietyId, dt.grade
       `;
 
-        collectionofficer.query(sql, [centerId], (error, results) => {
-            if (error) {
-                console.error("Database error in getCenterTarget:", error);
-                return reject(error);
-            }
+    collectionofficer.query(sql, [centerId], (error, results) => {
+      if (error) {
+        console.error("Database error in getCenterTarget:", error);
+        return reject(error);
+      }
 
-            const formattedResults = results.map((target) => ({
-                varietyId: target.varietyId,
-                varietyNameEnglish: target.varietyNameEnglish,
-                varietyNameSinhala: target.varietyNameSinhala,
-                varietyNameTamil: target.varietyNameTamil,
-                grade: target.grade,
-                target: parseFloat(target.target).toFixed(2),
-                complete: parseFloat(target.complete || 0).toFixed(2),
-                todo: parseFloat(target.todo || 0).toFixed(2),
-            }));
+      const formattedResults = results.map((target) => ({
+        varietyId: target.varietyId,
+        varietyNameEnglish: target.varietyNameEnglish,
+        varietyNameSinhala: target.varietyNameSinhala,
+        varietyNameTamil: target.varietyNameTamil,
+        grade: target.grade,
+        target: parseFloat(target.target).toFixed(2),
+        complete: parseFloat(target.complete || 0).toFixed(2),
+        todo: parseFloat(target.todo || 0).toFixed(2),
+      }));
 
-            resolve(formattedResults.length === 0 ? [] : formattedResults);
-        });
+      resolve(formattedResults.length === 0 ? [] : formattedResults);
     });
+  });
 };
 
 exports.transferTargetDAO = (
-    fromOfficerId,
-    toOfficerId,
-    varietyId,
-    grade,
-    amount,
+  fromOfficerId,
+  toOfficerId,
+  varietyId,
+  grade,
+  amount,
 ) => {
-    return new Promise((resolve, reject) => {
-        const validGrades = ["A", "B", "C"];
-        if (!validGrades.includes(grade)) {
-            return reject(new Error(`Invalid grade: ${grade}`));
-        }
+  return new Promise((resolve, reject) => {
+    const validGrades = ["A", "B", "C"];
+    if (!validGrades.includes(grade)) {
+      return reject(new Error(`Invalid grade: ${grade}`));
+    }
 
-        const decrementSql = `
+    const decrementSql = `
           UPDATE officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
           SET ot.target = ot.target - ?
@@ -145,7 +140,7 @@ exports.transferTargetDAO = (
           AND ot.target >= ?;
       `;
 
-        const checkReceiverSql = `
+    const checkReceiverSql = `
           SELECT COUNT(*) as recordExists
           FROM officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
@@ -154,7 +149,7 @@ exports.transferTargetDAO = (
           AND dt.grade = ?;
       `;
 
-        const incrementSql = `
+    const incrementSql = `
           UPDATE officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
           SET ot.target = ot.target + ?
@@ -163,7 +158,7 @@ exports.transferTargetDAO = (
           AND dt.grade = ?;
       `;
 
-        const getFromOfficerDetailsSql = `
+    const getFromOfficerDetailsSql = `
           SELECT ot.dailyTargetId
           FROM officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
@@ -173,191 +168,191 @@ exports.transferTargetDAO = (
           LIMIT 1;
       `;
 
-        const createNewRecordSql = `
+    const createNewRecordSql = `
           INSERT INTO officertarget
           (dailyTargetId, officerId, target, complete)
           VALUES (?, ?, ?, 0);
       `;
 
-        const getDailyTargetIdSql = `
+    const getDailyTargetIdSql = `
           SELECT id FROM dailytarget
           WHERE varietyId = ? AND grade = ? AND DATE(date) = CURDATE()
           LIMIT 1;
       `;
 
-        collectionofficer.getConnection((err, connection) => {
-            if (err) return reject(err);
+    collectionofficer.getConnection((err, connection) => {
+      if (err) return reject(err);
 
-            connection.beginTransaction((err) => {
+      connection.beginTransaction((err) => {
+        if (err) {
+          connection.release();
+          return reject(err);
+        }
+
+        connection.query(
+          decrementSql,
+          [amount, fromOfficerId, varietyId, grade, amount],
+          (err, result) => {
+            if (err || result.affectedRows === 0) {
+              return connection.rollback(() => {
+                connection.release();
+                reject(
+                  err ||
+                    new Error(
+                      "Insufficient target balance or record not found",
+                    ),
+                );
+              });
+            }
+
+            connection.query(
+              checkReceiverSql,
+              [toOfficerId, varietyId, grade],
+              (err, results) => {
                 if (err) {
+                  return connection.rollback(() => {
                     connection.release();
-                    return reject(err);
+                    reject(err);
+                  });
                 }
 
-                connection.query(
-                    decrementSql,
-                    [amount, fromOfficerId, varietyId, grade, amount],
+                const receiverHasRecord = results[0].recordExists > 0;
+
+                if (receiverHasRecord) {
+                  connection.query(
+                    incrementSql,
+                    [amount, toOfficerId, varietyId, grade],
                     (err, result) => {
-                        if (err || result.affectedRows === 0) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(
-                                    err ||
-                                    new Error(
-                                        "Insufficient target balance or record not found",
-                                    ),
-                                );
-                            });
+                      if (err) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          reject(err);
+                        });
+                      }
+
+                      connection.commit((err) => {
+                        if (err) {
+                          return connection.rollback(() => {
+                            connection.release();
+                            reject(err);
+                          });
                         }
 
-                        connection.query(
-                            checkReceiverSql,
-                            [toOfficerId, varietyId, grade],
-                            (err, results) => {
-                                if (err) {
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        reject(err);
-                                    });
-                                }
-
-                                const receiverHasRecord = results[0].recordExists > 0;
-
-                                if (receiverHasRecord) {
-                                    connection.query(
-                                        incrementSql,
-                                        [amount, toOfficerId, varietyId, grade],
-                                        (err, result) => {
-                                            if (err) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(err);
-                                                });
-                                            }
-
-                                            connection.commit((err) => {
-                                                if (err) {
-                                                    return connection.rollback(() => {
-                                                        connection.release();
-                                                        reject(err);
-                                                    });
-                                                }
-
-                                                connection.release();
-                                                resolve({ message: "Target transferred successfully" });
-                                            });
-                                        },
-                                    );
-                                } else {
-                                    connection.query(
-                                        getFromOfficerDetailsSql,
-                                        [fromOfficerId, varietyId, grade],
-                                        (err, results) => {
-                                            if (err || results.length === 0) {
-                                                connection.query(
-                                                    getDailyTargetIdSql,
-                                                    [varietyId, grade],
-                                                    (err, dailyTargetResults) => {
-                                                        if (err || dailyTargetResults.length === 0) {
-                                                            return connection.rollback(() => {
-                                                                connection.release();
-                                                                reject(
-                                                                    err ||
-                                                                    new Error(
-                                                                        "No daily target found for this variety and grade",
-                                                                    ),
-                                                                );
-                                                            });
-                                                        }
-
-                                                        const dailyTargetId = dailyTargetResults[0].id;
-
-                                                        connection.query(
-                                                            createNewRecordSql,
-                                                            [dailyTargetId, toOfficerId, amount],
-                                                            (err, result) => {
-                                                                if (err) {
-                                                                    return connection.rollback(() => {
-                                                                        connection.release();
-                                                                        reject(err);
-                                                                    });
-                                                                }
-
-                                                                connection.commit((err) => {
-                                                                    if (err) {
-                                                                        return connection.rollback(() => {
-                                                                            connection.release();
-                                                                            reject(err);
-                                                                        });
-                                                                    }
-
-                                                                    connection.release();
-                                                                    resolve({
-                                                                        message:
-                                                                            "Target transferred successfully with new record creation",
-                                                                    });
-                                                                });
-                                                            },
-                                                        );
-                                                    },
-                                                );
-                                            } else {
-                                                const dailyTargetId = results[0].dailyTargetId;
-
-                                                connection.query(
-                                                    createNewRecordSql,
-                                                    [dailyTargetId, toOfficerId, amount],
-                                                    (err, result) => {
-                                                        if (err) {
-                                                            return connection.rollback(() => {
-                                                                connection.release();
-                                                                reject(err);
-                                                            });
-                                                        }
-
-                                                        connection.commit((err) => {
-                                                            if (err) {
-                                                                return connection.rollback(() => {
-                                                                    connection.release();
-                                                                    reject(err);
-                                                                });
-                                                            }
-
-                                                            connection.release();
-                                                            resolve({
-                                                                message:
-                                                                    "Target transferred successfully with new record creation",
-                                                            });
-                                                        });
-                                                    },
-                                                );
-                                            }
-                                        },
-                                    );
-                                }
-                            },
-                        );
+                        connection.release();
+                        resolve({ message: "Target transferred successfully" });
+                      });
                     },
-                );
-            });
-        });
+                  );
+                } else {
+                  connection.query(
+                    getFromOfficerDetailsSql,
+                    [fromOfficerId, varietyId, grade],
+                    (err, results) => {
+                      if (err || results.length === 0) {
+                        connection.query(
+                          getDailyTargetIdSql,
+                          [varietyId, grade],
+                          (err, dailyTargetResults) => {
+                            if (err || dailyTargetResults.length === 0) {
+                              return connection.rollback(() => {
+                                connection.release();
+                                reject(
+                                  err ||
+                                    new Error(
+                                      "No daily target found for this variety and grade",
+                                    ),
+                                );
+                              });
+                            }
+
+                            const dailyTargetId = dailyTargetResults[0].id;
+
+                            connection.query(
+                              createNewRecordSql,
+                              [dailyTargetId, toOfficerId, amount],
+                              (err, result) => {
+                                if (err) {
+                                  return connection.rollback(() => {
+                                    connection.release();
+                                    reject(err);
+                                  });
+                                }
+
+                                connection.commit((err) => {
+                                  if (err) {
+                                    return connection.rollback(() => {
+                                      connection.release();
+                                      reject(err);
+                                    });
+                                  }
+
+                                  connection.release();
+                                  resolve({
+                                    message:
+                                      "Target transferred successfully with new record creation",
+                                  });
+                                });
+                              },
+                            );
+                          },
+                        );
+                      } else {
+                        const dailyTargetId = results[0].dailyTargetId;
+
+                        connection.query(
+                          createNewRecordSql,
+                          [dailyTargetId, toOfficerId, amount],
+                          (err, result) => {
+                            if (err) {
+                              return connection.rollback(() => {
+                                connection.release();
+                                reject(err);
+                              });
+                            }
+
+                            connection.commit((err) => {
+                              if (err) {
+                                return connection.rollback(() => {
+                                  connection.release();
+                                  reject(err);
+                                });
+                              }
+
+                              connection.release();
+                              resolve({
+                                message:
+                                  "Target transferred successfully with new record creation",
+                              });
+                            });
+                          },
+                        );
+                      }
+                    },
+                  );
+                }
+              },
+            );
+          },
+        );
+      });
     });
+  });
 };
 
 exports.receiveTargetDAO = (
-    fromOfficerId,
-    toOfficerId,
-    varietyId,
-    grade,
-    amount,
+  fromOfficerId,
+  toOfficerId,
+  varietyId,
+  grade,
+  amount,
 ) => {
-    return new Promise((resolve, reject) => {
-        const validGrades = ["A", "B", "C"];
-        if (!validGrades.includes(grade)) {
-            return reject(new Error(`Invalid grade: ${grade}`));
-        }
+  return new Promise((resolve, reject) => {
+    const validGrades = ["A", "B", "C"];
+    if (!validGrades.includes(grade)) {
+      return reject(new Error(`Invalid grade: ${grade}`));
+    }
 
-        const decrementSql = `
+    const decrementSql = `
           UPDATE officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
           SET ot.target = ot.target - ?
@@ -367,7 +362,7 @@ exports.receiveTargetDAO = (
           AND ot.target >= ?;
       `;
 
-        const incrementSql = `
+    const incrementSql = `
           UPDATE officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
           SET ot.target = ot.target + ?
@@ -376,7 +371,7 @@ exports.receiveTargetDAO = (
           AND dt.grade = ?;
       `;
 
-        const checkReceiverSql = `
+    const checkReceiverSql = `
           SELECT ot.id 
           FROM officertarget ot
           JOIN dailytarget dt ON ot.dailyTargetId = dt.id
@@ -385,7 +380,7 @@ exports.receiveTargetDAO = (
           AND dt.grade = ?;
       `;
 
-        const createReceiverRecordSql = `
+    const createReceiverRecordSql = `
           INSERT INTO officertarget (dailyTargetId, officerId, target, complete)
           SELECT dt.id, ?, ?, 0
           FROM dailytarget dt
@@ -395,133 +390,133 @@ exports.receiveTargetDAO = (
           LIMIT 1;
       `;
 
-        collectionofficer.getConnection((err, connection) => {
-            if (err) return reject(err);
+    collectionofficer.getConnection((err, connection) => {
+      if (err) return reject(err);
 
-            connection.beginTransaction((err) => {
+      connection.beginTransaction((err) => {
+        if (err) {
+          connection.release();
+          return reject(err);
+        }
+
+        connection.query(
+          decrementSql,
+          [amount, fromOfficerId, varietyId, grade, amount],
+          (err, result) => {
+            if (err) {
+              return connection.rollback(() => {
+                connection.release();
+                reject(err);
+              });
+            }
+
+            if (result.affectedRows === 0) {
+              return connection.rollback(() => {
+                connection.release();
+                reject(
+                  new Error(
+                    "Insufficient target balance or sender record not found",
+                  ),
+                );
+              });
+            }
+
+            connection.query(
+              checkReceiverSql,
+              [toOfficerId, varietyId, grade],
+              (err, results) => {
                 if (err) {
+                  return connection.rollback(() => {
                     connection.release();
-                    return reject(err);
+                    reject(err);
+                  });
                 }
 
-                connection.query(
-                    decrementSql,
-                    [amount, fromOfficerId, varietyId, grade, amount],
+                if (results.length > 0) {
+                  connection.query(
+                    incrementSql,
+                    [amount, toOfficerId, varietyId, grade],
                     (err, result) => {
+                      if (err) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          reject(err);
+                        });
+                      }
+
+                      if (result.affectedRows === 0) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          reject(
+                            new Error("Failed to update receiver's target"),
+                          );
+                        });
+                      }
+
+                      connection.commit((err) => {
                         if (err) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(err);
-                            });
+                          return connection.rollback(() => {
+                            connection.release();
+                            reject(err);
+                          });
                         }
 
-                        if (result.affectedRows === 0) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                reject(
-                                    new Error(
-                                        "Insufficient target balance or sender record not found",
-                                    ),
-                                );
-                            });
-                        }
-
-                        connection.query(
-                            checkReceiverSql,
-                            [toOfficerId, varietyId, grade],
-                            (err, results) => {
-                                if (err) {
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        reject(err);
-                                    });
-                                }
-
-                                if (results.length > 0) {
-                                    connection.query(
-                                        incrementSql,
-                                        [amount, toOfficerId, varietyId, grade],
-                                        (err, result) => {
-                                            if (err) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(err);
-                                                });
-                                            }
-
-                                            if (result.affectedRows === 0) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(
-                                                        new Error("Failed to update receiver's target"),
-                                                    );
-                                                });
-                                            }
-
-                                            connection.commit((err) => {
-                                                if (err) {
-                                                    return connection.rollback(() => {
-                                                        connection.release();
-                                                        reject(err);
-                                                    });
-                                                }
-
-                                                connection.release();
-                                                resolve({ message: "Target received successfully" });
-                                            });
-                                        },
-                                    );
-                                } else {
-                                    connection.query(
-                                        createReceiverRecordSql,
-                                        [toOfficerId, amount, varietyId, grade],
-                                        (err, result) => {
-                                            if (err) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(err);
-                                                });
-                                            }
-
-                                            if (result.affectedRows === 0) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    reject(
-                                                        new Error(
-                                                            "No daily target found to create receiver record",
-                                                        ),
-                                                    );
-                                                });
-                                            }
-
-                                            connection.commit((err) => {
-                                                if (err) {
-                                                    return connection.rollback(() => {
-                                                        connection.release();
-                                                        reject(err);
-                                                    });
-                                                }
-
-                                                connection.release();
-                                                resolve({
-                                                    message: "Target received with new record creation",
-                                                });
-                                            });
-                                        },
-                                    );
-                                }
-                            },
-                        );
+                        connection.release();
+                        resolve({ message: "Target received successfully" });
+                      });
                     },
-                );
-            });
-        });
+                  );
+                } else {
+                  connection.query(
+                    createReceiverRecordSql,
+                    [toOfficerId, amount, varietyId, grade],
+                    (err, result) => {
+                      if (err) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          reject(err);
+                        });
+                      }
+
+                      if (result.affectedRows === 0) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          reject(
+                            new Error(
+                              "No daily target found to create receiver record",
+                            ),
+                          );
+                        });
+                      }
+
+                      connection.commit((err) => {
+                        if (err) {
+                          return connection.rollback(() => {
+                            connection.release();
+                            reject(err);
+                          });
+                        }
+
+                        connection.release();
+                        resolve({
+                          message: "Target received with new record creation",
+                        });
+                      });
+                    },
+                  );
+                }
+              },
+            );
+          },
+        );
+      });
     });
+  });
 };
 
 exports.getDailyTargetByOfficerAndVariety = (officerId, varietyId, grade) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
+  return new Promise((resolve, reject) => {
+    const sql = `
           SELECT 
               ot.id,
               ot.dailyTargetId,
@@ -542,35 +537,35 @@ exports.getDailyTargetByOfficerAndVariety = (officerId, varietyId, grade) => {
               AND DATE(dt.date) = CURDATE();
       `;
 
-        collectionofficer.query(
-            sql,
-            [officerId, varietyId, grade],
-            (err, results) => {
-                if (err) {
-                    console.error("Error in getDailyTargetByOfficerAndVariety:", err);
-                    return reject(err);
-                }
+    collectionofficer.query(
+      sql,
+      [officerId, varietyId, grade],
+      (err, results) => {
+        if (err) {
+          console.error("Error in getDailyTargetByOfficerAndVariety:", err);
+          return reject(err);
+        }
 
-                const formattedResults = results.map((target) => ({
-                    id: target.id,
-                    dailyTargetId: target.dailyTargetId,
-                    varietyId: target.varietyId,
-                    officerId: target.officerId,
-                    grade: target.grade,
-                    target: parseFloat(target.target).toFixed(2),
-                    complete: parseFloat(target.complete).toFixed(2),
-                    createdAt: target.createdAt ? target.createdAt.toISOString() : null,
-                }));
+        const formattedResults = results.map((target) => ({
+          id: target.id,
+          dailyTargetId: target.dailyTargetId,
+          varietyId: target.varietyId,
+          officerId: target.officerId,
+          grade: target.grade,
+          target: parseFloat(target.target).toFixed(2),
+          complete: parseFloat(target.complete).toFixed(2),
+          createdAt: target.createdAt ? target.createdAt.toISOString() : null,
+        }));
 
-                resolve(formattedResults.length > 0 ? formattedResults[0] : null);
-            },
-        );
-    });
+        resolve(formattedResults.length > 0 ? formattedResults[0] : null);
+      },
+    );
+  });
 };
 
 exports.getOfficerSummaryDao = async (officerId) => {
-    return new Promise((resolve, reject) => {
-        const query = `
+  return new Promise((resolve, reject) => {
+    const query = `
          SELECT 
               COUNT(ot.id) AS totalTasks,
               SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
@@ -595,27 +590,27 @@ exports.getOfficerSummaryDao = async (officerId) => {
               ot.officerId = ?
               AND DATE(dt.date) = CURDATE();
       `;
-        collectionofficer.query(query, [officerId], (error, results) => {
-            if (error) {
-                console.error("Database error in getOfficerSummaryDao:", error);
-                return reject(error);
-            }
-            resolve(
-                results[0] || {
-                    totalTasks: 0,
-                    completedTasks: 0,
-                    totalTarget: 0,
-                    totalComplete: 0,
-                    remainingTarget: 0,
-                },
-            );
-        });
+    collectionofficer.query(query, [officerId], (error, results) => {
+      if (error) {
+        console.error("Database error in getOfficerSummaryDao:", error);
+        return reject(error);
+      }
+      resolve(
+        results[0] || {
+          totalTasks: 0,
+          completedTasks: 0,
+          totalTarget: 0,
+          totalComplete: 0,
+          remainingTarget: 0,
+        },
+      );
     });
+  });
 };
 
 exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
-    return new Promise((resolve, reject) => {
-        const query = `
+  return new Promise((resolve, reject) => {
+    const query = `
           SELECT 
               COUNT(ot.id) AS totalTasks,
             SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
@@ -632,28 +627,28 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
               AND DATE(dt.date) = CURDATE();
       `;
 
-        collectionofficer.query(query, [collectionOfficerId], (error, results) => {
-            if (error) {
-                console.error("Database error in getOfficerSummaryDaoManager:", error);
-                return reject(error);
-            }
+    collectionofficer.query(query, [collectionOfficerId], (error, results) => {
+      if (error) {
+        console.error("Database error in getOfficerSummaryDaoManager:", error);
+        return reject(error);
+      }
 
-            const summary = results[0] || {
-                totalTasks: 0,
-                completedTasks: 0,
-                totalTarget: 0,
-                totalComplete: 0,
-                remainingTarget: 0,
-                gradesAssigned: "",
-            };
+      const summary = results[0] || {
+        totalTasks: 0,
+        completedTasks: 0,
+        totalTarget: 0,
+        totalComplete: 0,
+        remainingTarget: 0,
+        gradesAssigned: "",
+      };
 
-            summary.totalTasks = Number(summary.totalTasks);
-            summary.completedTasks = Number(summary.completedTasks);
-            summary.totalTarget = Number(summary.totalTarget);
-            summary.totalComplete = Number(summary.totalComplete);
-            summary.remainingTarget = Number(summary.remainingTarget);
+      summary.totalTasks = Number(summary.totalTasks);
+      summary.completedTasks = Number(summary.completedTasks);
+      summary.totalTarget = Number(summary.totalTarget);
+      summary.totalComplete = Number(summary.totalComplete);
+      summary.remainingTarget = Number(summary.remainingTarget);
 
-            resolve(summary);
-        });
+      resolve(summary);
     });
+  });
 };

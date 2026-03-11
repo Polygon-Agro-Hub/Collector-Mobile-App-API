@@ -1,5 +1,4 @@
 const db = require("../startup/database");
-const QRCode = require("qrcode");
 
 exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
   return new Promise((resolve, reject) => {

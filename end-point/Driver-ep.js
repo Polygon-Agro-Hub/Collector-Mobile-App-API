@@ -1,4 +1,4 @@
-const driverDao = require('../dao/Driver-dao');
+const driverDao = require('../dao/drivers-dao');
 const uploadFileToS3 = require('../middleware/s3upload'); 
 const { driverWithVehicleSchema } = require('../validation/driver-validation');
 

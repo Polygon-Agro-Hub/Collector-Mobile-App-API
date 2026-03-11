@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const userAuthDao = require("../dao/userAuth-dao");
+const userAuthDao = require("../dao/user-auth-dao");
 const bcrypt = require("bcrypt");
 const { loginSchema } = require("../validation/auth-validation");
 const uploadFileToS3 = require("../middleware/s3upload");
