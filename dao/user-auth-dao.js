@@ -176,37 +176,6 @@ exports.getProfileById = (userId) => {
   });
 };
 
-exports.getUserDetailsById = (userId) => {
-  return new Promise((resolve, reject) => {
-    const sql = `
-            SELECT 
-              co.firstNameEnglish AS firstName,
-              co.lastNameEnglish AS lastName,
-              co.phoneNumber01 AS phoneNumber,
-              co.nic AS nicNumber,
-              CONCAT(co.houseNumber, ', ', co.streetName, ', ', co.city) AS address,
-              cod.empid,
-              cod.companyNameEnglish AS companyName,
-              cod.jobRole AS jobRole,
-              cod.assignedDistrict AS regcode
-            FROM collectionofficer AS co
-            JOIN collectionofficercompanydetails AS cod 
-              ON cod.collectionOfficerId = co.id
-            WHERE co.id = ?
-        `;
-
-    db.collectionofficer.query(sql, [userId], (err, results) => {
-      if (err) {
-        return reject(new Error("Database error: " + err));
-      }
-      if (results.length === 0) {
-        return reject(new Error("User not found"));
-      }
-      resolve(results[0]);
-    });
-  });
-};
-
 exports.updatePhoneNumberById = (userId, phoneNumber, phoneNumber02) => {
   return new Promise((resolve, reject) => {
     const query =
@@ -221,24 +190,6 @@ exports.updatePhoneNumberById = (userId, phoneNumber, phoneNumber02) => {
         resolve(results);
       },
     );
-  });
-};
-
-exports.getQRCodeByOfficerId = (officerId) => {
-  return new Promise((resolve, reject) => {
-    const query = `
-            SELECT QRcode 
-            FROM collectionofficer
-            WHERE id = ?
-        `;
-
-    db.collectionofficer.query(query, [officerId], (error, results) => {
-      if (error) {
-        console.error("Error fetching officer QR code from DB:", error);
-        return reject(new Error("Database query failed"));
-      }
-      resolve(results);
-    });
   });
 };
 
@@ -348,38 +299,6 @@ exports.updateOnlineStatusWithSocket = async (empId, status) => {
       }
       resolve(null);
     });
-  });
-};
-
-exports.getUserProfileImage = async (userId) => {
-  return new Promise((resolve, reject) => {
-    const sql = "SELECT image FROM collectionofficer WHERE id = ?";
-    db.collectionofficer.query(sql, [userId], (err, results) => {
-      if (err) {
-        reject(err);
-      } else if (results.length > 0) {
-        resolve(results[0].profileImage);
-      } else {
-        resolve(null);
-      }
-    });
-  });
-};
-
-exports.updateUserProfileImage = async (userId, profileImageUrl) => {
-  return new Promise((resolve, reject) => {
-    const sql = "UPDATE collectionofficer SET image = ? WHERE id = ?";
-    db.collectionofficer.query(
-      sql,
-      [profileImageUrl, userId],
-      (err, result) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(result);
-        }
-      },
-    );
   });
 };
 

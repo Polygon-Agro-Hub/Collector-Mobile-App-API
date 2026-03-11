@@ -1,70 +1,70 @@
 const express = require("express");
 const auth = require("../middleware/auth.middleware");
 const router = express.Router();
-const unRegisterdcropfamerEp = require("../end-point/unRegisteredCropFarmer-ep");
+const unregisterdCropFamerEp = require("../end-point/unregistered-crop-farmer-ep");
 
-router.post("/add-crops", auth, unRegisterdcropfamerEp.addCropDetails);
+router.post("/add-crops", auth, unregisterdCropFamerEp.addCropDetails);
 
-router.post("/add-crops2", auth, unRegisterdcropfamerEp.addCropDetails2);
+router.post("/add-crops2", auth, unregisterdCropFamerEp.addCropDetails2);
 
-router.get("/get-crop-names", auth, unRegisterdcropfamerEp.getAllCropNames);
+router.get("/get-crop-names", auth, unregisterdCropFamerEp.getAllCropNames);
 
 router.get(
   "/get-crop-names/for-collection",
   auth,
-  unRegisterdcropfamerEp.getAllCropNamesForCollection,
+  unregisterdCropFamerEp.getAllCropNamesForCollection,
 );
 
 router.get(
   "/crops/varieties/:id",
   auth,
-  unRegisterdcropfamerEp.getVarietiesByCropId,
+  unregisterdCropFamerEp.getVarietiesByCropId,
 );
 
 router.get(
   "/unitPrices/:cropId",
   auth,
-  unRegisterdcropfamerEp.getUnitPricesByCropId,
+  unregisterdCropFamerEp.getUnitPricesByCropId,
 );
 
 router.get(
   "/user-crops/today/:userId/:registeredFarmerId",
-  unRegisterdcropfamerEp.getCropDetailsByUserId,
+  unregisterdCropFamerEp.getCropDetailsByUserId,
 );
 
 router.get(
   "/invoice/latest/:empId/:currentDate",
-  unRegisterdcropfamerEp.getLatestInvoiceNumber,
+  unregisterdCropFamerEp.getLatestInvoiceNumber,
 );
 
-router.post("/collection", unRegisterdcropfamerEp.getaddCollection);
+router.post("/collection", unregisterdCropFamerEp.getaddCollection);
 
-router.get("/get-all-crop", auth, unRegisterdcropfamerEp.getAllCropNameId);
+router.get("/get-all-crop", auth, unregisterdCropFamerEp.getAllCropNameId);
 
 router.get(
   "/crops/varieties/collection/:id",
   auth,
-  unRegisterdcropfamerEp.getVarietiesByCropIdCollection,
+  unregisterdCropFamerEp.getVarietiesByCropIdCollection,
 );
 
-router.get("/all-farmer", auth, unRegisterdcropfamerEp.getAllUsers);
+router.get("/all-farmer", auth, unregisterdCropFamerEp.getAllUsers);
 
 router.post(
   "/submit-collection-request",
   auth,
-  unRegisterdcropfamerEp.submitCollectionRequest,
+  unregisterdCropFamerEp.submitCollectionRequest,
 );
 
 router.put(
   "/user/update/:userId",
   auth,
-  unRegisterdcropfamerEp.updateUserAddress,
+  unregisterdCropFamerEp.updateUserAddress,
 );
 
 router.post(
   "/submit-collection-request",
   auth,
-  unRegisterdcropfamerEp.submitCollectionRequest,
+  unregisterdCropFamerEp.submitCollectionRequest,
 );
 
 module.exports = router;

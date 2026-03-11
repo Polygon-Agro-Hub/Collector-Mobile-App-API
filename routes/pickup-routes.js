@@ -2,8 +2,7 @@ const express = require("express");
 const auth = require("../middleware/auth.middleware");
 const router = express.Router();
 const upload = require("../middleware/multer.middleware");
-
-const pickupEp = require("../end-point/pickUp-ep");
+const pickupEp = require("../end-point/pick-up-ep");
 
 router.get("/get-pickupOrders", auth, pickupEp.getPickupOrders);
 

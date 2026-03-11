@@ -1,7 +1,7 @@
 const express = require("express");
 const auth = require("../middleware/auth.middleware");
 const router = express.Router();
-const marketPrice = require("../end-point/marketPrice-ep");
+const marketPrice = require("../end-point/market-price-ep");
 
 router.post(
   "/marketpricerequest",

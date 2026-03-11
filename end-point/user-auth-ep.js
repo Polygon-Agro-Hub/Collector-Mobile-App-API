@@ -2,8 +2,6 @@ const jwt = require("jsonwebtoken");
 const userAuthDao = require("../dao/user-auth-dao");
 const bcrypt = require("bcrypt");
 const { loginSchema } = require("../validation/auth-validation");
-const uploadFileToS3 = require("../middleware/s3upload");
-const delectfilesOnS3 = require("../middleware/s3delete");
 
 exports.loginUser = async (req, res) => {
   try {
@@ -240,29 +238,6 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-exports.getUserDetails = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const user = await userAuthDao.getUserDetailsById(userId);
-
-    res.status(200).json({
-      firstName: user.firstName,
-      lastName: user.lastName,
-      companyName: user.companyName,
-      regcode: user.regcode,
-      jobRole: user.jobRole,
-      nicNumber: user.nicNumber,
-      address: user.address,
-      phoneNumber: user.phoneNumber,
-      empid: user.empid,
-    });
-  } catch (error) {
-    console.error("Error in getUserDetails controller:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
 exports.updatePhoneNumber = async (req, res) => {
   const userId = req.user.id;
   const { phoneNumber, phoneNumber2 } = req.body;
@@ -294,35 +269,6 @@ exports.updatePhoneNumber = async (req, res) => {
     res
       .status(500)
       .json({ message: "An error occurred while updating the phone number" });
-  }
-};
-
-exports.getOfficerQRCode = async (req, res) => {
-  const officerId = req.user.id;
-
-  try {
-    const results = await userAuthDao.getQRCodeByOfficerId(officerId);
-
-    if (results.length === 0) {
-      return res.status(404).json({ error: "Officer not found" });
-    }
-
-    const { QRcode } = results[0];
-    if (!QRcode) {
-      return res
-        .status(404)
-        .json({ error: "QR code not available for this officer" });
-    }
-
-    const qrCodeBase64 = QRcode.toString("base64");
-
-    res.status(200).json({
-      message: "Officer QR code retrieved successfully",
-      QRcode: `data:image/png;base64,${qrCodeBase64}`,
-    });
-  } catch (error) {
-    console.error("Error fetching officer QR code:", error.message);
-    res.status(500).json({ error: "Failed to fetch officer QR code" });
   }
 };
 
@@ -371,50 +317,6 @@ exports.updateOnlineStatus = async (req, res) => {
     res
       .status(500)
       .json({ error: "An error occurred while updating online status." });
-  }
-};
-
-exports.uploadProfileImage = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const existingProfileImage = await userAuthDao.getUserProfileImage(userId);
-    if (existingProfileImage) {
-      delectfilesOnS3(existingProfileImage);
-    }
-
-    let profileImageUrl = null;
-
-    if (req.file) {
-      const fileName = req.file.originalname;
-      const imageBuffer = req.file.buffer;
-
-      const uploadedImage = await uploadFileToS3(
-        imageBuffer,
-        fileName,
-        "collectionofficer/image",
-      );
-      profileImageUrl = uploadedImage;
-    } else {
-    }
-    await userAuthDao.updateUserProfileImage(userId, profileImageUrl);
-
-    res.status(200).json({
-      status: "success",
-      message: "Profile image uploaded successfully",
-      profileImageUrl,
-    });
-  } catch (err) {
-    console.error("Error uploading profile image:", err);
-
-    if (err.isJoi) {
-      return res.status(400).json({
-        status: "error",
-        message: err.details[0].message,
-      });
-    }
-
-    res.status(500).json({ error: "Internal Server Error" });
   }
 };
 

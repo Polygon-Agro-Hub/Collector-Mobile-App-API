@@ -15,19 +15,19 @@ const {
 // Route imports
 const addCropDetails = require("./routes/unregistered-crop-farmer-routes");
 const farmerRoutes = require("./routes/farmer-routes");
-const getUserdata = require("./routes/QRroutes");
+const getUserdata = require("./routes/qr-routes");
 const complainRoutes = require("./routes/complains-routes");
-const priceUpdatesRoutes = require("./routes/price.routes");
-const managerRoutes = require("./routes/manager.routes");
+const priceUpdatesRoutes = require("./routes/price-routes");
+const managerRoutes = require("./routes/manager-routes");
 const collectionrequest = require("./routes/collection-routes");
 const heathRoutes = require("./routes/heath-routes");
 const distribution = require("./routes/distribution-routes");
 const distributionManager = require("./routes/distibution-manager-routes");
-const pickupRoute = require("./routes/pickup.routes");
-const pensionRoute = require("./routes/pension.routes");
+const pickupRoute = require("./routes/pickup-routes");
+const pensionRoute = require("./routes/pension-routes");
 const collectionOfficerRoutes = require("./routes/user-routes");
-const searchRoutes = require("./routes/search.routes");
-const targetRoutes = require("./routes/TargetNew-routes");
+const searchRoutes = require("./routes/search-routes");
+const targetRoutes = require("./routes/target-routes");
 const emailRoutes = require("./routes/email-routes");
 const farmerEp = require("./end-point/farmer-ep");
 
@@ -93,6 +93,7 @@ checkConnections();
 const basePathMain = "/agro-api/collection-api";
 
 // Route configurations
+mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
 mainApp.use(`${basePathMain}/api/unregisteredfarmercrop`, addCropDetails);
@@ -102,7 +103,6 @@ mainApp.use(`${basePathMain}/api/complain`, complainRoutes);
 mainApp.use(`${basePathMain}/api/auth`, priceUpdatesRoutes);
 mainApp.use(`${basePathMain}/api/collection-manager`, managerRoutes);
 mainApp.use(`${basePathMain}/api/target`, targetRoutes);
-mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collectionrequest`, collectionrequest);
 mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);

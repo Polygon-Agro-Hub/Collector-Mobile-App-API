@@ -1,5 +1,4 @@
 const TargetDAO = require("../dao/TargetNew-dao");
-
 const targetValidation = require("../validation/target-validations");
 
 exports.getDailyTargetsForOfficer = async (req, res) => {

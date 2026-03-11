@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const qrGenerateEp = require("../end-point/qrGenerate-ep");
+const qrGenerateEp = require("../end-point/qr-generate-ep");
 
 router.post("/getUserData", qrGenerateEp.getUserData);
 

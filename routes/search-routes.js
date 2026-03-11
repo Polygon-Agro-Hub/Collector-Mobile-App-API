@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const serachFarmerEp = require("../end-point/searchFarmer-ep");
+const serachFarmerEp = require("../end-point/search-farmer-ep");
 
 router.get("/getall", serachFarmerEp.getAllUsers);
 

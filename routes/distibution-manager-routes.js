@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth.middleware");
-const dmanagerEp = require("../end-point/distributionManger-ep");
+const dmanagerEp = require("../end-point/distribution-manger-ep");
 const auth = require("../middleware/auth.middleware");
 
 // Get distribution center targets
