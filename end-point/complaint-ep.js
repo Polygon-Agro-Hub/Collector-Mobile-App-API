@@ -1,5 +1,4 @@
 const ComplaintDao = require("../dao/complaint-dao");
-const { createComplain } = require("../Validations/complain-validation");
 const asyncHandler = require("express-async-handler");
 
 exports.createFarmerComplaint = async (req, res) => {

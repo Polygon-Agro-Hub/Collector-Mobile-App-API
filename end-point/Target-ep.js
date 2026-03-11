@@ -1,5 +1,5 @@
 const TargetDAO = require("../dao/Target-dao");
-const TargetValidate = require("../Validations/Target-validation");
+const TargetValidate = require("../validation/target-validations");
 
 exports.getAllCropCatogory = async (req, res) => {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;

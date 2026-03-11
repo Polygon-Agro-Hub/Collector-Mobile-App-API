@@ -1,11 +1,10 @@
 const QRCode = require("qrcode");
 const fs = require("fs");
-const path = require("path");
 const farmerDao = require("../dao/farmar-dao");
 const asyncHandler = require("express-async-handler");
-const uploadFileToS3 = require("../Middlewares/s3upload");
+const uploadFileToS3 = require("../middleware/s3upload");
 const axios = require("axios");
-const userSchema = require("../Validations/farmer-validation");
+const userSchema = require("../validation/farmer-validation");
 
 exports.addUserAndPaymentDetails = asyncHandler(async (req, res) => {
     try {
