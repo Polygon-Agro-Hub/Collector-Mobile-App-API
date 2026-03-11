@@ -1,10 +1,8 @@
 const collectionofficerDao = require("../dao/manager-dao");
 const jwt = require("jsonwebtoken");
 const Joi = require("joi");
-
-const uploadFileToS3 = require("../Middlewares/s3upload");
-
-const createCollectionOfficerSchema = require("../Validations/manager-validation");
+const uploadFileToS3 = require("../middleware/s3upload");
+const createCollectionOfficerSchema = require("../validation/manager-validation");
 
 exports.createCollectionOfficer = async (req, res) => {
   try {

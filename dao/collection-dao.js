@@ -1,13 +1,12 @@
-const jwt = require("jsonwebtoken");
 const db = require("../startup/database");
 
 exports.getTargetForOfficerDao = (officerId) => {
-    return new Promise((resolve, reject) => {
-        if (!officerId) {
-            return reject(new Error("Officer ID is missing or invalid"));
-        }
+  return new Promise((resolve, reject) => {
+    if (!officerId) {
+      return reject(new Error("Officer ID is missing or invalid"));
+    }
 
-        const sql = `
+    const sql = `
             SELECT 
                 dt.id AS distributedTargetId,
                 dt.companycenterId,
@@ -190,26 +189,26 @@ exports.getTargetForOfficerDao = (officerId) => {
                 o.id ASC
         `;
 
-        db.collectionofficer.query(sql, [officerId], (err, results) => {
-            if (err) {
-                console.error("Error in getTargetForOfficerDao:", err);
-                return reject(err);
-            }
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Error in getTargetForOfficerDao:", err);
+        return reject(err);
+      }
 
-            resolve(results);
-        });
+      resolve(results);
     });
+  });
 };
 
 exports.getViewDetailsById = (requestId) => {
-    return new Promise((resolve, reject) => {
-        db.plantcare.getConnection((connErr, connection) => {
-            if (connErr) {
-                console.error("Connection Error:", connErr);
-                return reject(connErr);
-            }
+  return new Promise((resolve, reject) => {
+    db.plantcare.getConnection((connErr, connection) => {
+      if (connErr) {
+        console.error("Connection Error:", connErr);
+        return reject(connErr);
+      }
 
-            const query = ` 
+      const query = ` 
                 SELECT  
                     cr.id,  
                     cr.farmerId,  
@@ -231,19 +230,19 @@ exports.getViewDetailsById = (requestId) => {
                 WHERE cr.id = ? 
             `;
 
-            connection.query(query, [requestId], (error, results) => {
-                if (error) {
-                    connection.release();
-                    console.error("Database Query Error:", error);
-                    return reject(error);
-                }
+      connection.query(query, [requestId], (error, results) => {
+        if (error) {
+          connection.release();
+          console.error("Database Query Error:", error);
+          return reject(error);
+        }
 
-                if (!results || results.length === 0) {
-                    connection.release();
-                    return resolve(null);
-                }
+        if (!results || results.length === 0) {
+          connection.release();
+          return resolve(null);
+        }
 
-                const itemsQuery = ` 
+        const itemsQuery = ` 
                     SELECT 
                         ri.id, 
                         ri.cropId, 
@@ -261,86 +260,86 @@ exports.getViewDetailsById = (requestId) => {
                     WHERE ri.requestId = ? 
                 `;
 
-                connection.query(
-                    itemsQuery,
-                    [requestId],
-                    (itemsError, itemsResults) => {
-                        connection.release();
+        connection.query(
+          itemsQuery,
+          [requestId],
+          (itemsError, itemsResults) => {
+            connection.release();
 
-                        if (itemsError) {
-                            console.error("Database Items Query Error:", itemsError);
-                            return reject(itemsError);
-                        }
+            if (itemsError) {
+              console.error("Database Items Query Error:", itemsError);
+              return reject(itemsError);
+            }
 
-                        const requestDetails = results[0];
-                        const formattedResponse = {
-                            id: requestDetails.id,
-                            name:
-                                requestDetails.firstName || `Farmer ${requestDetails.farmerId}`,
-                            route:
-                                requestDetails.farmerRoute ||
-                                `Route ${requestDetails.farmerId}`,
-                            nic: requestDetails.NICnumber || `NIC ${requestDetails.farmerId}`,
-                            farmerId: requestDetails.farmerId,
-                            scheduleDate: requestDetails.scheduleDate,
-                            requestStatus: requestDetails.requestStatus,
-                            assignedStatus: requestDetails.assignedStatus,
-                            city: requestDetails.city,
-                            streetName: requestDetails.streetName,
-                            houseNo: requestDetails.houseNo,
-                            requestID: requestDetails.reqId,
-                            items: (itemsResults || []).map((item) => ({
-                                itemId: item.id,
-                                cropId: item.cropId,
-                                cropName: item.cropNameEnglish,
-                                cropNameSinhala: item.cropNameSinhala,
-                                cropNameTamil: item.cropNameTamil,
-                                varietyNameTamil: item.varietyNameTamil,
-                                varietyNameSinhala: item.varietyNameSinhala,
-                                varietyId: item.varietyId,
-                                varietyName: item.varietyNameEnglish,
-                                loadWeight: item.loadWeight,
-                            })),
-                        };
+            const requestDetails = results[0];
+            const formattedResponse = {
+              id: requestDetails.id,
+              name:
+                requestDetails.firstName || `Farmer ${requestDetails.farmerId}`,
+              route:
+                requestDetails.farmerRoute ||
+                `Route ${requestDetails.farmerId}`,
+              nic: requestDetails.NICnumber || `NIC ${requestDetails.farmerId}`,
+              farmerId: requestDetails.farmerId,
+              scheduleDate: requestDetails.scheduleDate,
+              requestStatus: requestDetails.requestStatus,
+              assignedStatus: requestDetails.assignedStatus,
+              city: requestDetails.city,
+              streetName: requestDetails.streetName,
+              houseNo: requestDetails.houseNo,
+              requestID: requestDetails.reqId,
+              items: (itemsResults || []).map((item) => ({
+                itemId: item.id,
+                cropId: item.cropId,
+                cropName: item.cropNameEnglish,
+                cropNameSinhala: item.cropNameSinhala,
+                cropNameTamil: item.cropNameTamil,
+                varietyNameTamil: item.varietyNameTamil,
+                varietyNameSinhala: item.varietyNameSinhala,
+                varietyId: item.varietyId,
+                varietyName: item.varietyNameEnglish,
+                loadWeight: item.loadWeight,
+              })),
+            };
 
-                        resolve(formattedResponse);
-                    },
-                );
-            });
-        });
+            resolve(formattedResponse);
+          },
+        );
+      });
     });
+  });
 };
 
 exports.updateCollectionRequest = async (requestId, scheduleDate) => {
-    return new Promise((resolve, reject) => {
-        const updateQuery = `
+  return new Promise((resolve, reject) => {
+    const updateQuery = `
         UPDATE collectionrequest 
         SET scheduleDate = ? 
         WHERE id = ?
       `;
 
-        db.collectionofficer.query(
-            updateQuery,
-            [scheduleDate, requestId],
-            (err, results) => {
-                if (err) {
-                    console.error("Error updating schedule date:", err);
-                    reject(new Error("Database query failed"));
-                    return;
-                }
+    db.collectionofficer.query(
+      updateQuery,
+      [scheduleDate, requestId],
+      (err, results) => {
+        if (err) {
+          console.error("Error updating schedule date:", err);
+          reject(new Error("Database query failed"));
+          return;
+        }
 
-                resolve({
-                    success: true,
-                    message: "Schedule date updated successfully.",
-                });
-            },
-        );
-    });
+        resolve({
+          success: true,
+          message: "Schedule date updated successfully.",
+        });
+      },
+    );
+  });
 };
 
 exports.cancelRequest = async (requestId, cancelReason, userId) => {
-    return new Promise((resolve, reject) => {
-        const updateQuery = `
+  return new Promise((resolve, reject) => {
+    const updateQuery = `
             UPDATE collectionrequest 
             SET cancelReason = ?, 
                 cancelStatus = 1, 
@@ -349,20 +348,20 @@ exports.cancelRequest = async (requestId, cancelReason, userId) => {
             WHERE id = ?
         `;
 
-        db.collectionofficer.query(
-            updateQuery,
-            [cancelReason, userId, requestId],
-            (err, result) => {
-                if (err) {
-                    console.error("Query Error:", err);
-                    return reject({
-                        success: false,
-                        message: "Database error",
-                        error: err,
-                    });
-                }
-                resolve({ success: true, message: "Request cancelled successfully." });
-            },
-        );
-    });
+    db.collectionofficer.query(
+      updateQuery,
+      [cancelReason, userId, requestId],
+      (err, result) => {
+        if (err) {
+          console.error("Query Error:", err);
+          return reject({
+            success: false,
+            message: "Database error",
+            error: err,
+          });
+        }
+        resolve({ success: true, message: "Request cancelled successfully." });
+      },
+    );
+  });
 };
