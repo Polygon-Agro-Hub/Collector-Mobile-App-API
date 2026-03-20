@@ -24,4 +24,10 @@ router.post(
   pensionRequestController.submitPensionRequest,
 );
 
+router.get(
+  "/check-eligibility/:userId",
+  auth,
+  pensionRequestController.checkEligibility,
+);
+
 module.exports = router;
