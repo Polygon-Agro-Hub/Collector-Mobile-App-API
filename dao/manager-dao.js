@@ -624,18 +624,18 @@ exports.getFarmerPaymentsSummary = async ({
 }) => {
   const sql = `
     SELECT 
-      DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30')) AS date, 
-      SUM(gradeAquan) + SUM(gradeBquan) + SUM(gradeCquan) AS total, 
-      COUNT(fpc.registerFarmerId) AS TCount
+      DATE(CONVERT_TZ(rfp.createdAt, '+00:00', '+05:30')) AS date, 
+      SUM(fpc.gradeAquan + fpc.gradeBquan + fpc.gradeCquan) AS total, 
+      COUNT(DISTINCT rfp.id) AS TCount
     FROM 
       registeredfarmerpayments rfp
     JOIN 
       farmerpaymentscrops fpc ON rfp.id = fpc.registerFarmerId
     WHERE 
       rfp.collectionOfficerId = ? 
-      AND DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30')) BETWEEN ? AND ?
+      AND DATE(CONVERT_TZ(rfp.createdAt, '+00:00', '+05:30')) BETWEEN ? AND ?
     GROUP BY 
-      DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30'));
+      DATE(CONVERT_TZ(rfp.createdAt, '+00:00', '+05:30'));
   `;
   return db.collectionofficer
     .promise()
