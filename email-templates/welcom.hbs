@@ -127,29 +127,79 @@
         <!-- Billing Section -->
         <div class="section1" style="display: flex; justify-content: space-between">
             <div>
-                <p class="bold">Bill To :</p>
-                <p class="headerp">{{safe order.customerInfo "title"}}.{{safe order.customerInfo "firstName"}} {{safe order.customerInfo "lastName"}}</p>
-                <p class="headerp"> +94 {{safe order.customerInfo "phoneNumber"}}</p>
-                <p class="headerp">{{safe customerData "email"}}</p>
-     <!-- Previous template content remains the same until the conditional section -->
+        <p style="font-weight: 550; font-size: 14px; margin: 5px 0;">Bill To :</p>
+        <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+            {{safe order.customerInfo "title"}}.{{safe order.customerInfo "firstName"}} {{safe order.customerInfo "lastName"}}
+        </p>
+        <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">+94 {{safe order.customerInfo "phoneNumber"}}</p>
+        <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">{{safe customerData "email"}}</p>
 
- <div style="margin-top: 10px">
-                    {{#if (isEqual (safe order.customerInfo "buildingType") "Apartment")}}
-                        <p class="bold">Apartment Address :</p>
-                        <p class="headerp"><span class="label">House No:</span> <span class="value">{{safe customerData.buildingDetails "houseNo"}}</span></p>
-                        <p class="headerp"><span class="label">Floor No:</span> <span class="value">{{safe customerData.buildingDetails "floorNo"}}</span></p>
-                        <p class="headerp"><span class="label">Building No:</span> <span class="value">{{safe customerData.buildingDetails "buildingNo"}}</span></p>
-                        <p class="headerp"><span class="label">Building Name:</span> <span class="value">{{safe customerData.buildingDetails "buildingName"}}</span></p>
-                        <p class="headerp"><span class="label">Unit No:</span> <span class="value">{{safe customerData.buildingDetails "unitNo"}}</span></p>
-                        <p class="headerp"><span class="label">Street:</span> <span class="value">{{safe customerData.buildingDetails "streetName"}}</span></p>
-                        <p class="headerp"><span class="label">City:</span> <span class="value">{{safe customerData.buildingDetails "city"}}</span></p>
-                    {{else}}
-                        <p class="bold">House Address :</p>
-                        <p class="headerp"><span class="label">House No:</span> <span class="value">{{safe customerData.buildingDetails "houseNo"}}</span></p>
-                        <p class="headerp"><span class="label">Street:</span> <span class="value">{{safe customerData.buildingDetails "streetName"}}</span></p>
-                        <p class="headerp"><span class="label">City:</span> <span class="value">{{safe customerData.buildingDetails "city"}}</span></p>
-                    {{/if}}
-                </div>
+        {{#if (isEqual (safe order "delivaryMethod") "Pickup")}}
+            {{!-- PICKUP: show center address only --}}
+            <div style="margin-top: 10px;">
+                <p style="font-weight: 550; font-size: 14px; margin: 5px 0;">Pickup Centre :</p>
+                <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                    <span style="color: #929292;">Centre:</span>
+                    <span>{{safe customerData.centerDetails "centerName"}}</span>
+                </p>
+                <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                    <span style="color: #929292;">City:</span>
+                    <span>{{safe customerData.centerDetails "city"}}</span>
+                </p>
+                <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                    <span style="color: #929292;">District:</span>
+                    <span>{{safe customerData.centerDetails "district"}}</span>
+                </p>
+                <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                    <span style="color: #929292;">Province:</span>
+                    <span>{{safe customerData.centerDetails "province"}}</span>
+                </p>
+                <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                    <span style="color: #929292;">Country:</span>
+                    <span>{{safe customerData.centerDetails "country"}}</span>
+                </p>
+            </div>
+        {{else}}
+         
+            <div style="margin-top: 10px;">
+                {{#if (isEqual (safe order.customerInfo "buildingType") "Apartment")}}
+                    <p style="font-weight: 550; font-size: 14px; margin: 5px 0;">Apartment Address :</p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">House No:</span> {{safe customerData.buildingDetails "houseNo"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Floor No:</span> {{safe customerData.buildingDetails "floorNo"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Building No:</span> {{safe customerData.buildingDetails "buildingNo"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Building Name:</span> {{safe customerData.buildingDetails "buildingName"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Unit No:</span> {{safe customerData.buildingDetails "unitNo"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Street:</span> {{safe customerData.buildingDetails "streetName"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">City:</span> {{safe customerData.buildingDetails "city"}}
+                    </p>
+                {{else}}
+                    <p style="font-weight: 550; font-size: 14px; margin: 5px 0;">House Address :</p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">House No:</span> {{safe customerData.buildingDetails "houseNo"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">Street:</span> {{safe customerData.buildingDetails "streetName"}}
+                    </p>
+                    <p style="font-size: 14px; line-height: 10px; margin: 5px 0;">
+                        <span style="color: #929292;">City:</span> {{safe customerData.buildingDetails "city"}}
+                    </p>
+                {{/if}}
+            </div>
+        {{/if}}
+    </div>
 
 <!-- Rest of the template remains the same -->
             </div>

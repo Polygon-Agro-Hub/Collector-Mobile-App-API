@@ -1468,7 +1468,14 @@ exports.updateoutForDelivery = (orderId, userId) => {
         oa.floorNo,
         oa.houseNo       AS aptHouseNo,
         oa.streetName    AS aptStreetName,
-        oa.city          AS aptCity
+        oa.city          AS aptCity,
+
+        -- Center fields (for Pickup orders)
+        dc.centerName    AS centerName,
+        dc.city          AS centerCity,
+        dc.district      AS centerDistrict,
+        dc.province      AS centerProvince,
+        dc.country       AS centerCountry
 
     FROM market_place.orders AS o
     INNER JOIN market_place.processorders AS po ON po.orderId = o.id
@@ -1477,6 +1484,8 @@ exports.updateoutForDelivery = (orderId, userId) => {
         ON oh.orderId = o.id AND c.buildingType = 'House'
     LEFT JOIN market_place.orderapartment AS oa 
         ON oa.orderId = o.id AND c.buildingType = 'Apartment'
+    LEFT JOIN collection_officer.distributedcenter AS dc 
+        ON o.centerId = dc.id
     WHERE po.orderId = ?
 `;
 
