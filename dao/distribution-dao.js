@@ -153,7 +153,7 @@ LEFT JOIN (
         orderId
 ) additional_item_counts ON o.id = additional_item_counts.orderId
 LEFT JOIN (
-    -- Package items subquery - FIXED: Calculate individual package statuses first
+    -- Package items subquery
     SELECT 
         op.orderId,
         COUNT(DISTINCT op.id) as total_packages,
@@ -196,9 +196,21 @@ LEFT JOIN (
 WHERE 
     dt.userId = ?
     AND (
-        DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-        OR 
-        (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+        -- Completed items: keep EXACT original behavior, no change
+        (
+            dti.isComplete = 1
+            AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+        )
+        OR
+        -- Todo (Pending/Opened) items: filter by sheduleDate window
+        -- Past 3 days : day-before-yesterday, yesterday, today  (-2 days)
+        -- Next 3 days : today, tomorrow, day-after-tomorrow     (+2 days)
+        (
+            (dti.isComplete IS NULL OR dti.isComplete = 0)
+            AND DATE(o.sheduleDate) BETWEEN 
+                DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
+            AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+        )
     )
 ORDER BY 
     dt.companycenterId ASC,

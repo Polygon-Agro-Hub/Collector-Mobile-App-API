@@ -167,7 +167,7 @@ exports.getDCenterTarget = (irmId = null) => {
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Calculate individual package statuses first
+                -- Package items subquery
                 SELECT 
                     op.orderId,
                     COUNT(DISTINCT op.id) as total_packages,
@@ -213,11 +213,28 @@ exports.getDCenterTarget = (irmId = null) => {
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 (
-                    -- Last 3 days: get all data without filtering
-                    DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    OR 
-                    -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                    -- Completed items: keep EXACT original behavior, no change
+                    (
+                        dti.isComplete = 1
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Out For Delivery / Ready to Pickup: keep existing behavior, no change
+                    (
+                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Todo (Pending/Opened) items: filter by sheduleDate window
+                    -- Past 3 days : day-before-yesterday, yesterday, today  (-2 days)
+                    -- Next 3 days : today, tomorrow, day-after-tomorrow     (+2 days)
+                    (
+                        (dti.isComplete IS NULL OR dti.isComplete = 0)
+                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
+                        AND DATE(o.sheduleDate) BETWEEN 
+                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
+                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                    )
                 )
                 ${irmId ? "AND (co.irmId = ? OR dt.userId = ?)" : ""}
             ORDER BY 
@@ -820,21 +837,17 @@ exports.getDistributionOfficerTarget = (officerId) => {
                 CAST(COALESCE(package_item_counts.opened_packages, 0) AS UNSIGNED) AS openedPackages,
                 CAST(COALESCE(package_item_counts.pending_packages, 0) AS UNSIGNED) AS pendingPackages,
 
-                -- Overall package status (considering all individual package statuses)
+                -- Overall package status
                 CASE 
                     WHEN o.isPackage = 0 THEN NULL
                     WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
-                    -- All packages completed
                     WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                    -- All packages pending
                     WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
-                    -- Mix of statuses (some opened, some completed, or some pending)
                     ELSE 'Opened'
                 END AS packageItemStatus,
 
-                -- Final overall status combining additional items and package status
+                -- Final overall status
                 CASE 
-                    -- For non-package orders (only check additional items)
                     WHEN o.isPackage = 0 THEN
                         CASE 
                             WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
@@ -844,32 +857,19 @@ exports.getDistributionOfficerTarget = (officerId) => {
                             WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
                             ELSE 'Pending'
                         END
-
-                    -- For package orders
                     WHEN o.isPackage = 1 THEN
                         CASE 
-                            -- Both additional and package items exist
                             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
                                  COALESCE(package_item_counts.total_packages, 0) > 0 THEN
                                 CASE 
-                                    -- RULE 1: All Completed → "Completed" (Row 19)
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
                                          COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- RULE 2: ANY section has NO progress (Pending) → "Pending"
-                                    -- This covers rows: 1,2,3,4,5,6,7,8,9,11,12,13,14,16,20,21,22,23,26
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
                                          COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- RULE 3: All sections have progress (no Pending) → "Opened"
-                                    -- This covers rows: 10,15,17,18,24,25,27
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
                                          COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
-                                    
                                     ELSE 'Pending'
                                 END
-
-                            -- Only additional items exist
                             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
                                 CASE 
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
@@ -878,20 +878,12 @@ exports.getDistributionOfficerTarget = (officerId) => {
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
                                     ELSE 'Pending'
                                 END
-
-                            -- Only package items exist
                             WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
                                 CASE 
-                                    -- All packages completed
                                     WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- Any package is pending (0 progress)
                                     WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- All packages have some progress (mix of opened and completed, but no pending)
                                     ELSE 'Opened'
                                 END
-
                             ELSE 'Pending'
                         END
                     ELSE 'Pending'
@@ -906,7 +898,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
             INNER JOIN 
                 market_place.orders o ON po.orderId = o.id
             LEFT JOIN (
-                -- Additional items subquery
                 SELECT 
                     orderId,
                     COUNT(*) as total_items,
@@ -918,7 +909,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Calculate individual package statuses first
                 SELECT 
                     op.orderId,
                     COUNT(DISTINCT op.id) as total_packages,
@@ -926,7 +916,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     SUM(COALESCE(package_items.total_items, 0)) as total_items,
                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
-                    -- Count packages by their individual status
                     SUM(CASE 
                         WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
                         WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
@@ -956,20 +945,37 @@ exports.getDistributionOfficerTarget = (officerId) => {
                         orderPackageId
                 ) package_items ON op.id = package_items.orderPackageId
                 WHERE 
-                    COALESCE(op.isLock, 0) = 0  -- Only include unlocked packages
+                    COALESCE(op.isLock, 0) = 0
                 GROUP BY 
                     op.orderId
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 dt.userId = ?
                 AND (
-                    -- Last 3 days: get all data without filtering
-                    DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    OR 
-                    -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                    -- Completed items: use dt.createdAt range
+                    (
+                        dti.isComplete = 1
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Out For Delivery / Ready to Pickup: use dt.createdAt range
+                    (
+                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Todo (Pending/Opened): filter by sheduleDate window
+                    -- Past 3 days: day-before-yesterday, yesterday, today  (-2 days)
+                    -- Next 3 days: today, tomorrow, day-after-tomorrow     (+2 days)
+                    (
+                        (dti.isComplete IS NULL OR dti.isComplete = 0)
+                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
+                        AND DATE(o.sheduleDate) BETWEEN 
+                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
+                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                    )
                 )
-                -- ADDITIONAL FIX: Exclude orders where ALL packages are locked
+                -- Exclude orders where ALL packages are locked
                 AND NOT EXISTS (
                     SELECT 1 
                     FROM market_place.orderpackage op_check
