@@ -167,7 +167,7 @@ exports.getDCenterTarget = (irmId = null) => {
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Calculate individual package statuses first
+                -- Package items subquery
                 SELECT 
                     op.orderId,
                     COUNT(DISTINCT op.id) as total_packages,
@@ -213,11 +213,28 @@ exports.getDCenterTarget = (irmId = null) => {
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 (
-                    -- Last 3 days: get all data without filtering
-                    DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    OR 
-                    -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                    -- Completed items: keep EXACT original behavior, no change
+                    (
+                        dti.isComplete = 1
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Out For Delivery / Ready to Pickup: keep existing behavior, no change
+                    (
+                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Todo (Pending/Opened) items: filter by sheduleDate window
+                    -- Past 3 days : day-before-yesterday, yesterday, today  (-2 days)
+                    -- Next 3 days : today, tomorrow, day-after-tomorrow     (+2 days)
+                    (
+                        (dti.isComplete IS NULL OR dti.isComplete = 0)
+                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
+                        AND DATE(o.sheduleDate) BETWEEN 
+                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
+                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                    )
                 )
                 ${irmId ? "AND (co.irmId = ? OR dt.userId = ?)" : ""}
             ORDER BY 
@@ -820,21 +837,17 @@ exports.getDistributionOfficerTarget = (officerId) => {
                 CAST(COALESCE(package_item_counts.opened_packages, 0) AS UNSIGNED) AS openedPackages,
                 CAST(COALESCE(package_item_counts.pending_packages, 0) AS UNSIGNED) AS pendingPackages,
 
-                -- Overall package status (considering all individual package statuses)
+                -- Overall package status
                 CASE 
                     WHEN o.isPackage = 0 THEN NULL
                     WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
-                    -- All packages completed
                     WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                    -- All packages pending
                     WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
-                    -- Mix of statuses (some opened, some completed, or some pending)
                     ELSE 'Opened'
                 END AS packageItemStatus,
 
-                -- Final overall status combining additional items and package status
+                -- Final overall status
                 CASE 
-                    -- For non-package orders (only check additional items)
                     WHEN o.isPackage = 0 THEN
                         CASE 
                             WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
@@ -844,32 +857,19 @@ exports.getDistributionOfficerTarget = (officerId) => {
                             WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
                             ELSE 'Pending'
                         END
-
-                    -- For package orders
                     WHEN o.isPackage = 1 THEN
                         CASE 
-                            -- Both additional and package items exist
                             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
                                  COALESCE(package_item_counts.total_packages, 0) > 0 THEN
                                 CASE 
-                                    -- RULE 1: All Completed → "Completed" (Row 19)
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
                                          COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- RULE 2: ANY section has NO progress (Pending) → "Pending"
-                                    -- This covers rows: 1,2,3,4,5,6,7,8,9,11,12,13,14,16,20,21,22,23,26
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
                                          COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- RULE 3: All sections have progress (no Pending) → "Opened"
-                                    -- This covers rows: 10,15,17,18,24,25,27
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
                                          COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
-                                    
                                     ELSE 'Pending'
                                 END
-
-                            -- Only additional items exist
                             WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
                                 CASE 
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
@@ -878,20 +878,12 @@ exports.getDistributionOfficerTarget = (officerId) => {
                                     WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
                                     ELSE 'Pending'
                                 END
-
-                            -- Only package items exist
                             WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
                                 CASE 
-                                    -- All packages completed
                                     WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- Any package is pending (0 progress)
                                     WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- All packages have some progress (mix of opened and completed, but no pending)
                                     ELSE 'Opened'
                                 END
-
                             ELSE 'Pending'
                         END
                     ELSE 'Pending'
@@ -906,7 +898,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
             INNER JOIN 
                 market_place.orders o ON po.orderId = o.id
             LEFT JOIN (
-                -- Additional items subquery
                 SELECT 
                     orderId,
                     COUNT(*) as total_items,
@@ -918,7 +909,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
             LEFT JOIN (
-                -- Package items subquery - FIXED: Calculate individual package statuses first
                 SELECT 
                     op.orderId,
                     COUNT(DISTINCT op.id) as total_packages,
@@ -926,7 +916,6 @@ exports.getDistributionOfficerTarget = (officerId) => {
                     SUM(COALESCE(package_items.total_items, 0)) as total_items,
                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
-                    -- Count packages by their individual status
                     SUM(CASE 
                         WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
                         WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
@@ -956,20 +945,37 @@ exports.getDistributionOfficerTarget = (officerId) => {
                         orderPackageId
                 ) package_items ON op.id = package_items.orderPackageId
                 WHERE 
-                    COALESCE(op.isLock, 0) = 0  -- Only include unlocked packages
+                    COALESCE(op.isLock, 0) = 0
                 GROUP BY 
                     op.orderId
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
                 dt.userId = ?
                 AND (
-                    -- Last 3 days: get all data without filtering
-                    DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    OR 
-                    -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                    -- Completed items: use dt.createdAt range
+                    (
+                        dti.isComplete = 1
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Out For Delivery / Ready to Pickup: use dt.createdAt range
+                    (
+                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
+                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    )
+                    OR
+                    -- Todo (Pending/Opened): filter by sheduleDate window
+                    -- Past 3 days: day-before-yesterday, yesterday, today  (-2 days)
+                    -- Next 3 days: today, tomorrow, day-after-tomorrow     (+2 days)
+                    (
+                        (dti.isComplete IS NULL OR dti.isComplete = 0)
+                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
+                        AND DATE(o.sheduleDate) BETWEEN 
+                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
+                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                    )
                 )
-                -- ADDITIONAL FIX: Exclude orders where ALL packages are locked
+                -- Exclude orders where ALL packages are locked
                 AND NOT EXISTS (
                     SELECT 1 
                     FROM market_place.orderpackage op_check
@@ -1069,17 +1075,11 @@ exports.targetPass = async (params) => {
     } = params;
 
     if (!officerId) {
-      return {
-        success: false,
-        message: "officerId is required",
-      };
+      return { success: false, message: "officerId is required" };
     }
 
     if (!assigneeOfficerId) {
-      return {
-        success: false,
-        message: "assigneeOfficerId is required",
-      };
+      return { success: false, message: "assigneeOfficerId is required" };
     }
 
     if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
@@ -1089,30 +1089,32 @@ exports.targetPass = async (params) => {
       };
     }
 
+    // ─── Resolve sourceOfficerId from empId ───────────────────────────────────
+    // officerId from URL params is always the empId string (e.g. "342"),
+    // so we always do a DB lookup instead of treating it as a primary key.
     let sourceOfficerId;
-    let targetOfficerId;
 
-    if (typeof officerId === "number" || !isNaN(parseInt(officerId))) {
-      sourceOfficerId = parseInt(officerId);
-    } else {
-      const sourceQuery = `
-                SELECT id FROM collection_officer.collectionofficer
-                WHERE empId = ? 
-                LIMIT 1
-            `;
-      const sourceResult = await db.collectionofficer
-        .promise()
-        .query(sourceQuery, [officerId]);
+    const sourceQuery = `
+      SELECT id FROM collection_officer.collectionofficer
+      WHERE empId = ?
+      LIMIT 1
+    `;
+    const sourceResult = await db.collectionofficer
+      .promise()
+      .query(sourceQuery, [officerId]);
 
-      if (!sourceResult[0] || sourceResult[0].length === 0) {
-        return {
-          success: false,
-          message: `Source officer not found with code: ${officerId}`,
-        };
-      }
-
-      sourceOfficerId = parseInt(sourceResult[0][0].id);
+    if (!sourceResult[0] || sourceResult[0].length === 0) {
+      return {
+        success: false,
+        message: `Source officer not found with empId: ${officerId}`,
+      };
     }
+    sourceOfficerId = parseInt(sourceResult[0][0].id);
+
+    // ─── Resolve targetOfficerId ──────────────────────────────────────────────
+    // assigneeOfficerId comes from the frontend dropdown which uses officer.id,
+    // so it IS the DB primary key — safe to parse directly.
+    let targetOfficerId;
 
     if (
       typeof assigneeOfficerId === "number" ||
@@ -1121,10 +1123,10 @@ exports.targetPass = async (params) => {
       targetOfficerId = parseInt(assigneeOfficerId);
     } else {
       const assigneeQuery = `
-                SELECT id FROM collection_officer.collectionofficer 
-                WHERE empId = ? 
-                LIMIT 1
-            `;
+        SELECT id FROM collection_officer.collectionofficer
+        WHERE empId = ?
+        LIMIT 1
+      `;
       const assigneeResult = await db.collectionofficer
         .promise()
         .query(assigneeQuery, [assigneeOfficerId]);
@@ -1135,53 +1137,55 @@ exports.targetPass = async (params) => {
           message: `Assignee officer not found with code: ${assigneeOfficerId}`,
         };
       }
-
       targetOfficerId = parseInt(assigneeResult[0][0].id);
     }
 
-    const today = new Date();
-
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istDate = new Date(today.getTime() + istOffset);
-    const todayStr = istDate.toISOString().split("T")[0];
-
-    const sourceTargetQuery = `
-            SELECT id, userId, target, complete, createdAt, companycenterId 
-            FROM collection_officer.distributedtarget 
-            WHERE userId = ? 
-            AND DATE(createdAt) = CURDATE()
-            ORDER BY id DESC
-            LIMIT 1
-        `;
-
-    const sourceTargetResult = await db.collectionofficer
+    // ─── Get sourceTargetId from the actual orders being passed ───────────────
+    // Instead of requiring a target record for TODAY (which breaks when orders
+    // were created on a previous day), we look up the target that the first
+    // order actually belongs to. This is the real source target regardless of date.
+    const targetFromOrderQuery = `
+      SELECT dt.id, dt.userId, dt.target, dt.complete, dt.createdAt, dt.companycenterId
+      FROM collection_officer.distributedtargetitems dti
+      JOIN collection_officer.distributedtarget dt ON dti.targetId = dt.id
+      WHERE dti.orderId = ?
+      LIMIT 1
+    `;
+    const targetFromOrderResult = await db.collectionofficer
       .promise()
-      .query(sourceTargetQuery, [sourceOfficerId]);
+      .query(targetFromOrderQuery, [parseInt(processOrderId[0])]);
 
-    const sourceRows = sourceTargetResult[0];
+    const sourceRows = targetFromOrderResult[0];
 
     if (!sourceRows || sourceRows.length === 0) {
       return {
         success: false,
-        message: `Source officer (userId: ${sourceOfficerId}) has no target record for today. Please create a target first.`,
+        message: `Could not find a target record for the selected orders.`,
+      };
+    }
+
+    // Verify these orders actually belong to the source officer
+    if (parseInt(sourceRows[0].userId) !== sourceOfficerId) {
+      return {
+        success: false,
+        message: `These orders do not belong to officer ${officerId}. They belong to userId: ${sourceRows[0].userId}.`,
       };
     }
 
     const sourceTargetId = parseInt(sourceRows[0].id);
-    const sourceUserId = sourceRows[0].userId;
     const sourceTargetCount = sourceRows[0].target;
     const sourceComplete = sourceRows[0].complete;
     const sourceCreatedAt = sourceRows[0].createdAt;
 
+    // ─── Get or create assignee's target record ───────────────────────────────
     const assigneeTargetQuery = `
-            SELECT id, userId, target, complete, createdAt 
-            FROM collection_officer.distributedtarget 
-            WHERE userId = ? 
-            AND DATE(createdAt) = CURDATE()
-            ORDER BY id DESC
-            LIMIT 1
-        `;
-
+      SELECT id, userId, target, complete, createdAt
+      FROM collection_officer.distributedtarget
+      WHERE userId = ?
+      AND DATE(createdAt) = CURDATE()
+      ORDER BY id DESC
+      LIMIT 1
+    `;
     const assigneeTargetResult = await db.collectionofficer
       .promise()
       .query(assigneeTargetQuery, [targetOfficerId]);
@@ -1189,19 +1193,17 @@ exports.targetPass = async (params) => {
     const assigneeRows = assigneeTargetResult[0];
 
     let assigneeTargetId;
-    let assigneeUserId;
     let assigneeTargetCount;
-    let assigneeComplete;
-    let assigneeCreatedAt;
 
     if (!assigneeRows || assigneeRows.length === 0) {
+      // Assignee has no target today — create one
       const getCompanyCenterQuery = `
-                SELECT companycenterId 
-                FROM collection_officer.distributedtarget 
-                WHERE userId = ? 
-                ORDER BY id DESC 
-                LIMIT 1
-            `;
+        SELECT companycenterId
+        FROM collection_officer.distributedtarget
+        WHERE userId = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `;
       const companyCenterResult = await db.collectionofficer
         .promise()
         .query(getCompanyCenterQuery, [targetOfficerId]);
@@ -1214,59 +1216,54 @@ exports.targetPass = async (params) => {
       }
 
       const createTargetQuery = `
-                INSERT INTO collection_officer.distributedtarget 
-                (companycenterId, userId, target, complete, createdAt) 
-                VALUES (?, ?, 0, 0, NOW())
-            `;
-
+        INSERT INTO collection_officer.distributedtarget
+        (companycenterId, userId, target, complete, createdAt)
+        VALUES (?, ?, 0, 0, NOW())
+      `;
       const createResult = await db.collectionofficer
         .promise()
         .query(createTargetQuery, [companycenterId, targetOfficerId]);
 
       assigneeTargetId = parseInt(createResult[0].insertId);
-      assigneeUserId = targetOfficerId;
       assigneeTargetCount = 0;
-      assigneeComplete = 0;
-      assigneeCreatedAt = new Date();
     } else {
       assigneeTargetId = parseInt(assigneeRows[0].id);
-      assigneeUserId = assigneeRows[0].userId;
       assigneeTargetCount = assigneeRows[0].target;
-      assigneeComplete = assigneeRows[0].complete;
-      assigneeCreatedAt = assigneeRows[0].createdAt;
     }
 
+    // ─── Check source has enough targets ─────────────────────────────────────
     const transferCount = processOrderId.length;
 
     if (sourceTargetCount < transferCount) {
       return {
         success: false,
-        message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}`,
+        message: `Source officer does not have enough targets. Has ${sourceTargetCount}, trying to transfer ${transferCount}.`,
       };
     }
 
+    // ─── Update source officer target count ───────────────────────────────────
     const newSourceTarget = sourceTargetCount - transferCount;
     const updateSourceQuery = `
-            UPDATE collection_officer.distributedtarget 
-            SET target = ? 
-            WHERE id = ? AND DATE(createdAt) = CURDATE()
-        `;
-
-    const sourceUpdateResult = await db.collectionofficer
+      UPDATE collection_officer.distributedtarget
+      SET target = ?
+      WHERE id = ?
+    `;
+    await db.collectionofficer
       .promise()
       .query(updateSourceQuery, [newSourceTarget, sourceTargetId]);
 
+    // ─── Update assignee officer target count ────────────────────────────────
     const newAssigneeTarget = assigneeTargetCount + transferCount;
     const updateAssigneeQuery = `
-            UPDATE collection_officer.distributedtarget 
-            SET target = ? 
-            WHERE id = ? AND DATE(createdAt) = CURDATE()
-        `;
-
-    const assigneeUpdateResult = await db.collectionofficer
+      UPDATE collection_officer.distributedtarget
+      SET target = ?
+      WHERE id = ?
+    `;
+    await db.collectionofficer
       .promise()
       .query(updateAssigneeQuery, [newAssigneeTarget, assigneeTargetId]);
 
+    // ─── Reassign each order to the assignee's target ────────────────────────
     const results = [];
     const errors = [];
 
@@ -1275,11 +1272,10 @@ exports.targetPass = async (params) => {
         const orderIdInt = parseInt(orderId);
 
         const checkOrderQuery = `
-                    SELECT id, targetId, orderId 
-                    FROM collection_officer.distributedtargetitems 
-                    WHERE orderId = ?
-                `;
-
+          SELECT id, targetId, orderId
+          FROM collection_officer.distributedtargetitems
+          WHERE orderId = ?
+        `;
         const existingRecords = await db.collectionofficer
           .promise()
           .query(checkOrderQuery, [orderIdInt]);
@@ -1292,17 +1288,16 @@ exports.targetPass = async (params) => {
 
         if (existingRows[0].targetId !== sourceTargetId) {
           errors.push(
-            `Order ID ${orderIdInt} does not belong to source officer (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`,
+            `Order ID ${orderIdInt} does not belong to source target (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`
           );
           continue;
         }
 
         const updateItemsQuery = `
-                    UPDATE collection_officer.distributedtargetitems 
-                    SET targetId = ? 
-                    WHERE orderId = ?
-                `;
-
+          UPDATE collection_officer.distributedtargetitems
+          SET targetId = ?
+          WHERE orderId = ?
+        `;
         const updateResult = await db.collectionofficer
           .promise()
           .query(updateItemsQuery, [assigneeTargetId, orderIdInt]);
@@ -1313,32 +1308,31 @@ exports.targetPass = async (params) => {
         }
 
         const updatedRecordsQuery = `
-                    SELECT id, targetId, orderId 
-                    FROM collection_officer.distributedtargetitems 
-                    WHERE orderId = ?
-                    ORDER BY id ASC
-                `;
-
+          SELECT id, targetId, orderId
+          FROM collection_officer.distributedtargetitems
+          WHERE orderId = ?
+          ORDER BY id ASC
+        `;
         const updatedRecords = await db.collectionofficer
           .promise()
           .query(updatedRecordsQuery, [orderIdInt]);
-        const updatedRows = updatedRecords[0];
 
         results.push({
           orderId: orderIdInt,
           previousTargetId: sourceTargetId,
           newTargetId: assigneeTargetId,
           affectedRows: updateResult[0].affectedRows,
-          updatedRecords: updatedRows,
+          updatedRecords: updatedRecords[0],
         });
       } catch (orderError) {
         console.error(`Error processing order ID ${orderId}:`, orderError);
         errors.push(
-          `Failed to process order ID ${orderId}: ${orderError.message}`,
+          `Failed to process order ID ${orderId}: ${orderError.message}`
         );
       }
     }
 
+    // ─── Build response ───────────────────────────────────────────────────────
     const response = {
       success: results.length > 0,
       message:
