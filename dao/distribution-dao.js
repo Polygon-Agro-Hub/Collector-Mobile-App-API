@@ -1456,7 +1456,7 @@ exports.updateoutForDelivery = (orderId, userId) => {
         o.id as orderId,
         po.invNo,
         o.delivaryMethod,
-        c.email,
+        c.email as customerEmail,
         po.paymentMethod,
         po.amount as totalAmount,
         o.createdAt,

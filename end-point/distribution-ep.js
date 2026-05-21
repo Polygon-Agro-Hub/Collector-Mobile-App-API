@@ -394,33 +394,54 @@ exports.updateoutForDelivery = async (req, res) => {
 
                 if (updateResult.orderInfo && updateResult.orderInfo.customerEmail) {
                     try {
+                        // ── Flat data object for the welcom.hbs template ──────────────
                         const invoiceData = {
-                            invoiceNumber: updateResult.orderInfo.invNo,
-                            totalAmount: updateResult.orderInfo.totalAmount,
-                            order: {
-                                customerInfo: {
-                                    title: updateResult.orderInfo.title,
-                                    firstName: updateResult.orderInfo.firstName,
-                                    lastName: updateResult.orderInfo.lastName,
-                                    phoneNumber: updateResult.orderInfo.phoneNumber,
-                                    buildingType: updateResult.orderInfo.buildingType,
-                                },
-                                paymentMethod: updateResult.orderInfo.paymentMethod,
-                                createdAt: updateResult.orderInfo.createdAt,
-                                scheduleDate: updateResult.orderInfo.scheduleDate,
-                            },
-                            customerData: {
-                                email: updateResult.orderInfo.customerEmail,
-                                buildingDetails: {
-                                    houseNo: updateResult.orderInfo.houseNo,
-                                    floorNo: updateResult.orderInfo.floorNo,
-                                    buildingNo: updateResult.orderInfo.buildingNo,
-                                    buildingName: updateResult.orderInfo.buildingName,
-                                    unitNo: updateResult.orderInfo.unitNo,
-                                    streetName: updateResult.orderInfo.streetName,
-                                    city: updateResult.orderInfo.city,
-                                },
-                            },
+                            // Customer
+                            customerName: `${updateResult.orderInfo.title || ""} ${updateResult.orderInfo.firstName || ""} ${updateResult.orderInfo.lastName || ""}`.trim(),
+                            firstName: updateResult.orderInfo.firstName || "",
+                            lastName: updateResult.orderInfo.lastName || "",
+                            phoneNumber: updateResult.orderInfo.phoneNumber || "",
+
+                            // Order
+                            invoiceNumber: updateResult.orderInfo.invNo || "",
+                            orderNumber: updateResult.orderInfo.invNo || "",   // in case template uses either
+                            totalAmount: parseFloat(updateResult.orderInfo.totalAmount) || 0,
+                            paymentMethod: updateResult.orderInfo.paymentMethod || "",
+                            orderStatus: updateResult.status || "",
+                            createdAt: updateResult.orderInfo.createdAt || "",
+                            scheduleDate: updateResult.orderInfo.scheduleDate || "",
+
+                            // Address — house fields
+                            houseNo: updateResult.orderInfo.houseHouseNo || "",
+                            streetName: updateResult.orderInfo.houseStreetName || "",
+                            city: updateResult.orderInfo.houseCity || "",
+
+                            // Address — apartment fields
+                            buildingNo: updateResult.orderInfo.buildingNo || "",
+                            buildingName: updateResult.orderInfo.buildingName || "",
+                            unitNo: updateResult.orderInfo.unitNo || "",
+                            floorNo: updateResult.orderInfo.floorNo || "",
+                            aptStreetName: updateResult.orderInfo.aptStreetName || "",
+                            aptCity: updateResult.orderInfo.aptCity || "",
+
+                            // Building type
+                            buildingType: updateResult.orderInfo.buildingType || "",
+                            isApartment: updateResult.orderInfo.buildingType === "Apartment",
+                            isHouse: updateResult.orderInfo.buildingType === "House",
+
+                            // Delivery
+                            deliveryMethod: updateResult.orderInfo.delivaryMethod || "Delivery",
+                            isPickup: updateResult.orderInfo.delivaryMethod === "Pickup",
+
+                            // Center (for Pickup orders)
+                            centerName: updateResult.orderInfo.centerName || "",
+                            centerCity: updateResult.orderInfo.centerCity || "",
+                            centerDistrict: updateResult.orderInfo.centerDistrict || "",
+                            centerProvince: updateResult.orderInfo.centerProvince || "",
+                            centerCountry: updateResult.orderInfo.centerCountry || "",
+
+                            // Email
+                            customerEmail: updateResult.orderInfo.customerEmail || "",
                         };
 
                         const pdfBuffer = await pdfService.generateInvoicePDF(invoiceData);
@@ -442,10 +463,7 @@ exports.updateoutForDelivery = async (req, res) => {
                         emailSuccessCount++;
                     } catch (emailError) {
                         emailErrorCount++;
-                        console.error(
-                            `❌ Failed to send email for order ${orderId}:`,
-                            emailError,
-                        );
+                        console.error(`❌ Failed to send email for order ${orderId}:`, emailError);
                     }
                 }
             } catch (error) {

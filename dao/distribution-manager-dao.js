@@ -1479,31 +1479,33 @@ exports.getOrderById = async (orderId) => {
     connection = await db.marketPlace.promise().getConnection();
 
     const orderSql = `
-            SELECT
-                o.id AS orderId,
-                o.userId,
-                o.orderApp,
-                o.sheduleType,
-                o.sheduleDate,
-                o.sheduleTime,
-                o.createdAt,
-                o.total,
-                o.buildingType AS orderBuildingType,
-                o.discount,
-                o.fullTotal,
-                o.isPackage AS orderIsPackage,
-                o.isCoupon,
-                o.couponValue,
-                c.title,
-                c.firstName,
-                c.lastName,
-                c.phoneNumber,
-                c.buildingType AS userBuildingType,
-                c.email
-            FROM orders o
-            JOIN marketplaceusers c ON o.userId = c.id
-            WHERE o.id = ?
-        `;
+      SELECT
+          o.id AS orderId,
+          o.userId,
+          o.orderApp,
+          o.sheduleType,
+          o.sheduleDate,
+          o.sheduleTime,
+          o.createdAt,
+          o.total,
+          o.buildingType AS orderBuildingType,
+          o.discount,
+          o.fullTotal,
+          o.isPackage AS orderIsPackage,
+          o.isCoupon,
+          o.couponValue,
+          o.delivaryMethod,
+          o.centerId,
+          c.title,
+          c.firstName,
+          c.lastName,
+          c.phoneNumber,
+          c.buildingType AS userBuildingType,
+          c.email
+      FROM orders o
+      JOIN marketplaceusers c ON o.userId = c.id
+      WHERE o.id = ?
+    `;
 
     const [orderResults] = await connection.execute(orderSql, [orderId]);
 
@@ -1524,15 +1526,15 @@ exports.getOrderById = async (orderId) => {
       finalIsPackage = order.orderIsPackage || 0;
 
       const processOrderSql = `
-                SELECT 
-                    id AS processOrderId,
-                    invNo AS invoiceNumber,
-                    status,
-                    paymentMethod,
-                    reportStatus
-                FROM processorders 
-                WHERE orderId = ?
-            `;
+        SELECT 
+            id AS processOrderId,
+            invNo AS invoiceNumber,
+            status,
+            paymentMethod,
+            reportStatus
+        FROM processorders 
+        WHERE orderId = ?
+      `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
         orderId,
@@ -1548,15 +1550,15 @@ exports.getOrderById = async (orderId) => {
       }
     } else if (order.orderApp === "Dash") {
       const processOrderSql = `
-                SELECT 
-                    id AS processOrderId,
-                    invNo AS invoiceNumber,
-                    status,
-                    paymentMethod,
-                    reportStatus
-                FROM processorders 
-                WHERE orderId = ?
-            `;
+        SELECT 
+            id AS processOrderId,
+            invNo AS invoiceNumber,
+            status,
+            paymentMethod,
+            reportStatus
+        FROM processorders 
+        WHERE orderId = ?
+      `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
         orderId,
@@ -1571,10 +1573,10 @@ exports.getOrderById = async (orderId) => {
         reportStatus = processOrder.reportStatus;
 
         const packageCheckSql = `
-                    SELECT COUNT(*) as packageCount
-                    FROM orderpackage 
-                    WHERE orderId = ?
-                `;
+          SELECT COUNT(*) as packageCount
+          FROM orderpackage 
+          WHERE orderId = ?
+        `;
 
         const [packageCheckResults] = await connection.execute(
           packageCheckSql,
@@ -1595,13 +1597,13 @@ exports.getOrderById = async (orderId) => {
 
     if (buildingType === "House") {
       const addressSql = `
-                SELECT
-                    houseNo,
-                    streetName,
-                    city
-                FROM orderhouse
-                WHERE orderId = ?
-            `;
+        SELECT
+            houseNo,
+            streetName,
+            city
+        FROM orderhouse
+        WHERE orderId = ?
+      `;
 
       const [addressResults] = await connection.execute(addressSql, [orderId]);
 
@@ -1617,21 +1619,21 @@ exports.getOrderById = async (orderId) => {
           .replace(/\s+/g, " ")
           .trim();
       } else {
-        console.log(" No house address found for orderId:", orderId);
+        console.log("No house address found for orderId:", orderId);
       }
     } else if (buildingType === "Apartment") {
       const addressSql = `
-                SELECT
-                    buildingNo,
-                    buildingName,
-                    unitNo,
-                    floorNo,
-                    houseNo,
-                    streetName,
-                    city
-                FROM orderapartment
-                WHERE orderId = ?
-            `;
+        SELECT
+            buildingNo,
+            buildingName,
+            unitNo,
+            floorNo,
+            houseNo,
+            streetName,
+            city
+        FROM orderapartment
+        WHERE orderId = ?
+      `;
 
       const [addressResults] = await connection.execute(addressSql, [orderId]);
 
@@ -1650,22 +1652,57 @@ exports.getOrderById = async (orderId) => {
 
         formattedAddress = addressParts.join(", ");
       } else {
-        console.log(" No apartment address found for orderId:", orderId);
+        console.log("No apartment address found for orderId:", orderId);
       }
     } else {
-      console.log(" Unknown building type:", buildingType);
+      console.log("Unknown building type:", buildingType);
     }
 
+    // ── Pickup centre details ──────────────────────────────────────
+    let centerDetails = null;
+
+    if (order.delivaryMethod === "Pickup" && order.centerId) {
+      const centerSql = `
+        SELECT
+            centerName,
+            city        AS centerCity,
+            district    AS centerDistrict,
+            province    AS centerProvince,
+            country     AS centerCountry
+        FROM collection_officer.distributedcenter
+        WHERE id = ?
+      `;
+
+      let centerConnection;
+      try {
+        centerConnection = await db.collectionofficer.promise().getConnection();
+        const [centerResults] = await centerConnection.execute(centerSql, [
+          order.centerId,
+        ]);
+
+        if (centerResults.length > 0) {
+          centerDetails = centerResults[0];
+        } else {
+          console.log("No center found for centerId:", order.centerId);
+        }
+      } catch (centerErr) {
+        console.error("Failed to fetch center details:", centerErr);
+      } finally {
+        if (centerConnection) centerConnection.release();
+      }
+    }
+
+    // ── Additional items ───────────────────────────────────────────
     const additionalItemsSql = `
-            SELECT
-                oai.qty,
-                oai.productId,
-                oai.unit,
-                oai.price,
-                oai.discount AS itemDiscount
-            FROM orderadditionalitems oai
-            WHERE oai.orderId = ?
-        `;
+      SELECT
+          oai.qty,
+          oai.productId,
+          oai.unit,
+          oai.price,
+          oai.discount AS itemDiscount
+      FROM orderadditionalitems oai
+      WHERE oai.orderId = ?
+    `;
 
     const [additionalItemsResults] = await connection.execute(
       additionalItemsSql,
@@ -1682,26 +1719,27 @@ exports.getOrderById = async (orderId) => {
         discount: parseFloat(item.itemDiscount) || 0,
       }));
 
+    // ── Packages ───────────────────────────────────────────────────
     let allPackages = [];
 
     if (finalIsPackage === 1 && processOrderId) {
       const packagesSql = `
-                SELECT
-                    op.id AS orderPackageId,
-                    op.packageId,
-                    mpp.displayName AS packageDisplayName,
-                    mpp.productPrice AS packagePrice,
-                    mpp.packingFee AS packagePackingFee,
-                    mpp.serviceFee AS packageServiceFee,
-                    mpp.status AS packageStatus,
-                    op.packingStatus,
-                    op.isLock,
-                    op.createdAt AS packageCreatedAt
-                FROM orderpackage op
-                LEFT JOIN marketplacepackages mpp ON mpp.id = op.packageId
-                WHERE op.orderId = ?
-                ORDER BY op.id ASC
-            `;
+        SELECT
+            op.id AS orderPackageId,
+            op.packageId,
+            mpp.displayName AS packageDisplayName,
+            mpp.productPrice AS packagePrice,
+            mpp.packingFee AS packagePackingFee,
+            mpp.serviceFee AS packageServiceFee,
+            mpp.status AS packageStatus,
+            op.packingStatus,
+            op.isLock,
+            op.createdAt AS packageCreatedAt
+        FROM orderpackage op
+        LEFT JOIN marketplacepackages mpp ON mpp.id = op.packageId
+        WHERE op.orderId = ?
+        ORDER BY op.id ASC
+      `;
 
       const [packagesResults] = await connection.execute(packagesSql, [
         processOrderId,
@@ -1709,26 +1747,26 @@ exports.getOrderById = async (orderId) => {
 
       for (const packageData of packagesResults) {
         const packageItemsSql = `
-                    SELECT
-                        opi.id,
-                        opi.orderPackageId,
-                        opi.productType,
-                        opi.productId,
-                        opi.qty,
-                        opi.price,
-                        opi.isPacked,
-                        pt.typeName AS productTypeName,
-                        mi.displayName AS productDisplayName,
-                        mi.varietyId,
-                        mi.category,
-                        mi.normalPrice,
-                        mi.discountedPrice
-                    FROM orderpackageitems opi
-                    JOIN producttypes pt ON pt.id = opi.productType
-                    LEFT JOIN marketplaceitems mi ON mi.id = opi.productId
-                    WHERE opi.orderPackageId = ?
-                    ORDER BY opi.id ASC
-                `;
+          SELECT
+              opi.id,
+              opi.orderPackageId,
+              opi.productType,
+              opi.productId,
+              opi.qty,
+              opi.price,
+              opi.isPacked,
+              pt.typeName AS productTypeName,
+              mi.displayName AS productDisplayName,
+              mi.varietyId,
+              mi.category,
+              mi.normalPrice,
+              mi.discountedPrice
+          FROM orderpackageitems opi
+          JOIN producttypes pt ON pt.id = opi.productType
+          LEFT JOIN marketplaceitems mi ON mi.id = opi.productId
+          WHERE opi.orderPackageId = ?
+          ORDER BY opi.id ASC
+        `;
 
         const [packageItemsResults] = await connection.execute(
           packageItemsSql,
@@ -1769,22 +1807,23 @@ exports.getOrderById = async (orderId) => {
       }
     }
 
+    // ── Enhanced additional items ──────────────────────────────────
     let enhancedAdditionalItems = [];
     if (additionalItems.length > 0) {
       const productIds = additionalItems.map((item) => item.productId);
       const placeholders = productIds.map(() => "?").join(",");
 
       const productDetailsSql = `
-                SELECT
-                    mi.id,
-                    mi.displayName,
-                    mi.varietyId,
-                    mi.category,
-                    mi.normalPrice,
-                    mi.discountedPrice
-                FROM marketplaceitems mi
-                WHERE mi.id IN (${placeholders})
-            `;
+        SELECT
+            mi.id,
+            mi.displayName,
+            mi.varietyId,
+            mi.category,
+            mi.normalPrice,
+            mi.discountedPrice
+        FROM marketplaceitems mi
+        WHERE mi.id IN (${placeholders})
+      `;
 
       const [productResults] = await connection.execute(
         productDetailsSql,
@@ -1808,6 +1847,7 @@ exports.getOrderById = async (orderId) => {
       });
     }
 
+    // ── Final result ───────────────────────────────────────────────
     const result = {
       orderId: order.orderId,
       userId: order.userId,
@@ -1825,6 +1865,12 @@ exports.getOrderById = async (orderId) => {
         order.orderApp === "Marketplace"
           ? parseFloat(order.couponValue) || 0
           : null,
+      delivaryMethod: order.delivaryMethod || "Delivery",
+      centerName: centerDetails?.centerName || null,
+      centerCity: centerDetails?.centerCity || null,
+      centerDistrict: centerDetails?.centerDistrict || null,
+      centerProvince: centerDetails?.centerProvince || null,
+      centerCountry: centerDetails?.centerCountry || null,
       customerInfo: {
         title: order.title,
         firstName: order.firstName,
@@ -1855,6 +1901,389 @@ exports.getOrderById = async (orderId) => {
     }
   }
 };
+// exports.getOrderById = async (orderId) => {
+//   let connection;
+
+//   try {
+//     connection = await db.marketPlace.promise().getConnection();
+
+//     const orderSql = `
+//             SELECT
+//                 o.id AS orderId,
+//                 o.userId,
+//                 o.orderApp,
+//                 o.sheduleType,
+//                 o.sheduleDate,
+//                 o.sheduleTime,
+//                 o.createdAt,
+//                 o.total,
+//                 o.buildingType AS orderBuildingType,
+//                 o.discount,
+//                 o.fullTotal,
+//                 o.isPackage AS orderIsPackage,
+//                 o.isCoupon,
+//                 o.couponValue,
+//                 c.title,
+//                 c.firstName,
+//                 c.lastName,
+//                 c.phoneNumber,
+//                 c.buildingType AS userBuildingType,
+//                 c.email
+//             FROM orders o
+//             JOIN marketplaceusers c ON o.userId = c.id
+//             WHERE o.id = ?
+//         `;
+
+//     const [orderResults] = await connection.execute(orderSql, [orderId]);
+
+//     if (orderResults.length === 0) {
+//       return { message: "No order found with the given ID" };
+//     }
+
+//     const order = orderResults[0];
+
+//     let finalIsPackage = 0;
+//     let processOrderId = null;
+//     let invoiceNumber = null;
+//     let orderStatus = null;
+//     let reportStatus = null;
+//     let paymentMethod = null;
+
+//     if (order.orderApp === "Marketplace") {
+//       finalIsPackage = order.orderIsPackage || 0;
+
+//       const processOrderSql = `
+//                 SELECT 
+//                     id AS processOrderId,
+//                     invNo AS invoiceNumber,
+//                     status,
+//                     paymentMethod,
+//                     reportStatus
+//                 FROM processorders 
+//                 WHERE orderId = ?
+//             `;
+
+//       const [processOrderResults] = await connection.execute(processOrderSql, [
+//         orderId,
+//       ]);
+
+//       if (processOrderResults.length > 0) {
+//         const processOrder = processOrderResults[0];
+//         processOrderId = processOrder.processOrderId;
+//         invoiceNumber = processOrder.invoiceNumber;
+//         orderStatus = processOrder.status;
+//         paymentMethod = processOrder.paymentMethod;
+//         reportStatus = processOrder.reportStatus;
+//       }
+//     } else if (order.orderApp === "Dash") {
+//       const processOrderSql = `
+//                 SELECT 
+//                     id AS processOrderId,
+//                     invNo AS invoiceNumber,
+//                     status,
+//                     paymentMethod,
+//                     reportStatus
+//                 FROM processorders 
+//                 WHERE orderId = ?
+//             `;
+
+//       const [processOrderResults] = await connection.execute(processOrderSql, [
+//         orderId,
+//       ]);
+
+//       if (processOrderResults.length > 0) {
+//         const processOrder = processOrderResults[0];
+//         processOrderId = processOrder.processOrderId;
+//         invoiceNumber = processOrder.invoiceNumber;
+//         orderStatus = processOrder.status;
+//         paymentMethod = processOrder.paymentMethod;
+//         reportStatus = processOrder.reportStatus;
+
+//         const packageCheckSql = `
+//                     SELECT COUNT(*) as packageCount
+//                     FROM orderpackage 
+//                     WHERE orderId = ?
+//                 `;
+
+//         const [packageCheckResults] = await connection.execute(
+//           packageCheckSql,
+//           [processOrderId],
+//         );
+
+//         if (packageCheckResults[0].packageCount > 0) {
+//           finalIsPackage = 1;
+//         } else {
+//           finalIsPackage = 0;
+//         }
+//       }
+//     }
+
+//     const buildingType = order.orderBuildingType || order.userBuildingType;
+
+//     let formattedAddress = "";
+
+//     if (buildingType === "House") {
+//       const addressSql = `
+//                 SELECT
+//                     houseNo,
+//                     streetName,
+//                     city
+//                 FROM orderhouse
+//                 WHERE orderId = ?
+//             `;
+
+//       const [addressResults] = await connection.execute(addressSql, [orderId]);
+
+//       if (addressResults[0]) {
+//         const addr = addressResults[0];
+//         formattedAddress =
+//           `${addr.houseNo || ""}, ${addr.streetName || ""}, ${addr.city || ""}`.trim();
+
+//         formattedAddress = formattedAddress
+//           .replace(/^,\s*/, "")
+//           .replace(/,\s*$/, "")
+//           .replace(/,\s*,/g, ",")
+//           .replace(/\s+/g, " ")
+//           .trim();
+//       } else {
+//         console.log(" No house address found for orderId:", orderId);
+//       }
+//     } else if (buildingType === "Apartment") {
+//       const addressSql = `
+//                 SELECT
+//                     buildingNo,
+//                     buildingName,
+//                     unitNo,
+//                     floorNo,
+//                     houseNo,
+//                     streetName,
+//                     city
+//                 FROM orderapartment
+//                 WHERE orderId = ?
+//             `;
+
+//       const [addressResults] = await connection.execute(addressSql, [orderId]);
+
+//       if (addressResults[0]) {
+//         const addr = addressResults[0];
+
+//         const addressParts = [];
+
+//         if (addr.buildingName) addressParts.push(addr.buildingName);
+//         if (addr.buildingNo) addressParts.push(addr.buildingNo);
+//         if (addr.unitNo) addressParts.push(`Unit ${addr.unitNo}`);
+//         if (addr.floorNo) addressParts.push(`Floor ${addr.floorNo}`);
+//         if (addr.houseNo) addressParts.push(addr.houseNo);
+//         if (addr.streetName) addressParts.push(addr.streetName);
+//         if (addr.city) addressParts.push(addr.city);
+
+//         formattedAddress = addressParts.join(", ");
+//       } else {
+//         console.log(" No apartment address found for orderId:", orderId);
+//       }
+//     } else {
+//       console.log(" Unknown building type:", buildingType);
+//     }
+
+//     const additionalItemsSql = `
+//             SELECT
+//                 oai.qty,
+//                 oai.productId,
+//                 oai.unit,
+//                 oai.price,
+//                 oai.discount AS itemDiscount
+//             FROM orderadditionalitems oai
+//             WHERE oai.orderId = ?
+//         `;
+
+//     const [additionalItemsResults] = await connection.execute(
+//       additionalItemsSql,
+//       [orderId],
+//     );
+
+//     const additionalItems = additionalItemsResults
+//       .filter((item) => item.productId !== null && item.productId !== undefined)
+//       .map((item) => ({
+//         productId: item.productId,
+//         qty: parseFloat(item.qty) || 0,
+//         unit: item.unit || "",
+//         price: parseFloat(item.price) || 0,
+//         discount: parseFloat(item.itemDiscount) || 0,
+//       }));
+
+//     let allPackages = [];
+
+//     if (finalIsPackage === 1 && processOrderId) {
+//       const packagesSql = `
+//                 SELECT
+//                     op.id AS orderPackageId,
+//                     op.packageId,
+//                     mpp.displayName AS packageDisplayName,
+//                     mpp.productPrice AS packagePrice,
+//                     mpp.packingFee AS packagePackingFee,
+//                     mpp.serviceFee AS packageServiceFee,
+//                     mpp.status AS packageStatus,
+//                     op.packingStatus,
+//                     op.isLock,
+//                     op.createdAt AS packageCreatedAt
+//                 FROM orderpackage op
+//                 LEFT JOIN marketplacepackages mpp ON mpp.id = op.packageId
+//                 WHERE op.orderId = ?
+//                 ORDER BY op.id ASC
+//             `;
+
+//       const [packagesResults] = await connection.execute(packagesSql, [
+//         processOrderId,
+//       ]);
+
+//       for (const packageData of packagesResults) {
+//         const packageItemsSql = `
+//                     SELECT
+//                         opi.id,
+//                         opi.orderPackageId,
+//                         opi.productType,
+//                         opi.productId,
+//                         opi.qty,
+//                         opi.price,
+//                         opi.isPacked,
+//                         pt.typeName AS productTypeName,
+//                         mi.displayName AS productDisplayName,
+//                         mi.varietyId,
+//                         mi.category,
+//                         mi.normalPrice,
+//                         mi.discountedPrice
+//                     FROM orderpackageitems opi
+//                     JOIN producttypes pt ON pt.id = opi.productType
+//                     LEFT JOIN marketplaceitems mi ON mi.id = opi.productId
+//                     WHERE opi.orderPackageId = ?
+//                     ORDER BY opi.id ASC
+//                 `;
+
+//         const [packageItemsResults] = await connection.execute(
+//           packageItemsSql,
+//           [packageData.orderPackageId],
+//         );
+
+//         const packageItems = packageItemsResults.map((item) => ({
+//           id: item.id,
+//           orderPackageId: item.orderPackageId,
+//           productType: item.productType,
+//           productTypeName: item.productTypeName,
+//           productId: item.productId,
+//           productDisplayName: item.productDisplayName || "N/A",
+//           varietyId: item.varietyId,
+//           category: item.category,
+//           normalPrice: item.normalPrice,
+//           discountedPrice: item.discountedPrice,
+//           qty: parseFloat(item.qty) || 0,
+//           price: parseFloat(item.price) || 0,
+//           isPacked: item.isPacked,
+//         }));
+
+//         const packageInfo = {
+//           packageId: packageData.packageId,
+//           orderPackageId: packageData.orderPackageId,
+//           displayName: packageData.packageDisplayName,
+//           productPrice: parseFloat(packageData.packagePrice) || 0,
+//           packingFee: parseFloat(packageData.packagePackingFee) || 0,
+//           serviceFee: parseFloat(packageData.packageServiceFee) || 0,
+//           status: packageData.packageStatus,
+//           packingStatus: packageData.packingStatus,
+//           isLock: packageData.isLock,
+//           packageCreatedAt: packageData.packageCreatedAt,
+//           packageItems: packageItems,
+//         };
+
+//         allPackages.push(packageInfo);
+//       }
+//     }
+
+//     let enhancedAdditionalItems = [];
+//     if (additionalItems.length > 0) {
+//       const productIds = additionalItems.map((item) => item.productId);
+//       const placeholders = productIds.map(() => "?").join(",");
+
+//       const productDetailsSql = `
+//                 SELECT
+//                     mi.id,
+//                     mi.displayName,
+//                     mi.varietyId,
+//                     mi.category,
+//                     mi.normalPrice,
+//                     mi.discountedPrice
+//                 FROM marketplaceitems mi
+//                 WHERE mi.id IN (${placeholders})
+//             `;
+
+//       const [productResults] = await connection.execute(
+//         productDetailsSql,
+//         productIds,
+//       );
+
+//       enhancedAdditionalItems = additionalItems.map((item) => {
+//         const productDetail = productResults.find(
+//           (p) => p.id === item.productId,
+//         );
+//         return {
+//           ...item,
+//           displayName: productDetail
+//             ? productDetail.displayName
+//             : "Unknown Product",
+//           varietyId: productDetail ? productDetail.varietyId : null,
+//           category: productDetail ? productDetail.category : null,
+//           normalPrice: productDetail ? productDetail.normalPrice : null,
+//           discountedPrice: productDetail ? productDetail.discountedPrice : null,
+//         };
+//       });
+//     }
+
+//     const result = {
+//       orderId: order.orderId,
+//       userId: order.userId,
+//       orderApp: order.orderApp,
+//       scheduleType: order.sheduleType,
+//       scheduleDate: order.sheduleDate,
+//       scheduleTime: order.sheduleTime,
+//       createdAt: order.createdAt,
+//       total: parseFloat(order.total) || 0,
+//       discount: parseFloat(order.discount) || 0,
+//       fullTotal: parseFloat(order.fullTotal) || 0,
+//       isPackage: finalIsPackage,
+//       isCoupon: order.isCoupon,
+//       couponValue:
+//         order.orderApp === "Marketplace"
+//           ? parseFloat(order.couponValue) || 0
+//           : null,
+//       customerInfo: {
+//         title: order.title,
+//         firstName: order.firstName,
+//         lastName: order.lastName,
+//         phoneNumber: order.phoneNumber,
+//         buildingType: buildingType,
+//         email: order.email,
+//       },
+//       fullAddress: formattedAddress,
+//       orderStatus: {
+//         processOrderId: processOrderId,
+//         invoiceNumber: invoiceNumber,
+//         status: orderStatus,
+//         paymentMethod: paymentMethod,
+//         reportStatus: reportStatus,
+//       },
+//       additionalItems: enhancedAdditionalItems,
+//       packages: allPackages,
+//     };
+
+//     return result;
+//   } catch (err) {
+//     console.error("Database error:", err);
+//     throw err;
+//   } finally {
+//     if (connection) {
+//       connection.release();
+//     }
+//   }
+// };
 
 exports.getDataCustomerId = async (customerId) => {
   let connection;
