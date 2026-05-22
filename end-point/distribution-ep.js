@@ -4,7 +4,6 @@ const {
     replaceOrderPackageSchema,
 } = require("../validation/distribution-validation");
 const emailService = require("../services/emailService");
-const pdfService = require("../services/pdfService");
 
 exports.getOfficerTarget = async (req, res) => {
     try {
@@ -391,81 +390,6 @@ exports.updateoutForDelivery = async (req, res) => {
                     affectedRows: updateResult.orderUpdate.affectedRows,
                 });
                 successCount++;
-
-                if (updateResult.orderInfo && updateResult.orderInfo.customerEmail) {
-                    try {
-                        // ── Flat data object for the welcom.hbs template ──────────────
-                        const invoiceData = {
-                            // Customer
-                            customerName: `${updateResult.orderInfo.title || ""} ${updateResult.orderInfo.firstName || ""} ${updateResult.orderInfo.lastName || ""}`.trim(),
-                            firstName: updateResult.orderInfo.firstName || "",
-                            lastName: updateResult.orderInfo.lastName || "",
-                            phoneNumber: updateResult.orderInfo.phoneNumber || "",
-
-                            // Order
-                            invoiceNumber: updateResult.orderInfo.invNo || "",
-                            orderNumber: updateResult.orderInfo.invNo || "",   // in case template uses either
-                            totalAmount: parseFloat(updateResult.orderInfo.totalAmount) || 0,
-                            paymentMethod: updateResult.orderInfo.paymentMethod || "",
-                            orderStatus: updateResult.status || "",
-                            createdAt: updateResult.orderInfo.createdAt || "",
-                            scheduleDate: updateResult.orderInfo.scheduleDate || "",
-
-                            // Address — house fields
-                            houseNo: updateResult.orderInfo.houseHouseNo || "",
-                            streetName: updateResult.orderInfo.houseStreetName || "",
-                            city: updateResult.orderInfo.houseCity || "",
-
-                            // Address — apartment fields
-                            buildingNo: updateResult.orderInfo.buildingNo || "",
-                            buildingName: updateResult.orderInfo.buildingName || "",
-                            unitNo: updateResult.orderInfo.unitNo || "",
-                            floorNo: updateResult.orderInfo.floorNo || "",
-                            aptStreetName: updateResult.orderInfo.aptStreetName || "",
-                            aptCity: updateResult.orderInfo.aptCity || "",
-
-                            // Building type
-                            buildingType: updateResult.orderInfo.buildingType || "",
-                            isApartment: updateResult.orderInfo.buildingType === "Apartment",
-                            isHouse: updateResult.orderInfo.buildingType === "House",
-
-                            // Delivery
-                            deliveryMethod: updateResult.orderInfo.delivaryMethod || "Delivery",
-                            isPickup: updateResult.orderInfo.delivaryMethod === "Pickup",
-
-                            // Center (for Pickup orders)
-                            centerName: updateResult.orderInfo.centerName || "",
-                            centerCity: updateResult.orderInfo.centerCity || "",
-                            centerDistrict: updateResult.orderInfo.centerDistrict || "",
-                            centerProvince: updateResult.orderInfo.centerProvince || "",
-                            centerCountry: updateResult.orderInfo.centerCountry || "",
-
-                            // Email
-                            customerEmail: updateResult.orderInfo.customerEmail || "",
-                        };
-
-                        const pdfBuffer = await pdfService.generateInvoicePDF(invoiceData);
-
-                        await emailService.sendEmail(
-                            updateResult.orderInfo.customerEmail,
-                            `Order ${updateResult.orderInfo.invNo} - ${updateResult.status}`,
-                            "welcom",
-                            invoiceData,
-                            [
-                                {
-                                    filename: `Invoice_${updateResult.orderInfo.invNo}.pdf`,
-                                    content: pdfBuffer,
-                                    contentType: "application/pdf",
-                                },
-                            ],
-                        );
-
-                        emailSuccessCount++;
-                    } catch (emailError) {
-                        emailErrorCount++;
-                        console.error(`❌ Failed to send email for order ${orderId}:`, emailError);
-                    }
-                }
             } catch (error) {
                 console.error(`❌ Failed to update order ${orderId}:`, error);
                 results.push({
