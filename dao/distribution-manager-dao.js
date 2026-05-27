@@ -3,247 +3,189 @@ const db = require("../startup/database");
 exports.getDCenterTarget = (irmId = null) => {
   return new Promise((resolve, reject) => {
     const sql = `
-            SELECT 
-                co.id,
-                co.irmId,
+      SELECT 
+          co.id,
+          co.irmId,
 
-                dt.id AS distributedTargetId,
-                dt.companycenterId,
-                dt.userId,
-                dt.target,
-                dt.complete,
-                dt.createdAt AS targetCreatedAt,
+          dt.id AS distributedTargetId,
+          dt.companycenterId,
+          dt.userId,
+          dt.target,
+          dt.complete,
+          dt.createdAt AS targetCreatedAt,
 
-                dti.id AS distributedTargetItemId,
-                dti.orderId,
-                dti.isComplete,
-                dti.completeTime,
-                dti.createdAt AS itemCreatedAt,
+          dti.id AS distributedTargetItemId,
+          dti.orderId,
+          dti.isComplete,
+          dti.completeTime,
+          dti.createdAt AS itemCreatedAt,
 
-                po.id AS processOrderId,
-                po.invNo,
-                po.transactionId,
-                po.paymentMethod,
-                po.isPaid,
-                po.amount,
-                po.status,
-                po.outDlvrDate,
-                po.createdAt AS orderCreatedAt,
-                po.reportStatus,
+          po.id AS processOrderId,
+          po.invNo,
+          po.transactionId,
+          po.paymentMethod,
+          po.isPaid,
+          po.amount,
+          po.status,
+          po.outDlvrDate,
+          po.createdAt AS orderCreatedAt,
+          po.reportStatus,
 
-                o.id AS orderId,
-                o.isPackage,
-                o.userId AS orderUserId,
-                o.orderApp,
-                o.buildingType,
-                o.sheduleType,
-                o.sheduleDate,
-                o.sheduleTime,
+          o.id AS orderId,
+          o.isPackage,
+          o.userId AS orderUserId,
+          o.orderApp,
+          o.buildingType,
+          o.sheduleType,
+          o.sheduleDate,
+          o.sheduleTime,
 
-                -- Additional item counts
-                COALESCE(additional_item_counts.total_items, 0) AS totalAdditionalItems,
-                COALESCE(additional_item_counts.packed_items, 0) AS packedAdditionalItems,
-                COALESCE(additional_item_counts.pending_items, 0) AS pendingAdditionalItems,
+          -- Additional item counts
+          COALESCE(additional_item_counts.total_items, 0) AS totalAdditionalItems,
+          COALESCE(additional_item_counts.packed_items, 0) AS packedAdditionalItems,
+          COALESCE(additional_item_counts.pending_items, 0) AS pendingAdditionalItems,
 
-                -- Additional item status
-                CASE 
-                    WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN NULL
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                    ELSE NULL
-                END AS additionalItemStatus,
+          -- Additional item status
+          CASE 
+              WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN NULL
+              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+              WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                   COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+              WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+              ELSE NULL
+          END AS additionalItemStatus,
 
-                -- Package counts
-                COALESCE(package_item_counts.total_items, 0) AS totalPackageItems,
-                COALESCE(package_item_counts.packed_items, 0) AS packedPackageItems,
-                COALESCE(package_item_counts.pending_items, 0) AS pendingPackageItems,
-                COALESCE(package_item_counts.total_packages, 0) AS totalPackages,
-                COALESCE(package_item_counts.locked_packages, 0) AS lockedPackages,
-                COALESCE(package_item_counts.completed_packages, 0) AS completedPackages,
-                COALESCE(package_item_counts.opened_packages, 0) AS openedPackages,
-                COALESCE(package_item_counts.pending_packages, 0) AS pendingPackages,
+          -- Package counts
+          COALESCE(package_item_counts.total_items, 0) AS totalPackageItems,
+          COALESCE(package_item_counts.packed_items, 0) AS packedPackageItems,
+          COALESCE(package_item_counts.pending_items, 0) AS pendingPackageItems,
+          COALESCE(package_item_counts.total_packages, 0) AS totalPackages,
+          COALESCE(package_item_counts.locked_packages, 0) AS lockedPackages,
+          COALESCE(package_item_counts.completed_packages, 0) AS completedPackages,
+          COALESCE(package_item_counts.opened_packages, 0) AS openedPackages,
+          COALESCE(package_item_counts.pending_packages, 0) AS pendingPackages,
 
-                -- Package details (aggregated)
-                package_item_counts.all_locked AS allPackagesLocked,
-                package_item_counts.packing_status_summary AS packagePackingStatusSummary,
+          package_item_counts.all_locked AS allPackagesLocked,
+          package_item_counts.packing_status_summary AS packagePackingStatusSummary,
 
-                -- Overall package status (considering all individual package statuses)
-                CASE 
-                    WHEN o.isPackage = 0 THEN NULL
-                    WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
-                    -- All packages completed
-                    WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                    -- All packages pending
-                    WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
-                    -- Mix of statuses (some opened, some completed, or some pending)
-                    ELSE 'Opened'
-                END AS packageItemStatus,
+          -- Overall package status
+          CASE 
+              WHEN o.isPackage = 0 THEN NULL
+              WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
+              WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+              WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
+              ELSE 'Opened'
+          END AS packageItemStatus,
 
-                -- Final overall status combining additional items and package status
-                CASE 
-                    -- For non-package orders (only check additional items)
-                    WHEN o.isPackage = 0 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                            ELSE 'Pending'
-                        END
+          -- Final overall selectedStatus
+          CASE 
+              WHEN o.isPackage = 0 THEN
+                  CASE 
+                      WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                           COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                      ELSE 'Pending'
+                  END
+              WHEN o.isPackage = 1 THEN
+                  CASE 
+                      WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                           COALESCE(package_item_counts.total_packages, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                                   COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
+                                   COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                                   COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
+                              ELSE 'Pending'
+                          END
+                      WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                              ELSE 'Completed'
+                          END
+                      WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+                              WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
+                              ELSE 'Opened'
+                          END
+                      ELSE 'Pending'
+                  END
+              ELSE 'Pending'
+          END AS selectedStatus
 
-                    -- For package orders
-                    WHEN o.isPackage = 1 THEN
-                        CASE 
-                            -- Both additional and package items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                                 COALESCE(package_item_counts.total_packages, 0) > 0 THEN
-                                CASE 
-                                    -- RULE 1: All Completed → "Completed"
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                         COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- RULE 2: ANY section has NO progress (Pending) → "Pending"
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
-                                         COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- RULE 3: All sections have progress (no Pending) → "Opened"
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
-                                         COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
-                                    
-                                    ELSE 'Pending'
-                                END
+      FROM 
+          distributedtarget dt
+      LEFT JOIN 
+          collectionofficer co ON dt.userId = co.id
+      INNER JOIN 
+          distributedtargetitems dti ON dt.id = dti.targetId
+      LEFT JOIN 
+          market_place.processorders po ON dti.orderId = po.id
+      LEFT JOIN 
+          market_place.orders o ON po.orderId = o.id
+      LEFT JOIN (
+          SELECT 
+              orderId,
+              COUNT(*) as total_items,
+              SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+              SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+          FROM market_place.orderadditionalitems
+          GROUP BY orderId
+      ) additional_item_counts ON o.id = additional_item_counts.orderId
+      LEFT JOIN (
+          SELECT 
+              op.orderId,
+              COUNT(DISTINCT op.id) as total_packages,
+              SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,
+              SUM(COALESCE(package_items.total_items, 0)) as total_items,
+              SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
+              SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
+              CASE WHEN COUNT(CASE WHEN op.isLock = 0 THEN 1 END) = 0 THEN 1 ELSE 0 END as all_locked,
+              GROUP_CONCAT(DISTINCT op.packingStatus ORDER BY op.packingStatus) as packing_status_summary,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
+                  WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
+                  ELSE 0 
+              END) as completed_packages,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.total_items, 0) = 0 THEN 1
+                  WHEN COALESCE(package_items.packed_items, 0) = 0 THEN 1 
+                  ELSE 0 
+              END) as pending_packages,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.packed_items, 0) > 0 AND 
+                       COALESCE(package_items.packed_items, 0) < COALESCE(package_items.total_items, 0) THEN 1 
+                  ELSE 0 
+              END) as opened_packages
+          FROM market_place.orderpackage op
+          LEFT JOIN (
+              SELECT 
+                  orderPackageId,
+                  COUNT(id) as total_items,
+                  SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+                  SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+              FROM market_place.orderpackageitems
+              GROUP BY orderPackageId
+          ) package_items ON op.id = package_items.orderPackageId
+          GROUP BY op.orderId
+      ) package_item_counts ON po.id = package_item_counts.orderId
 
-                            -- Only additional items exist
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
+      WHERE
+          DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
+          ${irmId ? "AND (co.irmId = ? OR dt.userId = ?)" : ""}
 
-                            -- Only package items exist
-                            WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
-                                CASE 
-                                    -- All packages completed
-                                    WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    
-                                    -- Any package is pending (0 progress)
-                                    WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    
-                                    -- All packages have some progress (mix of opened and completed, but no pending)
-                                    ELSE 'Opened'
-                                END
-
-                            ELSE 'Pending'
-                        END
-                    ELSE 'Pending'
-                END AS selectedStatus
-
-            FROM 
-                distributedtarget dt
-            LEFT JOIN 
-                collectionofficer co ON dt.userId = co.id
-            INNER JOIN 
-                distributedtargetitems dti ON dt.id = dti.targetId
-            LEFT JOIN 
-                market_place.processorders po ON dti.orderId = po.id
-            LEFT JOIN 
-                market_place.orders o ON po.orderId = o.id
-            LEFT JOIN (
-                -- Additional items subquery
-                SELECT 
-                    orderId,
-                    COUNT(*) as total_items,
-                    SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
-                    SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-                FROM 
-                    market_place.orderadditionalitems
-                GROUP BY 
-                    orderId
-            ) additional_item_counts ON o.id = additional_item_counts.orderId
-            LEFT JOIN (
-                -- Package items subquery
-                SELECT 
-                    op.orderId,
-                    COUNT(DISTINCT op.id) as total_packages,
-                    SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,
-                    SUM(COALESCE(package_items.total_items, 0)) as total_items,
-                    SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
-                    SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
-                    -- Check if all packages are locked
-                    CASE WHEN COUNT(CASE WHEN op.isLock = 0 THEN 1 END) = 0 THEN 1 ELSE 0 END as all_locked,
-                    -- Create a summary of packing statuses
-                    GROUP_CONCAT(DISTINCT op.packingStatus ORDER BY op.packingStatus) as packing_status_summary,
-                    -- Count packages by their individual status
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
-                        WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
-                        ELSE 0 
-                    END) as completed_packages,
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.total_items, 0) = 0 THEN 1
-                        WHEN COALESCE(package_items.packed_items, 0) = 0 THEN 1 
-                        ELSE 0 
-                    END) as pending_packages,
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.packed_items, 0) > 0 AND 
-                             COALESCE(package_items.packed_items, 0) < COALESCE(package_items.total_items, 0) THEN 1 
-                        ELSE 0 
-                    END) as opened_packages
-                FROM 
-                    market_place.orderpackage op
-                LEFT JOIN (
-                    SELECT 
-                        orderPackageId,
-                        COUNT(id) as total_items,
-                        SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
-                        SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-                    FROM 
-                        market_place.orderpackageitems
-                    GROUP BY 
-                        orderPackageId
-                ) package_items ON op.id = package_items.orderPackageId
-                GROUP BY 
-                    op.orderId
-            ) package_item_counts ON po.id = package_item_counts.orderId
-            WHERE 
-                (
-                    -- Completed items: keep EXACT original behavior, no change
-                    (
-                        dti.isComplete = 1
-                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    )
-                    OR
-                    -- Out For Delivery / Ready to Pickup: keep existing behavior, no change
-                    (
-                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
-                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    )
-                    OR
-                    -- Todo (Pending/Opened) items: filter by sheduleDate window
-                    -- Past 3 days : day-before-yesterday, yesterday, today  (-2 days)
-                    -- Next 3 days : today, tomorrow, day-after-tomorrow     (+2 days)
-                    (
-                        (dti.isComplete IS NULL OR dti.isComplete = 0)
-                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
-                        AND DATE(o.sheduleDate) BETWEEN 
-                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
-                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
-                    )
-                )
-                ${irmId ? "AND (co.irmId = ? OR dt.userId = ?)" : ""}
-            ORDER BY 
-                dt.companycenterId ASC,
-                dt.userId DESC,
-                dt.target ASC,
-                dt.complete ASC,
-                o.id ASC
-        `;
+      ORDER BY 
+          dt.companycenterId ASC,
+          dt.userId DESC,
+          dt.target ASC,
+          dt.complete ASC,
+          o.id ASC
+    `;
 
     const queryParams = irmId ? [irmId, irmId] : [];
     db.collectionofficer.query(sql, queryParams, (err, results) => {
@@ -251,7 +193,6 @@ exports.getDCenterTarget = (irmId = null) => {
         console.error("Error executing query:", err);
         return reject(err);
       }
-
       resolve(results);
     });
   });
@@ -779,224 +720,187 @@ exports.getDistributionOfficerTarget = (officerId) => {
     }
 
     const sql = `
-            SELECT 
-                dt.id AS distributedTargetId,
-                dt.companycenterId,
-                dt.userId,
-                dt.target,
-                dt.complete,
-                dt.createdAt AS targetCreatedAt,
+      SELECT 
+          dt.id AS distributedTargetId,
+          dt.companycenterId,
+          dt.userId,
+          dt.target,
+          dt.complete,
+          dt.createdAt AS targetCreatedAt,
 
-                dti.id AS distributedTargetItemId,
-                dti.orderId,
-                dti.isComplete,
-                dti.completeTime,
-                dti.createdAt AS itemCreatedAt,
+          dti.id AS distributedTargetItemId,
+          dti.orderId,
+          dti.isComplete,
+          dti.completeTime,
+          dti.createdAt AS itemCreatedAt,
 
-                po.id AS processOrderId,
-                po.invNo,
-                po.transactionId,
-                po.paymentMethod,
-                po.isPaid,
-                po.amount,
-                po.status,
-                po.createdAt AS orderCreatedAt,
-                po.reportStatus,
+          po.id AS processOrderId,
+          po.invNo,
+          po.transactionId,
+          po.paymentMethod,
+          po.isPaid,
+          po.amount,
+          po.status,
+          po.createdAt AS orderCreatedAt,
+          po.reportStatus,
 
-                o.id AS orderId,
-                o.isPackage,
-                o.userId AS orderUserId,
-                o.orderApp,
-                o.buildingType,
-                o.sheduleType,
-                o.sheduleDate,
-                o.sheduleTime,
+          o.id AS orderId,
+          o.isPackage,
+          o.userId AS orderUserId,
+          o.orderApp,
+          o.buildingType,
+          o.sheduleType,
+          o.sheduleDate,
+          o.sheduleTime,
 
-                -- Additional item counts (ensure numeric types)
-                CAST(COALESCE(additional_item_counts.total_items, 0) AS UNSIGNED) AS totalAdditionalItems,
-                CAST(COALESCE(additional_item_counts.packed_items, 0) AS UNSIGNED) AS packedAdditionalItems,
-                CAST(COALESCE(additional_item_counts.pending_items, 0) AS UNSIGNED) AS pendingAdditionalItems,
+          CAST(COALESCE(additional_item_counts.total_items, 0) AS UNSIGNED) AS totalAdditionalItems,
+          CAST(COALESCE(additional_item_counts.packed_items, 0) AS UNSIGNED) AS packedAdditionalItems,
+          CAST(COALESCE(additional_item_counts.pending_items, 0) AS UNSIGNED) AS pendingAdditionalItems,
 
-                -- Additional item status
-                CASE 
-                    WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN NULL
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                    ELSE NULL
-                END AS additionalItemStatus,
+          CASE 
+              WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN NULL
+              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+              WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                   COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+              WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+              ELSE NULL
+          END AS additionalItemStatus,
 
-                -- Package counts
-                CAST(COALESCE(package_item_counts.total_items, 0) AS UNSIGNED) AS totalPackageItems,
-                CAST(COALESCE(package_item_counts.packed_items, 0) AS UNSIGNED) AS packedPackageItems,
-                CAST(COALESCE(package_item_counts.pending_items, 0) AS UNSIGNED) AS pendingPackageItems,
-                CAST(COALESCE(package_item_counts.total_packages, 0) AS UNSIGNED) AS totalPackages,
-                CAST(COALESCE(package_item_counts.locked_packages, 0) AS UNSIGNED) AS lockedPackages,
-                CAST(COALESCE(package_item_counts.completed_packages, 0) AS UNSIGNED) AS completedPackages,
-                CAST(COALESCE(package_item_counts.opened_packages, 0) AS UNSIGNED) AS openedPackages,
-                CAST(COALESCE(package_item_counts.pending_packages, 0) AS UNSIGNED) AS pendingPackages,
+          CAST(COALESCE(package_item_counts.total_items, 0) AS UNSIGNED) AS totalPackageItems,
+          CAST(COALESCE(package_item_counts.packed_items, 0) AS UNSIGNED) AS packedPackageItems,
+          CAST(COALESCE(package_item_counts.pending_items, 0) AS UNSIGNED) AS pendingPackageItems,
+          CAST(COALESCE(package_item_counts.total_packages, 0) AS UNSIGNED) AS totalPackages,
+          CAST(COALESCE(package_item_counts.locked_packages, 0) AS UNSIGNED) AS lockedPackages,
+          CAST(COALESCE(package_item_counts.completed_packages, 0) AS UNSIGNED) AS completedPackages,
+          CAST(COALESCE(package_item_counts.opened_packages, 0) AS UNSIGNED) AS openedPackages,
+          CAST(COALESCE(package_item_counts.pending_packages, 0) AS UNSIGNED) AS pendingPackages,
 
-                -- Overall package status
-                CASE 
-                    WHEN o.isPackage = 0 THEN NULL
-                    WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
-                    WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                    WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
-                    ELSE 'Opened'
-                END AS packageItemStatus,
+          CASE 
+              WHEN o.isPackage = 0 THEN NULL
+              WHEN COALESCE(package_item_counts.total_packages, 0) = 0 THEN 'Pending'
+              WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+              WHEN COALESCE(package_item_counts.pending_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Pending'
+              ELSE 'Opened'
+          END AS packageItemStatus,
 
-                -- Final overall status
-                CASE 
-                    WHEN o.isPackage = 0 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                 COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                            WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                            ELSE 'Pending'
-                        END
-                    WHEN o.isPackage = 1 THEN
-                        CASE 
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
-                                 COALESCE(package_item_counts.total_packages, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
-                                         COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
-                                         COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
-                                         COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
-                                    ELSE 'Pending'
-                                END
-                            WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
-                                         COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
-                                    WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
-                                    ELSE 'Pending'
-                                END
-                            WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
-                                CASE 
-                                    WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
-                                    WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
-                                    ELSE 'Opened'
-                                END
-                            ELSE 'Pending'
-                        END
-                    ELSE 'Pending'
-                END AS selectedStatus
+          CASE 
+              WHEN o.isPackage = 0 THEN
+                  CASE 
+                      WHEN COALESCE(additional_item_counts.total_items, 0) = 0 THEN 'Pending'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND 
+                           COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                      WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) THEN 'Completed'
+                      ELSE 'Pending'
+                  END
+              WHEN o.isPackage = 1 THEN
+                  CASE 
+                      WHEN COALESCE(additional_item_counts.total_items, 0) > 0 AND 
+                           COALESCE(package_item_counts.total_packages, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = COALESCE(additional_item_counts.total_items, 0) AND
+                                   COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 OR
+                                   COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) > 0 AND
+                                   COALESCE(package_item_counts.pending_packages, 0) = 0 THEN 'Opened'
+                              ELSE 'Pending'
+                          END
+                      WHEN COALESCE(additional_item_counts.total_items, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) = 0 THEN 'Pending'
+                              WHEN COALESCE(additional_item_counts.packed_items, 0) < COALESCE(additional_item_counts.total_items, 0) THEN 'Opened'
+                              ELSE 'Completed'
+                          END
+                      WHEN COALESCE(package_item_counts.total_packages, 0) > 0 THEN
+                          CASE 
+                              WHEN COALESCE(package_item_counts.completed_packages, 0) = COALESCE(package_item_counts.total_packages, 0) THEN 'Completed'
+                              WHEN COALESCE(package_item_counts.pending_packages, 0) > 0 THEN 'Pending'
+                              ELSE 'Opened'
+                          END
+                      ELSE 'Pending'
+                  END
+              ELSE 'Pending'
+          END AS selectedStatus
 
-            FROM 
-                distributedtarget dt
-            INNER JOIN 
-                distributedtargetitems dti ON dt.id = dti.targetId
-            INNER JOIN 
-                market_place.processorders po ON dti.orderId = po.id
-            INNER JOIN 
-                market_place.orders o ON po.orderId = o.id
-            LEFT JOIN (
-                SELECT 
-                    orderId,
-                    COUNT(*) as total_items,
-                    SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
-                    SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-                FROM 
-                    market_place.orderadditionalitems
-                GROUP BY 
-                    orderId
-            ) additional_item_counts ON o.id = additional_item_counts.orderId
-            LEFT JOIN (
-                SELECT 
-                    op.orderId,
-                    COUNT(DISTINCT op.id) as total_packages,
-                    SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,
-                    SUM(COALESCE(package_items.total_items, 0)) as total_items,
-                    SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
-                    SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
-                        WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
-                        ELSE 0 
-                    END) as completed_packages,
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.total_items, 0) = 0 THEN 1
-                        WHEN COALESCE(package_items.packed_items, 0) = 0 THEN 1 
-                        ELSE 0 
-                    END) as pending_packages,
-                    SUM(CASE 
-                        WHEN COALESCE(package_items.packed_items, 0) > 0 AND 
-                             COALESCE(package_items.packed_items, 0) < COALESCE(package_items.total_items, 0) THEN 1 
-                        ELSE 0 
-                    END) as opened_packages
-                FROM 
-                    market_place.orderpackage op
-                LEFT JOIN (
-                    SELECT 
-                        orderPackageId,
-                        COUNT(id) as total_items,
-                        SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
-                        SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-                    FROM 
-                        market_place.orderpackageitems
-                    GROUP BY 
-                        orderPackageId
-                ) package_items ON op.id = package_items.orderPackageId
-                WHERE 
-                    COALESCE(op.isLock, 0) = 0
-                GROUP BY 
-                    op.orderId
-            ) package_item_counts ON po.id = package_item_counts.orderId
-            WHERE 
-                dt.userId = ?
-                AND (
-                    -- Completed items: use dt.createdAt range
-                    (
-                        dti.isComplete = 1
-                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    )
-                    OR
-                    -- Out For Delivery / Ready to Pickup: use dt.createdAt range
-                    (
-                        (po.status = 'Out For Delivery' OR po.status = 'Ready to Pickup')
-                        AND DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-                    )
-                    OR
-                    -- Todo (Pending/Opened): filter by sheduleDate window
-                    -- Past 3 days: day-before-yesterday, yesterday, today  (-2 days)
-                    -- Next 3 days: today, tomorrow, day-after-tomorrow     (+2 days)
-                    (
-                        (dti.isComplete IS NULL OR dti.isComplete = 0)
-                        AND (po.status != 'Out For Delivery' AND po.status != 'Ready to Pickup')
-                        AND DATE(o.sheduleDate) BETWEEN 
-                            DATE_SUB(CURDATE(), INTERVAL 2 DAY) 
-                        AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
-                    )
-                )
-                -- Exclude orders where ALL packages are locked
-                AND NOT EXISTS (
-                    SELECT 1 
-                    FROM market_place.orderpackage op_check
-                    WHERE op_check.orderId = po.id 
-                    AND o.isPackage = 1
-                    HAVING COUNT(*) = SUM(CASE WHEN op_check.isLock = 1 THEN 1 ELSE 0 END)
-                )
-            ORDER BY 
-                dt.companycenterId ASC,
-                dt.userId DESC,
-                dt.target ASC,
-                dt.complete ASC,
-                o.id ASC
-        `;
+      FROM 
+          distributedtarget dt
+      INNER JOIN 
+          distributedtargetitems dti ON dt.id = dti.targetId
+      INNER JOIN 
+          market_place.processorders po ON dti.orderId = po.id
+      INNER JOIN 
+          market_place.orders o ON po.orderId = o.id
+      LEFT JOIN (
+          SELECT 
+              orderId,
+              COUNT(*) as total_items,
+              SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+              SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+          FROM market_place.orderadditionalitems
+          GROUP BY orderId
+      ) additional_item_counts ON o.id = additional_item_counts.orderId
+      LEFT JOIN (
+          SELECT 
+              op.orderId,
+              COUNT(DISTINCT op.id) as total_packages,
+              SUM(CASE WHEN op.isLock = 1 THEN 1 ELSE 0 END) as locked_packages,
+              SUM(COALESCE(package_items.total_items, 0)) as total_items,
+              SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
+              SUM(COALESCE(package_items.pending_items, 0)) as pending_items,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.total_items, 0) = 0 THEN 0
+                  WHEN COALESCE(package_items.packed_items, 0) = COALESCE(package_items.total_items, 0) THEN 1 
+                  ELSE 0 
+              END) as completed_packages,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.total_items, 0) = 0 THEN 1
+                  WHEN COALESCE(package_items.packed_items, 0) = 0 THEN 1 
+                  ELSE 0 
+              END) as pending_packages,
+              SUM(CASE 
+                  WHEN COALESCE(package_items.packed_items, 0) > 0 AND 
+                       COALESCE(package_items.packed_items, 0) < COALESCE(package_items.total_items, 0) THEN 1 
+                  ELSE 0 
+              END) as opened_packages
+          FROM market_place.orderpackage op
+          LEFT JOIN (
+              SELECT 
+                  orderPackageId,
+                  COUNT(id) as total_items,
+                  SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
+                  SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
+              FROM market_place.orderpackageitems
+              GROUP BY orderPackageId
+          ) package_items ON op.id = package_items.orderPackageId
+          WHERE COALESCE(op.isLock, 0) = 0
+          GROUP BY op.orderId
+      ) package_item_counts ON po.id = package_item_counts.orderId
+
+      WHERE
+          dt.userId = ?
+          AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
+          AND NOT EXISTS (
+              SELECT 1 
+              FROM market_place.orderpackage op_check
+              WHERE op_check.orderId = po.id 
+              AND o.isPackage = 1
+              HAVING COUNT(*) = SUM(CASE WHEN op_check.isLock = 1 THEN 1 ELSE 0 END)
+          )
+
+      ORDER BY 
+          dt.companycenterId ASC,
+          dt.userId DESC,
+          dt.target ASC,
+          dt.complete ASC,
+          o.id ASC
+    `;
 
     db.collectionofficer.query(sql, [officerId], (err, results) => {
       if (err) {
         console.error("Error executing query:", err);
         return reject(err);
       }
-
       resolve(results);
     });
   });
@@ -1089,9 +993,6 @@ exports.targetPass = async (params) => {
       };
     }
 
-    // ─── Resolve sourceOfficerId from empId ───────────────────────────────────
-    // officerId from URL params is always the empId string (e.g. "342"),
-    // so we always do a DB lookup instead of treating it as a primary key.
     let sourceOfficerId;
 
     const sourceQuery = `
@@ -1111,9 +1012,6 @@ exports.targetPass = async (params) => {
     }
     sourceOfficerId = parseInt(sourceResult[0][0].id);
 
-    // ─── Resolve targetOfficerId ──────────────────────────────────────────────
-    // assigneeOfficerId comes from the frontend dropdown which uses officer.id,
-    // so it IS the DB primary key — safe to parse directly.
     let targetOfficerId;
 
     if (
@@ -1140,10 +1038,6 @@ exports.targetPass = async (params) => {
       targetOfficerId = parseInt(assigneeResult[0][0].id);
     }
 
-    // ─── Get sourceTargetId from the actual orders being passed ───────────────
-    // Instead of requiring a target record for TODAY (which breaks when orders
-    // were created on a previous day), we look up the target that the first
-    // order actually belongs to. This is the real source target regardless of date.
     const targetFromOrderQuery = `
       SELECT dt.id, dt.userId, dt.target, dt.complete, dt.createdAt, dt.companycenterId
       FROM collection_officer.distributedtargetitems dti
@@ -1164,7 +1058,6 @@ exports.targetPass = async (params) => {
       };
     }
 
-    // Verify these orders actually belong to the source officer
     if (parseInt(sourceRows[0].userId) !== sourceOfficerId) {
       return {
         success: false,
@@ -1177,7 +1070,6 @@ exports.targetPass = async (params) => {
     const sourceComplete = sourceRows[0].complete;
     const sourceCreatedAt = sourceRows[0].createdAt;
 
-    // ─── Get or create assignee's target record ───────────────────────────────
     const assigneeTargetQuery = `
       SELECT id, userId, target, complete, createdAt
       FROM collection_officer.distributedtarget
@@ -1196,7 +1088,6 @@ exports.targetPass = async (params) => {
     let assigneeTargetCount;
 
     if (!assigneeRows || assigneeRows.length === 0) {
-      // Assignee has no target today — create one
       const getCompanyCenterQuery = `
         SELECT companycenterId
         FROM collection_officer.distributedtarget
@@ -1231,7 +1122,6 @@ exports.targetPass = async (params) => {
       assigneeTargetCount = assigneeRows[0].target;
     }
 
-    // ─── Check source has enough targets ─────────────────────────────────────
     const transferCount = processOrderId.length;
 
     if (sourceTargetCount < transferCount) {
@@ -1241,7 +1131,6 @@ exports.targetPass = async (params) => {
       };
     }
 
-    // ─── Update source officer target count ───────────────────────────────────
     const newSourceTarget = sourceTargetCount - transferCount;
     const updateSourceQuery = `
       UPDATE collection_officer.distributedtarget
@@ -1252,7 +1141,6 @@ exports.targetPass = async (params) => {
       .promise()
       .query(updateSourceQuery, [newSourceTarget, sourceTargetId]);
 
-    // ─── Update assignee officer target count ────────────────────────────────
     const newAssigneeTarget = assigneeTargetCount + transferCount;
     const updateAssigneeQuery = `
       UPDATE collection_officer.distributedtarget
@@ -1263,7 +1151,6 @@ exports.targetPass = async (params) => {
       .promise()
       .query(updateAssigneeQuery, [newAssigneeTarget, assigneeTargetId]);
 
-    // ─── Reassign each order to the assignee's target ────────────────────────
     const results = [];
     const errors = [];
 
@@ -1288,7 +1175,7 @@ exports.targetPass = async (params) => {
 
         if (existingRows[0].targetId !== sourceTargetId) {
           errors.push(
-            `Order ID ${orderIdInt} does not belong to source target (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`
+            `Order ID ${orderIdInt} does not belong to source target (targetId mismatch: ${existingRows[0].targetId} vs ${sourceTargetId})`,
           );
           continue;
         }
@@ -1327,12 +1214,11 @@ exports.targetPass = async (params) => {
       } catch (orderError) {
         console.error(`Error processing order ID ${orderId}:`, orderError);
         errors.push(
-          `Failed to process order ID ${orderId}: ${orderError.message}`
+          `Failed to process order ID ${orderId}: ${orderError.message}`,
         );
       }
     }
 
-    // ─── Build response ───────────────────────────────────────────────────────
     const response = {
       success: results.length > 0,
       message:
@@ -1479,31 +1365,33 @@ exports.getOrderById = async (orderId) => {
     connection = await db.marketPlace.promise().getConnection();
 
     const orderSql = `
-            SELECT
-                o.id AS orderId,
-                o.userId,
-                o.orderApp,
-                o.sheduleType,
-                o.sheduleDate,
-                o.sheduleTime,
-                o.createdAt,
-                o.total,
-                o.buildingType AS orderBuildingType,
-                o.discount,
-                o.fullTotal,
-                o.isPackage AS orderIsPackage,
-                o.isCoupon,
-                o.couponValue,
-                c.title,
-                c.firstName,
-                c.lastName,
-                c.phoneNumber,
-                c.buildingType AS userBuildingType,
-                c.email
-            FROM orders o
-            JOIN marketplaceusers c ON o.userId = c.id
-            WHERE o.id = ?
-        `;
+      SELECT
+          o.id AS orderId,
+          o.userId,
+          o.orderApp,
+          o.sheduleType,
+          o.sheduleDate,
+          o.sheduleTime,
+          o.createdAt,
+          o.total,
+          o.buildingType AS orderBuildingType,
+          o.discount,
+          o.fullTotal,
+          o.isPackage AS orderIsPackage,
+          o.isCoupon,
+          o.couponValue,
+          o.delivaryMethod,
+          o.centerId,
+          c.title,
+          c.firstName,
+          c.lastName,
+          c.phoneNumber,
+          c.buildingType AS userBuildingType,
+          c.email
+      FROM orders o
+      JOIN marketplaceusers c ON o.userId = c.id
+      WHERE o.id = ?
+    `;
 
     const [orderResults] = await connection.execute(orderSql, [orderId]);
 
@@ -1524,15 +1412,15 @@ exports.getOrderById = async (orderId) => {
       finalIsPackage = order.orderIsPackage || 0;
 
       const processOrderSql = `
-                SELECT 
-                    id AS processOrderId,
-                    invNo AS invoiceNumber,
-                    status,
-                    paymentMethod,
-                    reportStatus
-                FROM processorders 
-                WHERE orderId = ?
-            `;
+        SELECT 
+            id AS processOrderId,
+            invNo AS invoiceNumber,
+            status,
+            paymentMethod,
+            reportStatus
+        FROM processorders 
+        WHERE orderId = ?
+      `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
         orderId,
@@ -1548,15 +1436,15 @@ exports.getOrderById = async (orderId) => {
       }
     } else if (order.orderApp === "Dash") {
       const processOrderSql = `
-                SELECT 
-                    id AS processOrderId,
-                    invNo AS invoiceNumber,
-                    status,
-                    paymentMethod,
-                    reportStatus
-                FROM processorders 
-                WHERE orderId = ?
-            `;
+        SELECT 
+            id AS processOrderId,
+            invNo AS invoiceNumber,
+            status,
+            paymentMethod,
+            reportStatus
+        FROM processorders 
+        WHERE orderId = ?
+      `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
         orderId,
@@ -1571,10 +1459,10 @@ exports.getOrderById = async (orderId) => {
         reportStatus = processOrder.reportStatus;
 
         const packageCheckSql = `
-                    SELECT COUNT(*) as packageCount
-                    FROM orderpackage 
-                    WHERE orderId = ?
-                `;
+          SELECT COUNT(*) as packageCount
+          FROM orderpackage 
+          WHERE orderId = ?
+        `;
 
         const [packageCheckResults] = await connection.execute(
           packageCheckSql,
@@ -1595,13 +1483,13 @@ exports.getOrderById = async (orderId) => {
 
     if (buildingType === "House") {
       const addressSql = `
-                SELECT
-                    houseNo,
-                    streetName,
-                    city
-                FROM orderhouse
-                WHERE orderId = ?
-            `;
+        SELECT
+            houseNo,
+            streetName,
+            city
+        FROM orderhouse
+        WHERE orderId = ?
+      `;
 
       const [addressResults] = await connection.execute(addressSql, [orderId]);
 
@@ -1617,21 +1505,21 @@ exports.getOrderById = async (orderId) => {
           .replace(/\s+/g, " ")
           .trim();
       } else {
-        console.log(" No house address found for orderId:", orderId);
+        console.log("No house address found for orderId:", orderId);
       }
     } else if (buildingType === "Apartment") {
       const addressSql = `
-                SELECT
-                    buildingNo,
-                    buildingName,
-                    unitNo,
-                    floorNo,
-                    houseNo,
-                    streetName,
-                    city
-                FROM orderapartment
-                WHERE orderId = ?
-            `;
+        SELECT
+            buildingNo,
+            buildingName,
+            unitNo,
+            floorNo,
+            houseNo,
+            streetName,
+            city
+        FROM orderapartment
+        WHERE orderId = ?
+      `;
 
       const [addressResults] = await connection.execute(addressSql, [orderId]);
 
@@ -1650,22 +1538,55 @@ exports.getOrderById = async (orderId) => {
 
         formattedAddress = addressParts.join(", ");
       } else {
-        console.log(" No apartment address found for orderId:", orderId);
+        console.log("No apartment address found for orderId:", orderId);
       }
     } else {
-      console.log(" Unknown building type:", buildingType);
+      console.log("Unknown building type:", buildingType);
+    }
+
+    let centerDetails = null;
+
+    if (order.delivaryMethod === "Pickup" && order.centerId) {
+      const centerSql = `
+        SELECT
+            centerName,
+            city        AS centerCity,
+            district    AS centerDistrict,
+            province    AS centerProvince,
+            country     AS centerCountry
+        FROM collection_officer.distributedcenter
+        WHERE id = ?
+      `;
+
+      let centerConnection;
+      try {
+        centerConnection = await db.collectionofficer.promise().getConnection();
+        const [centerResults] = await centerConnection.execute(centerSql, [
+          order.centerId,
+        ]);
+
+        if (centerResults.length > 0) {
+          centerDetails = centerResults[0];
+        } else {
+          console.log("No center found for centerId:", order.centerId);
+        }
+      } catch (centerErr) {
+        console.error("Failed to fetch center details:", centerErr);
+      } finally {
+        if (centerConnection) centerConnection.release();
+      }
     }
 
     const additionalItemsSql = `
-            SELECT
-                oai.qty,
-                oai.productId,
-                oai.unit,
-                oai.price,
-                oai.discount AS itemDiscount
-            FROM orderadditionalitems oai
-            WHERE oai.orderId = ?
-        `;
+      SELECT
+          oai.qty,
+          oai.productId,
+          oai.unit,
+          oai.price,
+          oai.discount AS itemDiscount
+      FROM orderadditionalitems oai
+      WHERE oai.orderId = ?
+    `;
 
     const [additionalItemsResults] = await connection.execute(
       additionalItemsSql,
@@ -1686,22 +1607,22 @@ exports.getOrderById = async (orderId) => {
 
     if (finalIsPackage === 1 && processOrderId) {
       const packagesSql = `
-                SELECT
-                    op.id AS orderPackageId,
-                    op.packageId,
-                    mpp.displayName AS packageDisplayName,
-                    mpp.productPrice AS packagePrice,
-                    mpp.packingFee AS packagePackingFee,
-                    mpp.serviceFee AS packageServiceFee,
-                    mpp.status AS packageStatus,
-                    op.packingStatus,
-                    op.isLock,
-                    op.createdAt AS packageCreatedAt
-                FROM orderpackage op
-                LEFT JOIN marketplacepackages mpp ON mpp.id = op.packageId
-                WHERE op.orderId = ?
-                ORDER BY op.id ASC
-            `;
+        SELECT
+            op.id AS orderPackageId,
+            op.packageId,
+            mpp.displayName AS packageDisplayName,
+            mpp.productPrice AS packagePrice,
+            mpp.packingFee AS packagePackingFee,
+            mpp.serviceFee AS packageServiceFee,
+            mpp.status AS packageStatus,
+            op.packingStatus,
+            op.isLock,
+            op.createdAt AS packageCreatedAt
+        FROM orderpackage op
+        LEFT JOIN marketplacepackages mpp ON mpp.id = op.packageId
+        WHERE op.orderId = ?
+        ORDER BY op.id ASC
+      `;
 
       const [packagesResults] = await connection.execute(packagesSql, [
         processOrderId,
@@ -1709,26 +1630,26 @@ exports.getOrderById = async (orderId) => {
 
       for (const packageData of packagesResults) {
         const packageItemsSql = `
-                    SELECT
-                        opi.id,
-                        opi.orderPackageId,
-                        opi.productType,
-                        opi.productId,
-                        opi.qty,
-                        opi.price,
-                        opi.isPacked,
-                        pt.typeName AS productTypeName,
-                        mi.displayName AS productDisplayName,
-                        mi.varietyId,
-                        mi.category,
-                        mi.normalPrice,
-                        mi.discountedPrice
-                    FROM orderpackageitems opi
-                    JOIN producttypes pt ON pt.id = opi.productType
-                    LEFT JOIN marketplaceitems mi ON mi.id = opi.productId
-                    WHERE opi.orderPackageId = ?
-                    ORDER BY opi.id ASC
-                `;
+          SELECT
+              opi.id,
+              opi.orderPackageId,
+              opi.productType,
+              opi.productId,
+              opi.qty,
+              opi.price,
+              opi.isPacked,
+              pt.typeName AS productTypeName,
+              mi.displayName AS productDisplayName,
+              mi.varietyId,
+              mi.category,
+              mi.normalPrice,
+              mi.discountedPrice
+          FROM orderpackageitems opi
+          JOIN producttypes pt ON pt.id = opi.productType
+          LEFT JOIN marketplaceitems mi ON mi.id = opi.productId
+          WHERE opi.orderPackageId = ?
+          ORDER BY opi.id ASC
+        `;
 
         const [packageItemsResults] = await connection.execute(
           packageItemsSql,
@@ -1775,16 +1696,16 @@ exports.getOrderById = async (orderId) => {
       const placeholders = productIds.map(() => "?").join(",");
 
       const productDetailsSql = `
-                SELECT
-                    mi.id,
-                    mi.displayName,
-                    mi.varietyId,
-                    mi.category,
-                    mi.normalPrice,
-                    mi.discountedPrice
-                FROM marketplaceitems mi
-                WHERE mi.id IN (${placeholders})
-            `;
+        SELECT
+            mi.id,
+            mi.displayName,
+            mi.varietyId,
+            mi.category,
+            mi.normalPrice,
+            mi.discountedPrice
+        FROM marketplaceitems mi
+        WHERE mi.id IN (${placeholders})
+      `;
 
       const [productResults] = await connection.execute(
         productDetailsSql,
@@ -1825,6 +1746,12 @@ exports.getOrderById = async (orderId) => {
         order.orderApp === "Marketplace"
           ? parseFloat(order.couponValue) || 0
           : null,
+      delivaryMethod: order.delivaryMethod || "Delivery",
+      centerName: centerDetails?.centerName || null,
+      centerCity: centerDetails?.centerCity || null,
+      centerDistrict: centerDetails?.centerDistrict || null,
+      centerProvince: centerDetails?.centerProvince || null,
+      centerCountry: centerDetails?.centerCountry || null,
       customerInfo: {
         title: order.title,
         firstName: order.firstName,
