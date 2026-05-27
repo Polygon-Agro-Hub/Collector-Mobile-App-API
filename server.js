@@ -87,6 +87,7 @@ const checkConnections = async () => {
   }
 };
 
+// Start the connection checks
 checkConnections();
 
 // Base path configuration
