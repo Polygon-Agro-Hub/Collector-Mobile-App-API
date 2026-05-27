@@ -198,9 +198,9 @@ exports.transferTargetDAO = (
                 connection.release();
                 reject(
                   err ||
-                    new Error(
-                      "Insufficient target balance or record not found",
-                    ),
+                  new Error(
+                    "Insufficient target balance or record not found",
+                  ),
                 );
               });
             }
@@ -258,9 +258,9 @@ exports.transferTargetDAO = (
                                 connection.release();
                                 reject(
                                   err ||
-                                    new Error(
-                                      "No daily target found for this variety and grade",
-                                    ),
+                                  new Error(
+                                    "No daily target found for this variety and grade",
+                                  ),
                                 );
                               });
                             }
@@ -611,21 +611,31 @@ exports.getOfficerSummaryDao = async (officerId) => {
 exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
   return new Promise((resolve, reject) => {
     const query = `
-          SELECT 
-              COUNT(ot.id) AS totalTasks,
-            SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
-              SUM(ot.target) AS totalTarget,
-              SUM(ot.complete) AS totalComplete,
-              (SUM(ot.target) - SUM(COALESCE(ot.complete, 0))) AS remainingTarget,
-              GROUP_CONCAT(DISTINCT dt.grade) AS gradesAssigned
-          FROM 
-              officertarget ot
-          JOIN 
-              dailytarget dt ON ot.dailyTargetId = dt.id
-          WHERE 
-              ot.officerId = ?
-              AND DATE(dt.date) = CURDATE();
-      `;
+      SELECT 
+          COUNT(ot.id) AS totalTasks,
+          SUM(CASE WHEN ot.target <= ot.complete AND ot.complete > 0 THEN 1 ELSE 0 END) AS completedTasks,
+          SUM(ot.target) AS totalTarget,
+          SUM(
+              CASE 
+                  WHEN ot.complete > ot.target THEN ot.target  
+                  ELSE COALESCE(ot.complete, 0)
+              END
+          ) AS totalComplete,
+          (SUM(ot.target) - SUM(
+              CASE 
+                  WHEN ot.complete > ot.target THEN ot.target  
+                  ELSE COALESCE(ot.complete, 0)
+              END
+          )) AS remainingTarget,
+          GROUP_CONCAT(DISTINCT dt.grade) AS gradesAssigned
+      FROM 
+          officertarget ot
+      JOIN 
+          dailytarget dt ON ot.dailyTargetId = dt.id
+      WHERE 
+          ot.officerId = ?
+          AND DATE(dt.date) = CURDATE();
+    `;
 
     collectionofficer.query(query, [collectionOfficerId], (error, results) => {
       if (error) {

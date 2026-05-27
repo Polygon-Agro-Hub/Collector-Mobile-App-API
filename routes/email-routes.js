@@ -31,7 +31,15 @@ router.post("/send-pdf-email", async (req, res) => {
     }
 
     for (const item of emailsData) {
-      const { email, pdfBase64, fileName } = item;
+      const {
+        email,
+        pdfBase64,
+        fileName,
+        firstName,
+        lastName,
+        invoiceNo,
+        totalAmount,
+      } = item;
 
       if (!email || !pdfBase64) {
         console.warn("Skipping invalid item:", item);
@@ -40,11 +48,22 @@ router.post("/send-pdf-email", async (req, res) => {
 
       const pdfBuffer = Buffer.from(pdfBase64, "base64");
 
+      const resolvedFirstName = firstName || "Valued Customer";
+      const resolvedLastName = lastName || "";
+      const fullName = `${resolvedFirstName} ${resolvedLastName}`.trim();
+
       await emailService.sendEmail(
         email,
-        "Your AgroWorld Invoice",
+        `Your GoViMart Invoice - ${invoiceNo || ""}`,
         "welcom",
-        { message: "Thank you for your order!" },
+        {
+          firstName: resolvedFirstName,
+          lastName: resolvedLastName,
+          fullName,
+          invoiceNumber: invoiceNo || "N/A",
+          totalAmount: parseFloat(totalAmount) || 0,
+          message: "Thank you for your order!",
+        },
         [
           {
             filename: fileName || "invoice.pdf",

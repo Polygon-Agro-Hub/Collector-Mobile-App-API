@@ -4,7 +4,6 @@ const {
     replaceOrderPackageSchema,
 } = require("../validation/distribution-validation");
 const emailService = require("../services/emailService");
-const pdfService = require("../services/pdfService");
 
 exports.getOfficerTarget = async (req, res) => {
     try {
@@ -391,63 +390,6 @@ exports.updateoutForDelivery = async (req, res) => {
                     affectedRows: updateResult.orderUpdate.affectedRows,
                 });
                 successCount++;
-
-                if (updateResult.orderInfo && updateResult.orderInfo.customerEmail) {
-                    try {
-                        const invoiceData = {
-                            invoiceNumber: updateResult.orderInfo.invNo,
-                            totalAmount: updateResult.orderInfo.totalAmount,
-                            order: {
-                                customerInfo: {
-                                    title: updateResult.orderInfo.title,
-                                    firstName: updateResult.orderInfo.firstName,
-                                    lastName: updateResult.orderInfo.lastName,
-                                    phoneNumber: updateResult.orderInfo.phoneNumber,
-                                    buildingType: updateResult.orderInfo.buildingType,
-                                },
-                                paymentMethod: updateResult.orderInfo.paymentMethod,
-                                createdAt: updateResult.orderInfo.createdAt,
-                                scheduleDate: updateResult.orderInfo.scheduleDate,
-                            },
-                            customerData: {
-                                email: updateResult.orderInfo.customerEmail,
-                                buildingDetails: {
-                                    houseNo: updateResult.orderInfo.houseNo,
-                                    floorNo: updateResult.orderInfo.floorNo,
-                                    buildingNo: updateResult.orderInfo.buildingNo,
-                                    buildingName: updateResult.orderInfo.buildingName,
-                                    unitNo: updateResult.orderInfo.unitNo,
-                                    streetName: updateResult.orderInfo.streetName,
-                                    city: updateResult.orderInfo.city,
-                                },
-                            },
-                        };
-
-                        const pdfBuffer = await pdfService.generateInvoicePDF(invoiceData);
-
-                        await emailService.sendEmail(
-                            updateResult.orderInfo.customerEmail,
-                            `Order ${updateResult.orderInfo.invNo} - ${updateResult.status}`,
-                            "welcom",
-                            invoiceData,
-                            [
-                                {
-                                    filename: `Invoice_${updateResult.orderInfo.invNo}.pdf`,
-                                    content: pdfBuffer,
-                                    contentType: "application/pdf",
-                                },
-                            ],
-                        );
-
-                        emailSuccessCount++;
-                    } catch (emailError) {
-                        emailErrorCount++;
-                        console.error(
-                            `❌ Failed to send email for order ${orderId}:`,
-                            emailError,
-                        );
-                    }
-                }
             } catch (error) {
                 console.error(`❌ Failed to update order ${orderId}:`, error);
                 results.push({

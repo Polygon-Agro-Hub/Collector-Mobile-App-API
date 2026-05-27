@@ -329,7 +329,7 @@ exports.getComplainCategories = async (appName) => {
                    SELECT cc.id, cc.roleId, cc.appId, cc.categoryEnglish, cc.categorySinhala, cc.categoryTamil, ssa.appName
                 FROM complaincategory cc
                 JOIN systemapplications ssa ON cc.appId = ssa.id
-                WHERE ssa.appName = 'Collection Officer'
+                WHERE ssa.appName = ?
       `;
     db.admin.query(query, [appName], (error, results) => {
       if (error) {
