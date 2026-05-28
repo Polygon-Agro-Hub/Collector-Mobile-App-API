@@ -139,79 +139,83 @@ exports.createCollectionOfficerPersonal = (
 ) => {
   return new Promise((resolve, reject) => {
     try {
-      let sql = `
+      const isDistribution =
+        jobRole === "Distribution Centre Manager" ||
+        jobRole === "Distribution Officer";
+
+      const centerColumn = isDistribution ? "distributedCenterId" : "centerId";
+
+      const sql = `
         INSERT INTO collectionofficer (
-          centerId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
-          lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
-          nic, email, houseNumber, streetName, city, district, province, country,
-          languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
+          ${centerColumn}, companyId, irmId,
+          firstNameEnglish, firstNameSinhala, firstNameTamil,
+          lastNameEnglish, lastNameSinhala, lastNameTamil,
+          jobRole, empId, empType,
+          phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
+          nic, email,
+          houseNumber, streetName, city, district, province, country,
+          languages,
+          accHolderName, accNumber, bankName, branchName,
+          image, QRcode,
+          status, passwordUpdated
+        ) VALUES (
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?,
+          ?, ?, ?, ?,
+          ?, ?,
+          'Not Approved', 0
+        )
       `;
 
-      if (
-        jobRole === "Distribution Centre Manager" ||
-        jobRole === "Distribution Officer"
-      ) {
-        sql = `
-          INSERT INTO collectionofficer (
-            distributedCenterId, companyId, irmId, firstNameEnglish, firstNameSinhala, firstNameTamil, lastNameEnglish,
-            lastNameSinhala, lastNameTamil, jobRole, empId, empType, phoneCode01, phoneNumber01, phoneCode02, phoneNumber02,
-            nic, email, houseNumber, streetName, city, district, province, country,
-            languages, accHolderName, accNumber, bankName, branchName, image, status, passwordUpdated
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Not Approved', 0)
-        `;
-      }
+      const values = [
+        centerId,
+        companyId,
+        irmId,
+        officerData.firstNameEnglish,
+        officerData.firstNameSinhala || null,
+        officerData.firstNameTamil || null,
+        officerData.lastNameEnglish,
+        officerData.lastNameSinhala || null,
+        officerData.lastNameTamil || null,
+        officerData.jobRole,
+        officerData.empId,
+        officerData.empType,
+        officerData.phoneCode01,
+        officerData.phoneNumber01,
+        officerData.phoneCode02 || null,
+        officerData.phoneNumber02 || null,
+        officerData.nic,
+        officerData.email,
+        officerData.houseNumber,
+        officerData.streetName,
+        officerData.city,
+        officerData.district,
+        officerData.province,
+        officerData.country,
+        officerData.languages,
+        officerData.accHolderName || null,
+        officerData.accNumber || null,
+        officerData.bankName || null,
+        officerData.branchName || null,
+        officerData.profileImageUrl || null,
+        officerData.qrCodeUrl || null,
+      ];
 
-      db.collectionofficer.query(
-        sql,
-        [
-          centerId,
-          companyId,
-          irmId,
-          officerData.firstNameEnglish,
-          officerData.firstNameSinhala || null,
-          officerData.firstNameTamil || null,
-          officerData.lastNameEnglish,
-          officerData.lastNameSinhala || null,
-          officerData.lastNameTamil || null,
-          officerData.jobRole,
-          officerData.empId,
-          officerData.empType,
-          officerData.phoneCode01,
-          officerData.phoneNumber01,
-          officerData.phoneCode02 || null,
-          officerData.phoneNumber02 || null,
-          officerData.nic,
-          officerData.email,
-          officerData.houseNumber,
-          officerData.streetName,
-          officerData.city,
-          officerData.district,
-          officerData.province,
-          officerData.country,
-          officerData.languages,
-          officerData.accHolderName || null,
-          officerData.accNumber || null,
-          officerData.bankName || null,
-          officerData.branchName || null,
-          officerData.profileImageUrl || null,
-        ],
-        (err, results) => {
-          if (err) {
-            console.error("Database query error:", err);
-            return reject(
-              new Error(
-                "Failed to insert collection officer into the database.",
-              ),
-            );
-          }
-          resolve(results);
-        },
-      );
+      db.collectionofficer.query(sql, values, (err, results) => {
+        if (err) {
+          console.error("Database query error:", err);
+          return reject(
+            new Error("Failed to insert collection officer into the database."),
+          );
+        }
+        resolve(results);
+      });
     } catch (error) {
       console.error(
         "Unexpected error in createCollectionOfficerPersonal:",
