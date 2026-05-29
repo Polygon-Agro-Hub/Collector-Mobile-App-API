@@ -86,6 +86,31 @@ exports.getAllReplaceRequests = async (req, res) => {
   }
 };
 
+exports.getOrderPackageItem = async (req, res) => {
+  try {
+    const { replaceId } = req.params;
+    if (!replaceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Replace ID is required",
+      });
+    }
+    const data = await targetDDao.getOrderPackageItemByReplaceId(replaceId);
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error("Error getting order package item:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve order package item",
+      error: error.message,
+    });
+  }
+};
+
+
 exports.getRetailItemWithOutEclist = async (req, res) => {
   try {
     const { ordreId } = req.params;
