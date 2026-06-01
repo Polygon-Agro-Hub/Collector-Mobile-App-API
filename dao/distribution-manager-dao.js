@@ -1432,12 +1432,14 @@ exports.getOrderById = async (orderId) => {
           o.isPackage AS orderIsPackage,
           o.isCoupon,
           o.couponValue,
+          o.couponType,
           o.delivaryMethod,
           o.centerId,
-          c.title,
-          c.firstName,
-          c.lastName,
-          c.phoneNumber,
+          o.fullName,
+          o.phonecode1,
+          o.phone1,
+          o.phonecode2,
+          o.phone2,
           c.buildingType AS userBuildingType,
           c.email
       FROM orders o
@@ -1532,6 +1534,7 @@ exports.getOrderById = async (orderId) => {
     const buildingType = order.orderBuildingType || order.userBuildingType;
 
     let formattedAddress = "";
+    let apartmentAddress = null;
 
     if (buildingType === "House") {
       const addressSql = `
@@ -1578,8 +1581,19 @@ exports.getOrderById = async (orderId) => {
       if (addressResults[0]) {
         const addr = addressResults[0];
 
-        const addressParts = [];
+        // ✅ Store raw apartment fields for PDF label-by-label display
+        apartmentAddress = {
+          buildingNo: addr.buildingNo || null,
+          buildingName: addr.buildingName || null,
+          unitNo: addr.unitNo || null,
+          floorNo: addr.floorNo || null,
+          houseNo: addr.houseNo || null,
+          streetName: addr.streetName || null,
+          city: addr.city || null,
+        };
 
+        // ✅ Also build formattedAddress for delivery fee city lookup
+        const addressParts = [];
         if (addr.buildingName) addressParts.push(addr.buildingName);
         if (addr.buildingNo) addressParts.push(addr.buildingNo);
         if (addr.unitNo) addressParts.push(`Unit ${addr.unitNo}`);
@@ -1587,7 +1601,6 @@ exports.getOrderById = async (orderId) => {
         if (addr.houseNo) addressParts.push(addr.houseNo);
         if (addr.streetName) addressParts.push(addr.streetName);
         if (addr.city) addressParts.push(addr.city);
-
         formattedAddress = addressParts.join(", ");
       } else {
         console.log("No apartment address found for orderId:", orderId);
@@ -1794,6 +1807,7 @@ exports.getOrderById = async (orderId) => {
       fullTotal: parseFloat(order.fullTotal) || 0,
       isPackage: finalIsPackage,
       isCoupon: order.isCoupon,
+      couponType: order.couponType || null,
       couponValue:
         order.orderApp === "Marketplace"
           ? parseFloat(order.couponValue) || 0
@@ -1805,14 +1819,16 @@ exports.getOrderById = async (orderId) => {
       centerProvince: centerDetails?.centerProvince || null,
       centerCountry: centerDetails?.centerCountry || null,
       customerInfo: {
-        title: order.title,
-        firstName: order.firstName,
-        lastName: order.lastName,
-        phoneNumber: order.phoneNumber,
+        fullName: order.fullName || null,
+        phoneCode1: order.phonecode1 || null,
+        phone1: order.phone1 || null,
+        phoneCode2: order.phonecode2 || null,
+        phone2: order.phone2 || null,
         buildingType: buildingType,
         email: order.email,
       },
       fullAddress: formattedAddress,
+      apartmentAddress: apartmentAddress,
       orderStatus: {
         processOrderId: processOrderId,
         invoiceNumber: invoiceNumber,
