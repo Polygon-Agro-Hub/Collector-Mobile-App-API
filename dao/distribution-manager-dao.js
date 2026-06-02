@@ -343,7 +343,9 @@ exports.getOrderPackageItemByReplaceId = (replaceId) => {
     db.marketPlace.query(sql, [replaceId], (err, results) => {
       if (err) {
         console.error("Database error:", err);
-        return reject(new Error("Database error while fetching order package item"));
+        return reject(
+          new Error("Database error while fetching order package item"),
+        );
       }
       if (results.length === 0) {
         return resolve(null);
@@ -1581,7 +1583,6 @@ exports.getOrderById = async (orderId) => {
       if (addressResults[0]) {
         const addr = addressResults[0];
 
-        // ✅ Store raw apartment fields for PDF label-by-label display
         apartmentAddress = {
           buildingNo: addr.buildingNo || null,
           buildingName: addr.buildingName || null,
@@ -1592,7 +1593,6 @@ exports.getOrderById = async (orderId) => {
           city: addr.city || null,
         };
 
-        // ✅ Also build formattedAddress for delivery fee city lookup
         const addressParts = [];
         if (addr.buildingName) addressParts.push(addr.buildingName);
         if (addr.buildingNo) addressParts.push(addr.buildingNo);
@@ -1675,6 +1675,7 @@ exports.getOrderById = async (orderId) => {
         SELECT
             op.id AS orderPackageId,
             op.packageId,
+            op.qty,
             mpp.displayName AS packageDisplayName,
             mpp.productPrice AS packagePrice,
             mpp.packingFee AS packagePackingFee,
@@ -1740,6 +1741,7 @@ exports.getOrderById = async (orderId) => {
         const packageInfo = {
           packageId: packageData.packageId,
           orderPackageId: packageData.orderPackageId,
+          qty: parseInt(packageData.qty) || 1,
           displayName: packageData.packageDisplayName,
           productPrice: parseFloat(packageData.packagePrice) || 0,
           packingFee: parseFloat(packageData.packagePackingFee) || 0,
@@ -1753,6 +1755,15 @@ exports.getOrderById = async (orderId) => {
 
         allPackages.push(packageInfo);
       }
+
+      const expandedPackages = [];
+      for (const pkg of allPackages) {
+        const qty = parseInt(pkg.qty) || 1;
+        for (let i = 0; i < qty; i++) {
+          expandedPackages.push({ ...pkg });
+        }
+      }
+      allPackages = expandedPackages;
     }
 
     let enhancedAdditionalItems = [];
