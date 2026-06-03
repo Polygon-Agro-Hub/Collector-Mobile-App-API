@@ -59,4 +59,6 @@ router.get(
   dmanagerEp.getOrderMarketplaceOrdash,
 );
 
+router.post("/get-claim-officer", auth, dmanagerEp.getClaimOfficer);
+
 module.exports = router;

@@ -239,6 +239,7 @@ exports.getFarmerListByCollectionOfficerAndDateForManager = async (
 exports.getClaimOfficer = async (req, res) => {
   const { empID, jobRole } = req.body;
   const OfficercompanyId = req.user.companyId;
+  console.log("claim", empID, jobRole, OfficercompanyId)
 
   try {
     const results = await collectionofficerDao.getClaimOfficer(

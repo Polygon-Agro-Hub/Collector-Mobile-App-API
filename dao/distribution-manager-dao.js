@@ -2011,3 +2011,40 @@ exports.getOrderMarketplaceOrdash = async (orderId) => {
     }
   }
 };
+
+exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        c.*, 
+        comp.companyNameEnglish,
+        comp.companyNameSinhala,
+        comp.companyNameTamil
+      FROM 
+        collectionofficer c 
+      INNER JOIN 
+        company comp 
+      ON 
+        c.companyId = comp.id 
+      WHERE 
+        c.empId = ? 
+        AND c.jobRole = ? 
+        AND c.centerId IS NULL 
+        AND c.claimStatus = 0
+        AND c.companyId = ?
+    `;
+
+    db.collectionofficer.query(
+      sql,
+      [empID, jobRole, OfficercompanyId],
+      (err, results) => {
+        if (err) {
+          return reject(err);
+        }
+
+        resolve(results);
+      },
+    );
+  });
+};
+

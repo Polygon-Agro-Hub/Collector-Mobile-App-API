@@ -669,3 +669,21 @@ exports.getOrderMarketplaceOrdash = async (req, res) => {
     });
   }
 };
+
+exports.getClaimOfficer = async (req, res) => {
+  const { empID, jobRole } = req.body;
+  const OfficercompanyId = req.user.companyId;
+  console.log("distibutio claim", empID, jobRole, OfficercompanyId)
+
+  try {
+    const results = await distributionofficerDao.getClaimOfficer(
+      empID,
+      jobRole,
+      OfficercompanyId,
+    );
+    res.status(200).json({ result: results, status: true });
+  } catch (err) {
+    console.error("Error executing query:", err);
+    res.status(500).send("An error occurred while fetching data.");
+  }
+};
