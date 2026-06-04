@@ -9,6 +9,8 @@ router.get("/get-dcenter-target", authenticate, dmanagerEp.getDCenterTarget);
 
 router.get("/get-replacerequest", auth, dmanagerEp.getAllReplaceRequests);
 
+router.get("/order-package-item/:replaceId", auth, dmanagerEp.getOrderPackageItem);
+
 router.get(
   "/retail-items/:ordreId",
   auth,
@@ -56,5 +58,7 @@ router.get(
   "/get-order-marketplace-ordash/:orderId",
   dmanagerEp.getOrderMarketplaceOrdash,
 );
+
+router.post("/get-claim-officer", auth, dmanagerEp.getClaimOfficer);
 
 module.exports = router;

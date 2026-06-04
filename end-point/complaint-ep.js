@@ -129,7 +129,20 @@ exports.getComplains = asyncHandler(async (req, res) => {
 
 exports.getComplainCategory = asyncHandler(async (req, res) => {
     try {
-        const appName = req.params.appName;
+        const officerRole = req.user.role;
+
+        const roleToAppName = {
+            "Collection Officer": "Collection",
+            "Collection Centre Manager": "Collection",
+            "Distribution Centre Manager": "Distribution",
+            "Distribution Officer": "Distribution",
+        };
+
+        const appName = roleToAppName[officerRole];
+
+        if (!appName) {
+            return res.status(403).json({ message: "Role not mapped to any app" });
+        }
 
         const categories = await ComplaintDao.getComplainCategories(appName);
 

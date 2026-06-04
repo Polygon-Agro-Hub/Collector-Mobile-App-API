@@ -281,7 +281,7 @@ exports.getOrderDataDao = (orderId) => {
                 op.packageId,
                 op.packingStatus,
                 op.createdAt AS packageCreatedAt,
-                op.qty AS packageQty, -- Quantity of packages ordered
+                op.qty AS packageQty,
                 op.isLock AS packageIsLock,
 
                 -- Package Information
@@ -295,7 +295,7 @@ exports.getOrderDataDao = (orderId) => {
                 opi.id AS packageItemId,
                 opi.productType AS packageProductType,
                 opi.productId AS packageProductId,
-                opi.qty AS packageItemQty, -- Renamed to avoid conflict with package quantity
+                opi.qty AS packageItemQty,
                 opi.price AS packageItemPrice,
                 opi.isPacked AS packageIsPacked,
                 mi_package.displayName AS packageProductName,
@@ -309,31 +309,25 @@ exports.getOrderDataDao = (orderId) => {
             FROM 
                 market_place.orders o
             
-            -- Join to get process order (required for package orders)
             LEFT JOIN 
                 market_place.processorders po ON o.id = po.orderId
             
-            -- Left join for additional items (all orders have these)
             LEFT JOIN 
                 market_place.orderadditionalitems oai ON o.id = oai.orderId
             LEFT JOIN 
                 market_place.marketplaceitems mi_additional ON oai.productId = mi_additional.id
 
-            -- Left join for package data (through processorders) - Multiple packages
             LEFT JOIN 
                 market_place.orderpackage op ON po.id = op.orderId
             
-            -- Left join for package information
             LEFT JOIN 
                 market_place.marketplacepackages mp ON op.packageId = mp.id
             
-            -- Left join for package items
             LEFT JOIN 
                 market_place.orderpackageitems opi ON op.id = opi.orderPackageId
             LEFT JOIN 
                 market_place.marketplaceitems mi_package ON opi.productId = mi_package.id
 
-            -- Left join for product types
             LEFT JOIN 
                 market_place.producttypes pt ON opi.productType = pt.id
 
@@ -350,6 +344,29 @@ exports.getOrderDataDao = (orderId) => {
     const preserveValue = (value) => {
       if (value === null || value === undefined) return value;
       return +value;
+    };
+
+    /**
+     * Normalize qty to kg.
+     * If the unit stored in the DB is "g" (grams), divide by 1000.
+     * All other units (kg, Kg, KG, etc.) are treated as already in kg.
+     * Returns { qty: number (in kg), unit: "kg" }
+     */
+    const normalizeToKg = (rawQty, rawUnit) => {
+      const qty = preserveValue(rawQty) || 0;
+      const unit = (rawUnit || "kg").toString().trim().toLowerCase();
+
+      if (unit === "g") {
+        return {
+          qty: parseFloat((qty / 1000).toFixed(4)),
+          unit: "kg",
+        };
+      }
+
+      return {
+        qty: qty,
+        unit: "kg",
+      };
     };
 
     db.collectionofficer.query(sql, [orderId], (err, results) => {
@@ -398,11 +415,16 @@ exports.getOrderDataDao = (orderId) => {
           row.additionalItemId &&
           !additionalItemsMap.has(row.additionalItemId)
         ) {
+          const { qty: normalizedQty, unit: normalizedUnit } = normalizeToKg(
+            row.additionalQty,
+            row.additionalUnit,
+          );
+
           additionalItemsMap.set(row.additionalItemId, {
             id: row.additionalItemId,
             productId: row.additionalProductId,
-            qty: preserveValue(row.additionalQty),
-            unit: row.additionalUnit,
+            qty: normalizedQty,
+            unit: normalizedUnit,
             price: preserveValue(row.additionalPrice),
             discount: preserveValue(row.additionalDiscount),
             isPacked: row.additionalIsPacked,
@@ -442,6 +464,7 @@ exports.getOrderDataDao = (orderId) => {
                 productType: row.packageProductType,
                 productId: row.packageProductId,
                 qty: preserveValue(row.packageItemQty),
+                unit: "kg",
                 price: preserveValue(row.packageItemPrice),
                 isPacked: row.packageIsPacked,
                 productName: row.packageProductName,

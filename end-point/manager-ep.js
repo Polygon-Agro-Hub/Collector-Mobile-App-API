@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const Joi = require("joi");
 const uploadFileToS3 = require("../middleware/s3upload");
 const createCollectionOfficerSchema = require("../validation/manager-validation");
+const QRCode = require("qrcode");
 
 exports.createCollectionOfficer = async (req, res) => {
   try {
@@ -78,7 +79,6 @@ exports.createCollectionOfficer = async (req, res) => {
     if (req.body.profileImage) {
       try {
         const fileBuffer = convertBase64ToBuffer(req.body.profileImage);
-
         const fileName = generateUniqueFileName("profile.jpg");
 
         profileImageUrl = await uploadFileToS3(
@@ -94,6 +94,33 @@ exports.createCollectionOfficer = async (req, res) => {
       }
     }
 
+    let qrCodeUrl = null;
+    try {
+      const qrData = {
+        userInfo: {
+          empId: generatedEmpId,
+        },
+      };
+
+      const qrCodeBase64 = await QRCode.toDataURL(JSON.stringify(qrData));
+
+      const qrCodeBuffer = Buffer.from(
+        qrCodeBase64.replace(/^data:image\/png;base64,/, ""),
+        "base64",
+      );
+
+      const fileName = `qrCode_${generatedEmpId}.png`;
+
+      qrCodeUrl = await uploadFileToS3(
+        qrCodeBuffer,
+        fileName,
+        "collectionofficer/QRcode",
+      );
+    } catch (qrError) {
+      console.error("Error generating/uploading QR code:", qrError);
+      return res.status(500).json({ error: "Failed to generate QR code" });
+    }
+
     const officerData = {
       ...req.body,
       empId: generatedEmpId,
@@ -105,6 +132,7 @@ exports.createCollectionOfficer = async (req, res) => {
       phoneCode01: req.body.phoneCode1,
       phoneCode02: req.body.phoneCode2 || null,
       profileImageUrl,
+      qrCodeUrl,
     };
 
     const resultsPersonal =
@@ -120,6 +148,7 @@ exports.createCollectionOfficer = async (req, res) => {
       message: "Collection Officer created successfully",
       id: resultsPersonal.insertId,
       empId: generatedEmpId,
+      qrCode: qrCodeUrl,
       status: true,
     });
   } catch (error) {
@@ -210,6 +239,7 @@ exports.getFarmerListByCollectionOfficerAndDateForManager = async (
 exports.getClaimOfficer = async (req, res) => {
   const { empID, jobRole } = req.body;
   const OfficercompanyId = req.user.companyId;
+  console.log("claim", empID, jobRole, OfficercompanyId)
 
   try {
     const results = await collectionofficerDao.getClaimOfficer(
@@ -254,12 +284,10 @@ exports.disclaimOfficer = async (req, res) => {
   const { collectionOfficerId, jobRole } = req.body;
 
   if (!collectionOfficerId) {
-    return res
-      .status(400)
-      .json({
-        status: "error",
-        message: "Missing collectionOfficerId in request body.",
-      });
+    return res.status(400).json({
+      status: "error",
+      message: "Missing collectionOfficerId in request body.",
+    });
   }
 
   try {
@@ -293,11 +321,9 @@ exports.GetFarmerReportDetails = async (req, res) => {
 
   try {
     if (!userId || !createdAt || !farmerId) {
-      return res
-        .status(400)
-        .json({
-          error: "userId, createdAt, and farmerId parameters are required.",
-        });
+      return res.status(400).json({
+        error: "userId, createdAt, and farmerId parameters are required.",
+      });
     }
 
     const cropDetails = await collectionofficerDao.GetFarmerReportDetailsDao(
@@ -500,11 +526,9 @@ exports.getofficeronline = async (req, res) => {
     res.status(200).json({ success: true, result });
   } catch (error) {
     console.error("Error fetching officer status:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "An error occurred while fetching officer status.",
-      });
+    res.status(500).json({
+      success: false,
+      error: "An error occurred while fetching officer status.",
+    });
   }
 };

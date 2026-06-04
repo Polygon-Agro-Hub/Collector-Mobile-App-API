@@ -321,6 +321,51 @@ exports.getAllReplaceRequests = (managerId) => {
   });
 };
 
+exports.getOrderPackageItemByReplaceId = (replaceId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        opi.id,
+        opi.productType,
+        opi.productId,
+        opi.qty,
+        opi.price,
+        opi.isPacked,
+        opi.orderPackageId,
+        mpi.displayName,
+        pt.typeName AS productTypeName
+      FROM market_place.orderpackageitems opi
+      LEFT JOIN market_place.marketplaceitems mpi ON opi.productId = mpi.id
+      LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
+      WHERE opi.id = ?
+      LIMIT 1
+    `;
+    db.marketPlace.query(sql, [replaceId], (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return reject(
+          new Error("Database error while fetching order package item"),
+        );
+      }
+      if (results.length === 0) {
+        return resolve(null);
+      }
+      const item = results[0];
+      resolve({
+        id: item.id,
+        productType: item.productType,
+        productId: item.productId,
+        qty: parseFloat(item.qty || 0),
+        price: parseFloat(item.price || 0),
+        isPacked: item.isPacked,
+        orderPackageId: item.orderPackageId,
+        displayName: item.displayName,
+        productTypeName: item.productTypeName,
+      });
+    });
+  });
+};
+
 exports.getRetailItemsExcludingUserExclusions = (orderId) => {
   return new Promise((resolve, reject) => {
     const sql = `
@@ -1324,20 +1369,29 @@ exports.getDistributionPaymentsSummary = async ({
 exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
   try {
     const query = `
-            SELECT 
-                COUNT(*) AS totalTasks,
-                SUM(CASE WHEN complete >= target THEN 1 ELSE 0 END) AS completedTasks,
-                COALESCE(SUM(complete), 0) AS totalComplete,
-                COALESCE(SUM(target), 0) AS totalTarget
-            FROM distributedtarget 
-            WHERE userId = ? AND target > 0;
-        `;
+      SELECT 
+        COUNT(dti.id) AS totalTasks,
+        SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) AS completedTasks,
+        SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) AS totalComplete,
+        COUNT(dti.id) AS totalTarget
+      FROM distributedtarget dt
+      INNER JOIN distributedtargetitems dti
+        ON dti.targetId = dt.id
+      INNER JOIN market_place.processorders po
+        ON po.id = dti.orderId
+      INNER JOIN market_place.orders o
+        ON o.id = po.orderId
+      WHERE
+        dt.userId = ?
+        AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
+        AND DATE(o.sheduleDate) = CURDATE()
+    `;
 
     const [results] = await db.collectionofficer
       .promise()
       .query(query, [collectionOfficerId]);
 
-    if (!results || results.length === 0) {
+    if (!results || results.length === 0 || results[0].totalTasks === null) {
       return {
         totalTasks: 0,
         completedTasks: 0,
@@ -1380,12 +1434,14 @@ exports.getOrderById = async (orderId) => {
           o.isPackage AS orderIsPackage,
           o.isCoupon,
           o.couponValue,
+          o.couponType,
           o.delivaryMethod,
           o.centerId,
-          c.title,
-          c.firstName,
-          c.lastName,
-          c.phoneNumber,
+          o.fullName,
+          o.phonecode1,
+          o.phone1,
+          o.phonecode2,
+          o.phone2,
           c.buildingType AS userBuildingType,
           c.email
       FROM orders o
@@ -1480,6 +1536,7 @@ exports.getOrderById = async (orderId) => {
     const buildingType = order.orderBuildingType || order.userBuildingType;
 
     let formattedAddress = "";
+    let apartmentAddress = null;
 
     if (buildingType === "House") {
       const addressSql = `
@@ -1526,8 +1583,17 @@ exports.getOrderById = async (orderId) => {
       if (addressResults[0]) {
         const addr = addressResults[0];
 
-        const addressParts = [];
+        apartmentAddress = {
+          buildingNo: addr.buildingNo || null,
+          buildingName: addr.buildingName || null,
+          unitNo: addr.unitNo || null,
+          floorNo: addr.floorNo || null,
+          houseNo: addr.houseNo || null,
+          streetName: addr.streetName || null,
+          city: addr.city || null,
+        };
 
+        const addressParts = [];
         if (addr.buildingName) addressParts.push(addr.buildingName);
         if (addr.buildingNo) addressParts.push(addr.buildingNo);
         if (addr.unitNo) addressParts.push(`Unit ${addr.unitNo}`);
@@ -1535,7 +1601,6 @@ exports.getOrderById = async (orderId) => {
         if (addr.houseNo) addressParts.push(addr.houseNo);
         if (addr.streetName) addressParts.push(addr.streetName);
         if (addr.city) addressParts.push(addr.city);
-
         formattedAddress = addressParts.join(", ");
       } else {
         console.log("No apartment address found for orderId:", orderId);
@@ -1610,6 +1675,7 @@ exports.getOrderById = async (orderId) => {
         SELECT
             op.id AS orderPackageId,
             op.packageId,
+            op.qty,
             mpp.displayName AS packageDisplayName,
             mpp.productPrice AS packagePrice,
             mpp.packingFee AS packagePackingFee,
@@ -1675,6 +1741,7 @@ exports.getOrderById = async (orderId) => {
         const packageInfo = {
           packageId: packageData.packageId,
           orderPackageId: packageData.orderPackageId,
+          qty: parseInt(packageData.qty) || 1,
           displayName: packageData.packageDisplayName,
           productPrice: parseFloat(packageData.packagePrice) || 0,
           packingFee: parseFloat(packageData.packagePackingFee) || 0,
@@ -1688,6 +1755,15 @@ exports.getOrderById = async (orderId) => {
 
         allPackages.push(packageInfo);
       }
+
+      const expandedPackages = [];
+      for (const pkg of allPackages) {
+        const qty = parseInt(pkg.qty) || 1;
+        for (let i = 0; i < qty; i++) {
+          expandedPackages.push({ ...pkg });
+        }
+      }
+      allPackages = expandedPackages;
     }
 
     let enhancedAdditionalItems = [];
@@ -1742,6 +1818,7 @@ exports.getOrderById = async (orderId) => {
       fullTotal: parseFloat(order.fullTotal) || 0,
       isPackage: finalIsPackage,
       isCoupon: order.isCoupon,
+      couponType: order.couponType || null,
       couponValue:
         order.orderApp === "Marketplace"
           ? parseFloat(order.couponValue) || 0
@@ -1753,14 +1830,16 @@ exports.getOrderById = async (orderId) => {
       centerProvince: centerDetails?.centerProvince || null,
       centerCountry: centerDetails?.centerCountry || null,
       customerInfo: {
-        title: order.title,
-        firstName: order.firstName,
-        lastName: order.lastName,
-        phoneNumber: order.phoneNumber,
+        fullName: order.fullName || null,
+        phoneCode1: order.phonecode1 || null,
+        phone1: order.phone1 || null,
+        phoneCode2: order.phonecode2 || null,
+        phone2: order.phone2 || null,
         buildingType: buildingType,
         email: order.email,
       },
       fullAddress: formattedAddress,
+      apartmentAddress: apartmentAddress,
       orderStatus: {
         processOrderId: processOrderId,
         invoiceNumber: invoiceNumber,
@@ -1932,3 +2011,40 @@ exports.getOrderMarketplaceOrdash = async (orderId) => {
     }
   }
 };
+
+exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        c.*, 
+        comp.companyNameEnglish,
+        comp.companyNameSinhala,
+        comp.companyNameTamil
+      FROM 
+        collectionofficer c 
+      INNER JOIN 
+        company comp 
+      ON 
+        c.companyId = comp.id 
+      WHERE 
+        c.empId = ? 
+        AND c.jobRole = ? 
+        AND c.centerId IS NULL 
+        AND c.claimStatus = 0
+        AND c.companyId = ?
+    `;
+
+    db.collectionofficer.query(
+      sql,
+      [empID, jobRole, OfficercompanyId],
+      (err, results) => {
+        if (err) {
+          return reject(err);
+        }
+
+        resolve(results);
+      },
+    );
+  });
+};
+
