@@ -97,9 +97,7 @@ exports.createCollectionOfficer = async (req, res) => {
     let qrCodeUrl = null;
     try {
       const qrData = {
-        userInfo: {
-          empId: generatedEmpId,
-        },
+        empld: generatedEmpId,
       };
 
       const qrCodeBase64 = await QRCode.toDataURL(JSON.stringify(qrData));
@@ -239,7 +237,7 @@ exports.getFarmerListByCollectionOfficerAndDateForManager = async (
 exports.getClaimOfficer = async (req, res) => {
   const { empID, jobRole } = req.body;
   const OfficercompanyId = req.user.companyId;
-  console.log("claim", empID, jobRole, OfficercompanyId)
+  console.log("claim", empID, jobRole, OfficercompanyId);
 
   try {
     const results = await collectionofficerDao.getClaimOfficer(
