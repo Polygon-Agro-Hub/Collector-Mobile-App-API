@@ -2,7 +2,9 @@ const targetDDao = require("../dao/distribution-manager-dao");
 const jwt = require("jsonwebtoken");
 const Joi = require("joi");
 const distributionofficerDao = require("../dao/distribution-manager-dao");
+const collectionofficerDao = require("../dao/manager-dao");
 const asyncHandler = require("express-async-handler");
+
 
 exports.getDCenterTarget = async (req, res) => {
   try {
@@ -680,6 +682,26 @@ exports.getClaimOfficer = async (req, res) => {
       empID,
       jobRole,
       OfficercompanyId,
+    );
+    res.status(200).json({ result: results, status: true });
+  } catch (err) {
+    console.error("Error executing query:", err);
+    res.status(500).send("An error occurred while fetching data.");
+  }
+};
+
+exports.createClaimOfficer = async (req, res) => {
+  const { officerId } = req.body;
+  const irmId = req.user.id;
+  const centerId = req.user.centerId;
+  const mangerJobRole = req.user.role;
+
+  try {
+    const results = await collectionofficerDao.createClaimOfficer(
+      officerId,
+      irmId,
+      centerId,
+      mangerJobRole,
     );
     res.status(200).json({ result: results, status: true });
   } catch (err) {
