@@ -60,5 +60,6 @@ router.get(
 );
 
 router.post("/get-claim-officer", auth, dmanagerEp.getClaimOfficer);
+router.post("/claim-officer", auth, dmanagerEp.createClaimOfficer);
 
 module.exports = router;
