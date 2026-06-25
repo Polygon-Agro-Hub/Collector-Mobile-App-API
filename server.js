@@ -12,7 +12,7 @@ const {
   admin,
 } = require("./startup/database");
 
-// Route imports
+// Route import
 const addCropDetails = require("./routes/unregistered-crop-farmer-routes");
 const farmerRoutes = require("./routes/farmer-routes");
 const getUserdata = require("./routes/qr-routes");
@@ -93,7 +93,7 @@ checkConnections();
 // Base path configuration
 const basePathMain = "/agro-api/collection-api";
 
-// Route configurations
+// Route registrations
 mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
