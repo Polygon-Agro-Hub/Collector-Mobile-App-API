@@ -93,7 +93,7 @@ checkConnections();
 // Base path configuration
 const basePathMain = "/agro-api/collection-api";
 
-// Route configurations
+// Route registrations
 mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
