@@ -3,9 +3,12 @@ const router = express.Router();
 const authenticate = require("../middleware/auth.middleware");
 const dmanagerEp = require("../end-point/distribution-manger-ep");
 const auth = require("../middleware/auth.middleware");
+const invoicePdfEp = require("../end-point/invoice-pdf-ep");
 
 // Get distribution center targets
 router.get("/get-dcenter-target", authenticate, dmanagerEp.getDCenterTarget);
+
+router.post("/process-delivery-invoices", auth, invoicePdfEp.processDeliveryInvoices);
 
 router.get("/get-replacerequest", auth, dmanagerEp.getAllReplaceRequests);
 
