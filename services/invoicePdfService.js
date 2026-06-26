@@ -1,5 +1,4 @@
 const puppeteer = require("puppeteer-core");
-const chromium = require("@sparticuz/chromium");
 const { logoBase64 } = require("./logoBase64");
 
 const calculatePackageTotal = (pkg) => {
@@ -612,14 +611,25 @@ const generateOrderPDF = async (orderData, deliveryFee = 0) => {
 
     const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
 
-    browser = await puppeteer.launch({
-      args: isLocal ? ["--no-sandbox", "--disable-setuid-sandbox"] : chromium.args,
-      defaultViewport: isLocal ? null : chromium.defaultViewport,
-      executablePath: isLocal 
-        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" // Local Chrome path
-        : await chromium.executablePath(),
-      headless: isLocal ? "new" : chromium.headless,
-    });
+    let launchArgs = {};
+    if (isLocal) {
+      launchArgs = {
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        defaultViewport: null,
+        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        headless: "new",
+      };
+    } else {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      launchArgs = {
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      };
+    }
+
+    browser = await puppeteer.launch(launchArgs);
 
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
