@@ -1,4 +1,5 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
 const { logoBase64 } = require("./logoBase64");
 
 const calculatePackageTotal = (pkg) => {
@@ -597,6 +598,8 @@ const generateInvoiceHTML = (
 </html>`;
 };
 
+
+
 const generateOrderPDF = async (orderData, deliveryFee = 0) => {
   let browser;
   try {
@@ -607,9 +610,15 @@ const generateOrderPDF = async (orderData, deliveryFee = 0) => {
       logoBase64,
     );
 
+    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+
     browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: isLocal ? ["--no-sandbox", "--disable-setuid-sandbox"] : chromium.args,
+      defaultViewport: isLocal ? null : chromium.defaultViewport,
+      executablePath: isLocal 
+        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" // Local Chrome path
+        : await chromium.executablePath(),
+      headless: isLocal ? "new" : chromium.headless,
     });
 
     const page = await browser.newPage();
