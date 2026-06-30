@@ -151,11 +151,12 @@ exports.updateOrderItems = async (req, res) => {
 exports.getAllRetailItems = asyncHandler(async (req, res) => {
     try {
         const { orderId } = req.params;
+        const { productTypeId } = req.query; // new
         if (!orderId) {
             return res.status(400).json({ message: "Order ID is required" });
         }
 
-        const items = await distributionDao.getAllRetailItems(orderId);
+        const items = await distributionDao.getAllRetailItems(orderId, productTypeId);
 
         if (!items || items.length === 0) {
             return res.status(404).json({ message: "No Retail Items found" });

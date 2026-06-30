@@ -873,12 +873,13 @@ exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
 };
 
 // Get all Retail Items
-exports.getAllRetailItems = async (orderId) => {
+exports.getAllRetailItems = async (orderId, productTypeId) => {
   return new Promise((resolve, reject) => {
     const query = `
             SELECT 
                 mi.id,
                 mi.varietyId,
+                mi.productTypeId,
                 mi.displayName,
                 mi.category,
                 mi.normalPrice,
@@ -891,21 +892,35 @@ exports.getAllRetailItems = async (orderId) => {
                 mi.displayType,
                 LEFT(mi.tags, 256) as tags,
                 mi.createdAt,
-                mi.maxQuantity
+                mi.maxQuantity,
+                IF(el.mpItemId IS NOT NULL, 1, 0) AS isExcluded,
+                IF(pl.mpItemId IS NOT NULL, 1, 0) AS isPreferred
             FROM market_place.marketplaceitems mi
-            WHERE mi.category = 'Retail'
-            AND mi.id NOT IN (
+            LEFT JOIN (
                 SELECT DISTINCT el.mpItemId 
                 FROM market_place.excludelist el
                 INNER JOIN market_place.orders o ON el.userId = o.userId
                 INNER JOIN market_place.processorders po ON o.id = po.orderId
                 WHERE po.orderId = ?
-            )
-            ORDER BY mi.displayName ASC
+            ) el ON mi.id = el.mpItemId
+            LEFT JOIN (
+                SELECT DISTINCT pl.mpItemId 
+                FROM market_place.preferlist pl
+                INNER JOIN market_place.orders o ON pl.userId = o.userId
+                INNER JOIN market_place.processorders po ON o.id = po.orderId
+                WHERE po.orderId = ?
+            ) pl ON mi.id = pl.mpItemId
+            WHERE mi.category = 'Retail'
+            ${productTypeId ? "AND mi.productTypeId = ?" : ""}
+            ORDER BY isPreferred DESC, isExcluded ASC, mi.displayName ASC
             LIMIT 1000
         `;
 
-    db.admin.query(query, [orderId], (error, results) => {
+    const params = productTypeId
+      ? [orderId, orderId, productTypeId]
+      : [orderId, orderId];
+
+    db.admin.query(query, params, (error, results) => {
       if (error) {
         console.error("Error fetching retail marketplace items:", error);
         reject(error);
