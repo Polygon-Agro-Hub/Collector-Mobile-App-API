@@ -261,6 +261,10 @@ exports.getOrderDataDao = (orderId) => {
                 o.sheduleTime,
                 o.createdAt AS orderCreatedAt,
 
+                -- Customer Information
+                mu.id AS customerId,
+                mu.rateofCus AS customerRateOfCus,
+
                 -- Process Order Information
                 po.id AS processOrderId,
 
@@ -308,6 +312,9 @@ exports.getOrderDataDao = (orderId) => {
 
             FROM 
                 market_place.orders o
+
+            LEFT JOIN
+                market_place.marketplaceusers mu ON o.userId = mu.id
             
             LEFT JOIN 
                 market_place.processorders po ON o.id = po.orderId
@@ -404,6 +411,8 @@ exports.getOrderDataDao = (orderId) => {
         sheduleTime: results[0].sheduleTime,
         orderCreatedAt: results[0].orderCreatedAt,
         processOrderId: results[0].processOrderId,
+        customerId: results[0].customerId,
+        rateofCus: results[0].customerRateOfCus,
       };
 
       const additionalItemsMap = new Map();
