@@ -1443,7 +1443,7 @@ exports.getOrderById = async (orderId) => {
           o.phone1,
           o.phonecode2,
           o.phone2,
-          c.buildingType AS userBuildingType,
+          o.buildingType AS userBuildingType,
           c.email
       FROM orders o
       JOIN marketplaceusers c ON o.userId = c.id
