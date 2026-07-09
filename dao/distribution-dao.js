@@ -1491,7 +1491,7 @@ exports.updateoutForDelivery = (orderId, userId) => {
         c.firstName,
         c.lastName,
         c.phoneNumber,
-        c.buildingType,
+        o.buildingType,
 
         -- House fields
         oh.houseNo       AS houseHouseNo,
@@ -1518,9 +1518,9 @@ exports.updateoutForDelivery = (orderId, userId) => {
     INNER JOIN market_place.processorders AS po ON po.orderId = o.id
     LEFT JOIN market_place.marketplaceusers AS c ON o.userId = c.id
     LEFT JOIN market_place.orderhouse AS oh 
-        ON oh.orderId = o.id AND c.buildingType = 'House'
+        ON oh.orderId = o.id AND o.buildingType = 'House'
     LEFT JOIN market_place.orderapartment AS oa 
-        ON oa.orderId = o.id AND c.buildingType = 'Apartment'
+        ON oa.orderId = o.id AND o.buildingType = 'Apartment'
     LEFT JOIN collection_officer.distributedcenter AS dc 
         ON o.centerId = dc.id
     WHERE po.orderId = ?
