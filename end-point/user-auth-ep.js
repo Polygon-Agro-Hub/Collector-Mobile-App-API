@@ -39,11 +39,30 @@ exports.loginUser = async (req, res) => {
       });
     }
 
+    const ALLOWED_ROLES = [
+      "collection officer",
+      "collection centre manager",
+      "distribution officer",
+      "distribution centre manager",
+    ];
+
+    if (!jobRole || !ALLOWED_ROLES.includes(jobRole.toLowerCase())) {
+      return res.status(403).json({
+        status: "error",
+        reason: "role_not_allowed",
+        message:
+          "Access denied. Your role is not authorized to use this application.",
+        jobRole: jobRole,
+      });
+    }
+
     if (accountStatus !== "Approved") {
       return res.status(403).json({
         status: "error",
+        reason: "not_approved",
         message: "This EMP ID is not approved.",
         accountStatus: accountStatus,
+        jobRole: jobRole,
       });
     }
 

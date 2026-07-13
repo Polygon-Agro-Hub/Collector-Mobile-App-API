@@ -675,7 +675,6 @@ exports.getOrderMarketplaceOrdash = async (req, res) => {
 exports.getClaimOfficer = async (req, res) => {
   const { empID, jobRole } = req.body;
   const OfficercompanyId = req.user.companyId;
-  console.log("distibutio claim", empID, jobRole, OfficercompanyId)
 
   try {
     const results = await distributionofficerDao.getClaimOfficer(
@@ -709,3 +708,27 @@ exports.createClaimOfficer = async (req, res) => {
     res.status(500).send("An error occurred while fetching data.");
   }
 };
+
+exports.getAllRetailItems = asyncHandler(async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { productTypeId } = req.query;
+
+    if (!orderId) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
+    const items = await targetDDao.getAllRetailItems(orderId, productTypeId);
+
+    if (!items || items.length === 0) {
+      return res.status(404).json({ message: "No Retail Items found" });
+    }
+
+    const retailItems = items.filter((item) => item.category === "Retail");
+
+    res.status(200).json(retailItems);
+  } catch (error) {
+    console.error("Error fetching Retail Items (distribution-manager):", error);
+    res.status(500).json({ message: "Failed to fetch Retail Items" });
+  }
+});

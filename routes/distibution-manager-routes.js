@@ -65,4 +65,10 @@ router.get(
 router.post("/get-claim-officer", auth, dmanagerEp.getClaimOfficer);
 router.post("/claim-officer", auth, dmanagerEp.createClaimOfficer);
 
+router.get(
+  "/all-retail-items/:orderId",
+  auth,
+  dmanagerEp.getAllRetailItems,
+);
+
 module.exports = router;
