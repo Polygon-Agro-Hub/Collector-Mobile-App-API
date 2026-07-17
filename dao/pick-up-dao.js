@@ -6,7 +6,6 @@ exports.getPickupOrders = (officerId) => {
         if (!officerId) {
             return reject(new Error("Officer ID is missing or invalid"));
         }
-
         const sql = `
             SELECT 
                 o.id AS orderId,
@@ -32,6 +31,7 @@ exports.getPickupOrders = (officerId) => {
                 po.paymentMethod,
                 po.isPaid,
                 po.amount,
+                po.creditPaid,
                 po.status,
                 po.outDlvrDate,
                 
@@ -49,7 +49,16 @@ exports.getPickupOrders = (officerId) => {
                 dc.regCode,
                 
                 co.firstNameEnglish AS officerFirstName,
-                co.lastNameEnglish AS officerLastName
+                co.lastNameEnglish AS officerLastName,
+
+                -- Remaining cash to collect after any credit payment
+                (o.fullTotal - COALESCE(po.creditPaid, 0)) AS remainingAmount,
+
+                -- True "fully paid" flag: only when nothing remains owed
+                CASE 
+                    WHEN (o.fullTotal - COALESCE(po.creditPaid, 0)) <= 0 THEN 1
+                    ELSE 0
+                END AS isFullyPaid
                 
             FROM collection_officer.collectionofficer co
             
@@ -70,13 +79,11 @@ exports.getPickupOrders = (officerId) => {
             
             ORDER BY o.createdAt DESC;
         `;
-
         collectionofficer.query(sql, [officerId], (error, results) => {
             if (error) {
                 console.error("Database error:", error);
                 return reject(error);
             }
-
             resolve(results);
         });
     });
@@ -112,7 +119,7 @@ exports.updatePickupDetails = async (
         await connection.beginTransaction();
 
         const getProcessOrderQuery = `
-            SELECT id, paymentMethod, orderId, amount, isPaid
+            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid
             FROM market_place.processorders 
             WHERE invNo = ?
         `;
@@ -128,6 +135,10 @@ exports.updatePickupDetails = async (
         const processOrder = processOrderResult[0];
         const processOrderId = processOrder.id;
         const paymentMethod = processOrder.paymentMethod;
+        const creditPaid = Number(processOrder.creditPaid) || 0;
+
+        let moneyPaidAmount = null;
+        let fullTotalAmount = null;
 
         if (paymentMethod === "Cash") {
             const getOrderAmountQuery = `
@@ -144,20 +155,25 @@ exports.updatePickupDetails = async (
                 throw new Error("Order details not found");
             }
 
-            const paymentAmount = orderResult[0].fullTotal;
+            fullTotalAmount = Number(orderResult[0].fullTotal) || 0;
+
+            moneyPaidAmount =
+                creditPaid > 0 ? fullTotalAmount - creditPaid : fullTotalAmount;
 
             const updateProcessOrderQuery = `
                 UPDATE market_place.processorders 
                 SET status = ?,
                     amount = ?,
+                    moneyPaid = ?,
                     isPaid = ?,
                     deliveredTime = NOW()
                 WHERE id = ?
             `;
 
-            const [updateResult] = await connection.query(updateProcessOrderQuery, [
+            await connection.query(updateProcessOrderQuery, [
                 "Picked up",
-                paymentAmount,
+                fullTotalAmount,
+                moneyPaidAmount,
                 1,
                 processOrderId,
             ]);
@@ -177,15 +193,7 @@ exports.updatePickupDetails = async (
 
         if (role === "Distribution Centre Manager") {
             if (paymentMethod === "Cash") {
-                const getOrderAmountQuery = `
-                    SELECT fullTotal 
-                    FROM market_place.orders 
-                    WHERE id = ?
-                `;
-                const [orderResult] = await connection.query(getOrderAmountQuery, [
-                    processOrder.orderId,
-                ]);
-                const handOverPrice = orderResult[0]?.fullTotal || 0;
+                const handOverPrice = moneyPaidAmount ?? 0;
 
                 insertQuery = `
                     INSERT INTO collection_officer.pickuporders 
