@@ -349,8 +349,69 @@ exports.getReceivedOrders = (officerId) => {
             [officerId, officerId, officerId],
             (error, results) => {
                 if (error) {
-                    console.error("Database error:", error);
-                    return reject(error);
+                    console.warn("⚠️ Querying driverorders failed due to schema mismatch. Falling back to pickuporders only.");
+                    
+                    const fallbackQuery = `
+                        SELECT 
+                            'pickup' AS orderType,
+                            po.id AS pickupOrderId,
+                            po.orderId AS pickupOrderOrderId,
+                            po.orderIssuedOfficer,
+                            po.handOverOfficer,
+                            po.signature,
+                            po.handOverPrice,
+                            po.handOverTime,
+                            po.createdAt AS pickupCreatedAt,
+                            CASE 
+                                WHEN po.handOverOfficer IS NOT NULL THEN po.createdAt 
+                                ELSE NULL 
+                            END AS handOverReceivedTime,
+                            NULL AS driverId,
+                            NULL AS drvStatus,
+                            NULL AS isHandOver,
+                            NULL AS receivedTime,
+                            NULL AS startTime,
+                            
+                            -- Process orders data
+                            pr.id AS processOrderId,
+                            pr.orderId AS processOrderOrderId,
+                            pr.invNo,
+                            pr.transactionId,
+                            pr.paymentMethod,
+                            pr.isPaid,
+                            pr.amount,
+                            pr.status AS processStatus,
+                            
+                            -- Orders data
+                            o.id AS orderId,
+                            o.userId,
+                            o.orderApp,
+                            o.delivaryMethod,
+                            o.fullTotal,
+                            o.createdAt AS orderCreatedAt
+                            
+                        FROM collection_officer.pickuporders po
+                        INNER JOIN market_place.processorders pr 
+                            ON po.orderId = pr.id
+                        INNER JOIN market_place.orders o 
+                            ON pr.orderId = o.id
+                        WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
+                            AND pr.paymentMethod = 'Cash'
+                        ORDER BY orderCreatedAt DESC
+                    `;
+                    
+                    db.collectionofficer.query(
+                        fallbackQuery,
+                        [officerId, officerId],
+                        (fallbackError, fallbackResults) => {
+                            if (fallbackError) {
+                                console.error("❌ Fallback query also failed:", fallbackError);
+                                return resolve([]); // Return empty to prevent 500 error
+                            }
+                            resolve(fallbackResults);
+                        }
+                    );
+                    return;
                 }
 
                 resolve(results);

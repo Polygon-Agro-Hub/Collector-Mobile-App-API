@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const userAuthDao = require("../dao/user-auth-dao");
 const bcrypt = require("bcrypt");
 const { loginSchema } = require("../validation/auth-validation");
+const { ROLES } = require("../constants/user-roles");
 
 exports.loginUser = async (req, res) => {
   try {
@@ -39,12 +40,7 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    const ALLOWED_ROLES = [
-      "collection officer",
-      "collection centre manager",
-      "distribution officer",
-      "distribution centre manager",
-    ];
+    const ALLOWED_ROLES = Object.values(ROLES);
 
     if (!jobRole || !ALLOWED_ROLES.includes(jobRole.toLowerCase())) {
       return res.status(403).json({

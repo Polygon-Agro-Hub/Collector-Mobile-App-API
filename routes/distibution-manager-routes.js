@@ -1,41 +1,81 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth.middleware");
+const checkRole = require("../middleware/role.middleware");
+const { ROLES } = require("../constants/user-roles");
 const dmanagerEp = require("../end-point/distribution-manger-ep");
 const auth = require("../middleware/auth.middleware");
 const invoicePdfEp = require("../end-point/invoice-pdf-ep");
 
 // Get distribution center targets
-router.get("/get-dcenter-target", authenticate, dmanagerEp.getDCenterTarget);
+router.get(
+  "/get-dcenter-target",
+  authenticate,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getDCenterTarget,
+);
 
-router.post("/process-delivery-invoices", auth, invoicePdfEp.processDeliveryInvoices);
+router.post(
+  "/process-delivery-invoices",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  invoicePdfEp.processDeliveryInvoices,
+);
 
-router.get("/get-replacerequest", auth, dmanagerEp.getAllReplaceRequests);
+router.get(
+  "/get-replacerequest",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getAllReplaceRequests,
+);
 
-router.get("/order-package-item/:replaceId", auth, dmanagerEp.getOrderPackageItem);
+router.get(
+  "/order-package-item/:replaceId",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getOrderPackageItem,
+);
 
 router.get(
   "/retail-items/:ordreId",
   auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getRetailItemWithOutEclist,
 );
-router.get("/ordre-replace/:id", auth, dmanagerEp.getOrdreReplace);
+router.get(
+  "/ordre-replace/:id",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getOrdreReplace,
+);
 
-router.post("/approve", auth, dmanagerEp.approveReplaceRequest);
+router.post(
+  "/approve",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.approveReplaceRequest,
+);
 
 router.get(
   "/distribution-officer/:id",
   auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getDistributionOfficerTarget,
 );
 
 router.get(
   "/get-all-distributionOfficer",
   auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getAllDistributionOfficer,
 );
 
-router.post("/target-pass/:officerId", auth, dmanagerEp.targetPass);
+router.post(
+  "/target-pass/:officerId",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.targetPass,
+);
 
 router.get("/employee/:empId", dmanagerEp.getOfficerDetailsForReport);
 
@@ -49,7 +89,12 @@ router.get(
   dmanagerEp.getOfficerTaskSummaryManagerView,
 );
 
-router.get("/user-profile", auth, dmanagerEp.getProfile);
+router.get(
+  "/user-profile",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getProfile,
+);
 
 router.get("/get-order/:orderId", dmanagerEp.getOrderById);
 
@@ -62,12 +107,23 @@ router.get(
   dmanagerEp.getOrderMarketplaceOrdash,
 );
 
-router.post("/get-claim-officer", auth, dmanagerEp.getClaimOfficer);
-router.post("/claim-officer", auth, dmanagerEp.createClaimOfficer);
+router.post(
+  "/get-claim-officer",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getClaimOfficer,
+);
+router.post(
+  "/claim-officer",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.createClaimOfficer,
+);
 
 router.get(
   "/all-retail-items/:orderId",
   auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getAllRetailItems,
 );
 
