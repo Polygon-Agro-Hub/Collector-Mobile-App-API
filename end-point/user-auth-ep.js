@@ -40,7 +40,7 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    const ALLOWED_ROLES = Object.values(ROLES);
+    const ALLOWED_ROLES = Object.values(ROLES).map((r) => r.toLowerCase());
 
     if (!jobRole || !ALLOWED_ROLES.includes(jobRole.toLowerCase())) {
       return res.status(403).json({
