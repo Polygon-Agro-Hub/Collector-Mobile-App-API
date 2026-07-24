@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth.middleware");
+const checkRole = require("../middleware/role.middleware");
+const { ROLES } = require("../constants/user-roles");
 const managerEp = require("../end-point/manager-ep");
 const TargetEP = require("../end-point/Target-ep");
 const upload = require("../middleware/multer.middleware");
@@ -10,18 +12,21 @@ const driverEp = require("../end-point/drivers-ep");
 router.get(
   "/collection-officers",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   managerEp.getCollectionOfficers,
 );
 
 router.get(
   "/collection-officers-recieve/:varietyId/:grade",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   managerEp.getCollectionOfficersReciever,
 );
 
 router.get(
   "/collection-officerslist",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   managerEp.getCollectionOfficersList,
 );
 
@@ -29,6 +34,7 @@ router.get(
 router.post(
   "/collection-officer/add",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   upload.single("image"),
   managerEp.createCollectionOfficer,
 );
@@ -51,10 +57,16 @@ router.get(
 router.get(
   "/my-collection",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   managerEp.getFarmerListByCollectionOfficerAndDateForManager,
 );
 
-router.post("/get-claim-officer", authenticate, managerEp.getClaimOfficer);
+router.post(
+  "/get-claim-officer",
+  authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
+  managerEp.getClaimOfficer,
+);
 
 router.post("/claim-officer", managerEp.createClaimOfficer);
 
@@ -70,13 +82,24 @@ router.get(
 
 router.get("/get-crop-category", TargetEP.getAllCropCatogory);
 
-router.post("/create-daily-target", authenticate, TargetEP.addDailyTarget);
+router.post(
+  "/create-daily-target",
+  authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
+  TargetEP.addDailyTarget,
+);
 
-router.get("/get-daily-target", authenticate, TargetEP.getAllDailyTarget);
+router.get(
+  "/get-daily-target",
+  authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
+  TargetEP.getAllDailyTarget,
+);
 
 router.get(
   "/download-daily-target",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   TargetEP.downloadDailyTarget,
 );
 
@@ -87,23 +110,31 @@ router.get(
   managerEp.getofficeronline,
 );
 
-router.post("/driver/add", authenticate, driverEp.createDriverWithVehicle);
+router.post(
+  "/driver/add",
+  authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
+  driverEp.createDriverWithVehicle,
+);
 
 router.get(
   "/driver/check-phone/:phoneNumber",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   driverEp.checkPhoneExists,
 );
 
 router.get(
   "/driver/check-nic/:nicNumber",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   driverEp.checkNicExists,
 );
 
 router.get(
   "/driver/check-email/:email",
   authenticate,
+  checkRole([ROLES.COLLECTION_MANAGER]),
   driverEp.checkemailExists,
 );
 
