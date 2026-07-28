@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const handlebars = require("handlebars");
 const fs = require("fs");
 const path = require("path");
@@ -40,10 +40,27 @@ const generateInvoicePDF = async (orderData) => {
     const template = handlebars.compile(templateContent);
     const htmlContent = template(orderData);
 
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+
+    let launchArgs = {};
+    if (isLocal) {
+      launchArgs = {
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        defaultViewport: null,
+        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        headless: "new",
+      };
+    } else {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      launchArgs = {
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      };
+    }
+
+    browser = await puppeteer.launch(launchArgs);
 
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
