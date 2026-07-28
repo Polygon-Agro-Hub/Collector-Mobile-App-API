@@ -6,33 +6,7 @@ const collectionofficerDao = require("../dao/manager-dao");
 const asyncHandler = require("express-async-handler");
 
 
-exports.getDCenterTarget = async (req, res) => {
-  try {
-    const officerId = req.user.id;
 
-    if (!officerId || isNaN(officerId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid officer ID provided",
-      });
-    }
-
-    const targets = await targetDDao.getDCenterTarget(officerId);
-
-    res.status(200).json({
-      success: true,
-      message: "Officer targets retrieved successfully",
-      data: targets,
-    });
-  } catch (error) {
-    console.error("Error getting officer targets:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve officer targets",
-      error: error.message,
-    });
-  }
-};
 
 exports.getProfile = async (req, res) => {
   try {
@@ -69,33 +43,7 @@ exports.getProfile = async (req, res) => {
 
 
 
-exports.getDistributionOfficerTarget = async (req, res) => {
-  try {
-    const { id: officerId } = req.params;
 
-    if (!officerId || isNaN(officerId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid officer ID provided",
-      });
-    }
-
-    const targets = await targetDDao.getDistributionOfficerTarget(officerId);
-
-    res.status(200).json({
-      success: true,
-      message: "Officer targets retrieved successfully",
-      data: targets,
-    });
-  } catch (error) {
-    console.error("Error getting officer targets:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve officer targets",
-      error: error.message,
-    });
-  }
-};
 
 exports.getAllDistributionOfficer = async (req, res) => {
   try {
@@ -114,107 +62,6 @@ exports.getAllDistributionOfficer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve distribution officers and manager details",
-      error: error.message,
-    });
-  }
-};
-
-exports.targetPass = async (req, res) => {
-  try {
-    if (!req.body) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Request body is empty. Make sure Content-Type is application/json",
-      });
-    }
-
-    const { assigneeOfficerId, targetItems, invoiceNumbers, processOrderId } =
-      req.body;
-    const { officerId } = req.params;
-
-    if (!officerId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: officerId (should be in URL path)",
-      });
-    }
-
-    if (!assigneeOfficerId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: assigneeOfficerId",
-      });
-    }
-
-    if (!invoiceNumbers) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: invoiceNumbers",
-      });
-    }
-
-    if (!targetItems) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: targetItems",
-      });
-    }
-
-    if (!processOrderId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: processOrderId",
-      });
-    }
-
-    if (!Array.isArray(invoiceNumbers) || invoiceNumbers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "invoiceNumbers must be a non-empty array",
-      });
-    }
-
-    if (!Array.isArray(targetItems) || targetItems.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "targetItems must be a non-empty array",
-      });
-    }
-
-    if (!Array.isArray(processOrderId) || processOrderId.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "processOrderId must be a non-empty array",
-      });
-    }
-
-    const result = await targetDDao.targetPass({
-      assigneeOfficerId,
-      targetItems,
-      invoiceNumbers,
-      processOrderId,
-      officerId,
-    });
-
-    if (result.success) {
-      res.status(200).json({
-        success: true,
-        message: result.message || "Target passed successfully",
-        data: result.data,
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        message: result.message || "Failed to pass target",
-        errors: result.errors || [],
-      });
-    }
-  } catch (error) {
-    console.error("Error in targetPass endpoint:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to pass target",
       error: error.message,
     });
   }
