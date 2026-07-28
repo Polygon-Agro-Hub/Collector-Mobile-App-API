@@ -22,39 +22,7 @@ router.post(
   invoicePdfEp.processDeliveryInvoices,
 );
 
-router.get(
-  "/get-replacerequest",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getAllReplaceRequests,
-);
 
-router.get(
-  "/order-package-item/:replaceId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getOrderPackageItem,
-);
-
-router.get(
-  "/retail-items/:ordreId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getRetailItemWithOutEclist,
-);
-router.get(
-  "/ordre-replace/:id",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getOrdreReplace,
-);
-
-router.post(
-  "/approve",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.approveReplaceRequest,
-);
 
 router.get(
   "/distribution-officer/:id",
