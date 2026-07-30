@@ -124,7 +124,7 @@ exports.updatePickupDetails = async (
             WHERE invNo = ?
         `;
 
-        const [processOrderResult] = await connection.query(getProcessOrderQuery, [
+        const [processOrderResult] = await connection.promise().query(getProcessOrderQuery, [
             orderId,
         ]);
 
@@ -147,7 +147,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            const [orderResult] = await connection.query(getOrderAmountQuery, [
+            const [orderResult] = await connection.promise().query(getOrderAmountQuery, [
                 processOrder.orderId,
             ]);
 
@@ -170,7 +170,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            await connection.query(updateProcessOrderQuery, [
+            await connection.promise().query(updateProcessOrderQuery, [
                 "Picked up",
                 fullTotalAmount,
                 moneyPaidAmount,
@@ -185,7 +185,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            await connection.query(updateStatusQuery, [processOrderId]);
+            await connection.promise().query(updateStatusQuery, [processOrderId]);
         }
 
         let insertQuery;
@@ -220,7 +220,7 @@ exports.updatePickupDetails = async (
             throw new Error("Invalid role for pickup details update");
         }
 
-        const [result] = await connection.query(insertQuery, insertParams);
+        const [result] = await connection.promise().query(insertQuery, insertParams);
 
         await connection.commit();
 

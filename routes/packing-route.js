@@ -20,6 +20,13 @@ router.get(
   PackingEp.getRowPositions
 );
 
+router.get(
+  "/active-assignment",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getOfficerActiveAssignment
+);
+
 router.post(
   "/positions/assign",
   auth,
@@ -32,6 +39,41 @@ router.get(
   auth,
   checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
   PackingEp.getPositionCrops
+);
+
+router.post(
+  "/qr-opened",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.markOrderAsOpened
+);
+
+router.post(
+  "/advance-position",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.advancePositionIndex
+);
+
+router.post(
+  "/qc-completed",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.markOrderAsCompleted
+);
+
+router.get(
+  "/order-status/:orderId",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getOrderTrackingStatus
+);
+
+router.get(
+  "/active-order",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getOfficerActiveOrder
 );
 
 // Assign Groups (DCM) Flow Routes
