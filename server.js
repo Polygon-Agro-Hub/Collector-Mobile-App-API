@@ -30,6 +30,7 @@ const searchRoutes = require("./routes/search-routes");
 const targetRoutes = require("./routes/target-routes");
 const emailRoutes = require("./routes/email-routes");
 const packingRoute = require("./routes/packing-route");
+const purchaseShortageRoute = require("./routes/purchase-shortage-route");
 const farmerEp = require("./end-point/farmer-ep");
 
 const mainApp = express();
@@ -112,6 +113,7 @@ mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
 mainApp.use(`${basePathMain}/api/pension`, pensionRoute);
 mainApp.use(`${basePathMain}/api/email`, emailRoutes);
 mainApp.use(`${basePathMain}/api/packing`, packingRoute);
+mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
 
 // Cron job for SMS sending
 cron.schedule(
