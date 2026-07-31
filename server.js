@@ -149,12 +149,18 @@ cron.schedule(
   }
 );
 
-// Server startup
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () =>
-  console.log(
-    `Main API server running with Socket.IO on port ${PORT} with base path ${basePathMain}`
-  )
-);
+// Attach io and mainApp to server instance
+server.io = io;
+server.mainApp = mainApp;
 
-module.exports = { mainApp, server, io };
+// Only listen locally, Vercel will export the handler and call listen internally
+const PORT = process.env.PORT || 3000;
+if (!process.env.VERCEL) {
+  server.listen(PORT, () =>
+    console.log(
+      `🚀 Main API server running with Socket.IO on port ${PORT} with base path ${basePathMain}`
+    )
+  );
+}
+
+module.exports = server;
