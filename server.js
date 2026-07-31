@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
 const bodyParser = require("body-parser");
+const http = require("http");
+const { Server } = require("socket.io");
 require("dotenv").config();
 
 // Database connections
@@ -29,23 +31,41 @@ const collectionOfficerRoutes = require("./routes/user-routes");
 const searchRoutes = require("./routes/search-routes");
 const targetRoutes = require("./routes/target-routes");
 const emailRoutes = require("./routes/email-routes");
+const packingRoute = require("./routes/packing-route");
+const purchaseShortageRoute = require("./routes/purchase-shortage-route");
+const webRoute = require("./routes/web-route");
 const farmerEp = require("./end-point/farmer-ep");
 
 const mainApp = express();
+const server = http.createServer(mainApp);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("⚡ Client connected to Socket.IO:", socket.id);
+
+  socket.on("join_row", (rowId) => {
+    socket.join(`row_${rowId}`);
+    console.log(`Socket ${socket.id} joined room row_${rowId}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("🔌 Client disconnected from Socket.IO:", socket.id);
+  });
+});
+
+// Attach io instance to express app
+mainApp.set("io", io);
 
 // CORS and body parser configuration
 [mainApp].forEach((app) => {
   app.use(
     cors({
-      origin: "http://localhost:8081",
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      credentials: true,
-    })
-  );
-  app.options(
-    "*",
-    cors({
-      origin: "http://localhost:8081",
+      origin: "*",
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
     })
@@ -110,6 +130,10 @@ mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
 mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
 mainApp.use(`${basePathMain}/api/pension`, pensionRoute);
 mainApp.use(`${basePathMain}/api/email`, emailRoutes);
+mainApp.use(`${basePathMain}/api/packing`, packingRoute);
+mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
+mainApp.use(`${basePathMain}/api/web`, webRoute);
+mainApp.use(`/api/web`, webRoute);
 
 // Cron job for SMS sending
 cron.schedule(
@@ -127,10 +151,10 @@ cron.schedule(
 
 // Server startup
 const PORT = process.env.PORT || 3000;
-mainApp.listen(PORT, () =>
+server.listen(PORT, () =>
   console.log(
-    `Main API server running on port ${PORT} with base path ${basePathMain}`
+    `Main API server running with Socket.IO on port ${PORT} with base path ${basePathMain}`
   )
 );
 
-module.exports = mainApp;
+module.exports = { mainApp, server, io };

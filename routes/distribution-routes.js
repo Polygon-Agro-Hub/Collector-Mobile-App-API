@@ -12,33 +12,7 @@ router.get(
   DistributionEp.getOfficerTarget,
 );
 
-router.get(
-  "/order-data/:orderId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
-  DistributionEp.getOrderData,
-);
 
-router.put(
-  "/update-order/:orderId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
-  DistributionEp.updateOrderItems,
-);
-
-router.get(
-  "/all-retail-items/:orderId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
-  DistributionEp.getAllRetailItems,
-);
-
-router.post(
-  "/replace-order-package",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
-  DistributionEp.replaceOrderPackage,
-);
 
 router.get(
   "/get-distribution-target",

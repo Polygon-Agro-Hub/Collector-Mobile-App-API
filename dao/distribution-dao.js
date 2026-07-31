@@ -1426,18 +1426,18 @@ exports.getDistributionTargets = async (officerId) => {
 
       connection.query(
         `SELECT
-            dt.userId,
+            tp.officerId AS userId,
 
-            -- Total: today's scheduled orders assigned to this officer
+            -- Total: today's scheduled orders assigned to this officer's row
             COUNT(dti.id) AS total_target,
 
-            -- Completed: today's scheduled orders marked isComplete = 1
-            SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) AS total_complete,
+            -- Completed: today's scheduled orders marked Completed
+            SUM(CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) AS total_complete,
 
             -- Percentage: completed / total * 100
             CASE
                 WHEN COUNT(dti.id) > 0
-                THEN (SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) / COUNT(dti.id) * 100)
+                THEN (SUM(CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) / COUNT(dti.id) * 100)
                 ELSE 0
             END AS completionPercentage,
 
@@ -1451,15 +1451,19 @@ exports.getDistributionTargets = async (officerId) => {
             ON po.id = dti.orderId
         INNER JOIN market_place.orders o
             ON o.id = po.orderId
+        INNER JOIN packingpositions pp
+            ON pp.rowId = dt.rowId
+        INNER JOIN targetposition tp
+            ON tp.positionId = pp.id AND DATE(tp.createdAt) = CURDATE()
 
         WHERE
-            dt.userId = ?
+            tp.officerId = ?
             -- Step 1: only targets created in last 3 days
             AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
             -- Step 2: only orders scheduled for TODAY
             AND DATE(o.sheduleDate) = CURDATE()
 
-        GROUP BY dt.userId`,
+        GROUP BY tp.officerId`,
         [officerId],
         (err, results) => {
           connection.release();

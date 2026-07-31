@@ -8,74 +8,7 @@ const auth = require("../middleware/auth.middleware");
 const invoicePdfEp = require("../end-point/invoice-pdf-ep");
 
 // Get distribution center targets
-router.get(
-  "/get-dcenter-target",
-  authenticate,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getDCenterTarget,
-);
 
-router.post(
-  "/process-delivery-invoices",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  invoicePdfEp.processDeliveryInvoices,
-);
-
-router.get(
-  "/get-replacerequest",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getAllReplaceRequests,
-);
-
-router.get(
-  "/order-package-item/:replaceId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getOrderPackageItem,
-);
-
-router.get(
-  "/retail-items/:ordreId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getRetailItemWithOutEclist,
-);
-router.get(
-  "/ordre-replace/:id",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getOrdreReplace,
-);
-
-router.post(
-  "/approve",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.approveReplaceRequest,
-);
-
-router.get(
-  "/distribution-officer/:id",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getDistributionOfficerTarget,
-);
-
-router.get(
-  "/get-all-distributionOfficer",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.getAllDistributionOfficer,
-);
-
-router.post(
-  "/target-pass/:officerId",
-  auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
-  dmanagerEp.targetPass,
-);
 
 router.get("/employee/:empId", dmanagerEp.getOfficerDetailsForReport);
 
@@ -92,7 +25,7 @@ router.get(
 router.get(
   "/user-profile",
   auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getProfile,
 );
 
