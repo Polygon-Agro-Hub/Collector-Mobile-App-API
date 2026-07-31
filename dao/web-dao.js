@@ -252,10 +252,14 @@ exports.getRowLiveMonitor = (rowId) => {
               status = "AT_PACKER_2";
               statusLabel = "At Packer 2";
               statusColor = "#8B5CF6";
-            } else if (pIdx >= 3) {
+            } else if (pIdx === 3) {
               status = "AT_QC";
-              statusLabel = "At QC / Completed";
+              statusLabel = "At QC";
               statusColor = "#059669";
+            } else if (pIdx >= 4) {
+              status = "COMPLETED";
+              statusLabel = "Completed";
+              statusColor = "#10B981";
             }
 
             boxes.push({
@@ -302,10 +306,14 @@ exports.getRowLiveMonitor = (rowId) => {
               status = "AT_PACKER_2";
               statusLabel = "At Packer 2";
               statusColor = "#8B5CF6";
-            } else if (pIdx >= 3) {
+            } else if (pIdx === 3) {
               status = "AT_QC";
-              statusLabel = "At QC / Completed";
+              statusLabel = "At QC";
               statusColor = "#059669";
+            } else if (pIdx >= 4) {
+              status = "COMPLETED";
+              statusLabel = "Completed";
+              statusColor = "#10B981";
             }
 
             boxes.push({
@@ -362,8 +370,8 @@ exports.getRowLiveMonitor = (rowId) => {
             // Box newly printed / at QR station (pIndex === 0)
             activeBox = boxes.find((b) => b.pIndex === 0) || null;
           } else if (pos.pType === "QC") {
-            // Box at QC station (pIndex >= 3)
-            activeBox = boxes.find((b) => b.pIndex >= 3) || null;
+            // Box actively at QC station (pIndex === 3)
+            activeBox = boxes.find((b) => b.pIndex === 3) || null;
           } else {
             // Box at Packer position pIndex
             activeBox = boxes.find((b) => b.pIndex === pos.pIndex) || null;
@@ -387,6 +395,143 @@ exports.getRowLiveMonitor = (rowId) => {
           boxes: boxes,
         });
       });
+    });
+  });
+};
+
+/**
+ * Get full package and item details for a process order (Web view)
+ * @param {number} processOrderId 
+ */
+exports.getWebOrderDetails = (processOrderId) => {
+  return new Promise((resolve, reject) => {
+    // 1. Fetch process order & master order details
+    const orderSql = `
+      SELECT 
+        po.id AS processOrderId,
+        po.orderId AS masterOrderId,
+        po.invNo AS invoiceNumber,
+        o.fullTotal,
+        o.total
+      FROM market_place.processorders po
+      JOIN market_place.orders o ON po.orderId = o.id
+      WHERE po.id = ?
+    `;
+
+    db.collectionofficer.query(orderSql, [processOrderId], async (err, orderResults) => {
+      if (err) {
+        console.error("Error fetching order details in web-dao:", err);
+        return reject(err);
+      }
+      if (orderResults.length === 0) {
+        return resolve(null);
+      }
+
+      const orderData = orderResults[0];
+
+      try {
+        // 2. Fetch packages for this order
+        const pkgSql = `
+          SELECT 
+            op.id AS orderPackageId,
+            op.packageId,
+            mp.displayName,
+            mp.productPrice
+          FROM market_place.orderpackage op
+          JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+          WHERE op.orderId = ? OR op.orderId = ?
+        `;
+
+        const packages = await new Promise((res) => {
+          db.collectionofficer.query(pkgSql, [processOrderId, orderData.masterOrderId], (e, r) => res(e ? [] : r));
+        });
+
+        // 3. For each package, fetch items grouped separately by category (productType)
+        for (const pkg of packages) {
+          const itemsSql = `
+            SELECT 
+              opi.id,
+              opi.orderPackageId,
+              opi.productType,
+              opi.productId,
+              opi.qty,
+              opi.price,
+              pt.typeName AS productTypeName,
+              mi.displayName AS productDisplayName
+            FROM market_place.orderpackageitems opi
+            LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
+            LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            WHERE opi.orderPackageId = ?
+            ORDER BY pt.typeName ASC, opi.id ASC
+          `;
+
+          const items = await new Promise((res) => {
+            db.collectionofficer.query(itemsSql, [pkg.orderPackageId], (e, r) => res(e ? [] : r));
+          });
+
+          pkg.packageItems = items.map((it) => {
+            const specName = it.productDisplayName || "N/A";
+            const catName = it.productTypeName || "General";
+            return {
+              id: it.id,
+              orderPackageId: it.orderPackageId,
+              productType: it.productType,
+              productTypeName: catName,
+              productId: it.productId,
+              productDisplayName: specName,
+              itemDescription: specName !== "N/A" ? `${specName} (${catName})` : catName,
+              qty: parseFloat(it.qty) || 1,
+              price: parseFloat(it.price) || 0,
+            };
+          });
+
+          // Group items by category (e.g. Low Country Vegetables, Up Country Vege)
+          const itemsByCategory = {};
+          pkg.packageItems.forEach((pi) => {
+            const cat = pi.productTypeName || "General";
+            if (!itemsByCategory[cat]) {
+              itemsByCategory[cat] = [];
+            }
+            itemsByCategory[cat].push(pi);
+          });
+          pkg.itemsByCategory = itemsByCategory;
+        }
+
+        // 4. Fetch additional / à la carte items for this order
+        const addSql = `
+          SELECT 
+            oai.id,
+            oai.productId,
+            oai.qty,
+            oai.price,
+            mi.displayName
+          FROM market_place.orderadditionalitems oai
+          JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+          WHERE oai.orderId = ?
+        `;
+
+        const additionalItems = await new Promise((res) => {
+          db.collectionofficer.query(addSql, [orderData.masterOrderId], (e, r) => res(e ? [] : r));
+        });
+
+        resolve({
+          processOrderId: Number(processOrderId),
+          masterOrderId: orderData.masterOrderId,
+          invoiceNumber: orderData.invoiceNumber,
+          fullTotal: parseFloat(orderData.fullTotal || orderData.total) || 0,
+          packages: packages,
+          additionalItems: additionalItems.map((ai) => ({
+            id: ai.id,
+            productId: ai.productId,
+            displayName: ai.displayName,
+            qty: parseFloat(ai.qty) || 1,
+            price: parseFloat(ai.price) || 0,
+          })),
+        });
+      } catch (e) {
+        console.error("Error in getWebOrderDetails:", e);
+        reject(e);
+      }
     });
   });
 };

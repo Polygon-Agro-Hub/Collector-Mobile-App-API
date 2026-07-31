@@ -1012,21 +1012,36 @@ exports.getOrderById = async (orderId) => {
           [packageData.orderPackageId],
         );
 
-        const packageItems = packageItemsResults.map((item) => ({
-          id: item.id,
-          orderPackageId: item.orderPackageId,
-          productType: item.productType,
-          productTypeName: item.productTypeName,
-          productId: item.productId,
-          productDisplayName: item.productDisplayName || "N/A",
-          varietyId: item.varietyId,
-          category: item.category,
-          normalPrice: item.normalPrice,
-          discountedPrice: item.discountedPrice,
-          qty: parseFloat(item.qty) || 0,
-          price: parseFloat(item.price) || 0,
-          isPacked: item.isPacked,
-        }));
+        const packageItems = packageItemsResults.map((item) => {
+          const specName = item.productDisplayName || "N/A";
+          const catName = item.productTypeName || "General";
+          return {
+            id: item.id,
+            orderPackageId: item.orderPackageId,
+            productType: item.productType,
+            productTypeName: catName,
+            productId: item.productId,
+            productDisplayName: specName,
+            itemDescription: specName !== "N/A" ? `${specName} (${catName})` : catName,
+            varietyId: item.varietyId,
+            category: item.category,
+            normalPrice: item.normalPrice,
+            discountedPrice: item.discountedPrice,
+            qty: parseFloat(item.qty) || 0,
+            price: parseFloat(item.price) || 0,
+            isPacked: item.isPacked,
+          };
+        });
+
+        // Group package items separately by category (e.g. Low Country Vegetables, Up Country Vege)
+        const itemsByCategory = {};
+        packageItems.forEach((pi) => {
+          const cat = pi.productTypeName || "General";
+          if (!itemsByCategory[cat]) {
+            itemsByCategory[cat] = [];
+          }
+          itemsByCategory[cat].push(pi);
+        });
 
         const packageInfo = {
           packageId: packageData.packageId,
@@ -1041,6 +1056,7 @@ exports.getOrderById = async (orderId) => {
           isLock: packageData.isLock,
           packageCreatedAt: packageData.packageCreatedAt,
           packageItems: packageItems,
+          itemsByCategory: itemsByCategory,
         };
 
         allPackages.push(packageInfo);

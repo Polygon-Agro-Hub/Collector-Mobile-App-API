@@ -25,7 +25,7 @@ router.get(
 router.get(
   "/user-profile",
   auth,
-  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
   dmanagerEp.getProfile,
 );
 

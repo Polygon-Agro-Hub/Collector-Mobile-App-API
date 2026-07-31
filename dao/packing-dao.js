@@ -361,6 +361,10 @@ exports.getQROrdersForOfficer = (officerId) => {
         dt.timeSlot,
         CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE 'Delivery' END AS category,
         dti.orderStatus,
+        COALESCE(
+          (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
+          0
+        ) AS minPIndex,
         (SELECT COUNT(*) FROM market_place.orderpackage op WHERE op.orderId = po.id OR op.orderId = po.orderId) AS packagesCount,
         (SELECT COUNT(*) FROM market_place.orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
       FROM targetposition tp
@@ -397,6 +401,26 @@ exports.getQROrdersForOfficer = (officerId) => {
             const pkgs = await new Promise((res, rej) => {
               db.collectionofficer.query(pkgSql, [item.id], (e, r) => e ? rej(e) : res(r));
             });
+            for (const pkg of pkgs) {
+              const pkgItemsSql = `
+                SELECT 
+                  opi.id,
+                  pt.typeName AS categoryName,
+                  mi.displayName AS itemName,
+                  ROUND(COALESCE(opi.qty, 1), 1) AS qty
+                FROM market_place.orderpackageitems opi
+                LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
+                LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+                WHERE opi.orderPackageId = ?
+              `;
+              const items = await new Promise((res) => {
+                db.collectionofficer.query(pkgItemsSql, [pkg.id], (e, r) => res(r || []));
+              });
+              pkg.items = items;
+              pkg.itemBreakdown = items
+                .map((i) => (i.itemName ? `${i.itemName} (${i.categoryName})` : i.categoryName))
+                .join(", ");
+            }
             item.packagesList = pkgs;
           } catch (e) {
             console.error("Error fetching packagesList for order:", e);
@@ -622,30 +646,93 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
  */
 exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = null) => {
   return new Promise((resolve, reject) => {
-    let sql = `
-      UPDATE positiontracking 
-      SET pIndex = pIndex + 1 
-      WHERE orderId = ?
-    `;
-    const params = [orderId];
+    const nextStep = currentPIndex ? Number(currentPIndex) + 1 : null;
 
-    if (orderpackageId) {
-      sql += ` AND orderpackageId = ?`;
-      params.push(orderpackageId);
-    } else if (currentPIndex !== null) {
-      sql += ` AND pIndex = ? LIMIT 1`;
-      params.push(currentPIndex);
+    if (nextStep && nextStep <= 3) {
+      const checkOccupiedSql = `
+        SELECT pt.id, pt.orderpackageId, pt.orderId, pt.pIndex
+        FROM positiontracking pt
+        JOIN distributedtargetitems dti ON pt.orderId = dti.orderId
+        JOIN distributedtarget dt ON dti.targetId = dt.id
+        WHERE dt.rowId = (
+          SELECT dt_sub.rowId 
+          FROM positiontracking pt_sub
+          JOIN distributedtargetitems dti_sub ON pt_sub.orderId = dti_sub.orderId
+          JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
+          WHERE pt_sub.orderId = ? LIMIT 1
+        )
+        AND dti.orderStatus = 'Opened'
+        AND pt.pIndex = ?
+        LIMIT 1
+      `;
+
+      db.collectionofficer.query(checkOccupiedSql, [orderId, nextStep], (checkErr, checkRows) => {
+        if (checkErr) {
+          console.error("Error checking next station occupancy:", checkErr);
+        }
+
+        if (checkRows && checkRows.length > 0) {
+          const targetStationName = nextStep === 3 ? "QC Station" : `Packing Position ${nextStep}`;
+          return resolve({
+            success: false,
+            isOccupied: true,
+            message: `The ${targetStationName} is currently busy with another package box. Please wait until they clear their current box.`
+          });
+        }
+
+        executeUpdate();
+      });
     } else {
-      sql += ` AND orderpackageId IS NULL LIMIT 1`;
+      executeUpdate();
     }
 
-    db.collectionofficer.query(sql, params, (err, result) => {
-      if (err) {
-        console.error("Error in advancePositionIndex:", err);
-        return reject(err);
+    function executeUpdate() {
+      let sql = `
+        UPDATE positiontracking 
+        SET pIndex = LEAST(pIndex + 1, 4) 
+        WHERE orderId = ? AND pIndex > 0
+      `;
+      const params = [orderId];
+
+      const isPackageIdValid =
+        orderpackageId !== null &&
+        orderpackageId !== undefined &&
+        orderpackageId !== "alacarte" &&
+        !isNaN(Number(orderpackageId));
+
+      if (isPackageIdValid) {
+        sql += ` AND orderpackageId = ?`;
+        params.push(Number(orderpackageId));
+      } else {
+        sql += ` AND orderpackageId IS NULL`;
       }
-      resolve({ success: true, affectedRows: result.affectedRows });
-    });
+
+      if (currentPIndex !== null && currentPIndex > 0) {
+        sql += ` AND pIndex = ?`;
+        params.push(Number(currentPIndex));
+      }
+
+      sql += ` LIMIT 1`;
+
+      console.log("=== DAO EXECUTE UPDATE SQL ===", sql, params);
+
+      db.collectionofficer.query(sql, params, (err, result) => {
+        if (err) {
+          console.error("Error in advancePositionIndex:", err);
+          return reject(err);
+        }
+        console.log("=== DAO EXECUTE UPDATE RESULT ===", result);
+
+        if (!result || result.affectedRows === 0) {
+          return resolve({
+            success: false,
+            affectedRows: 0,
+            message: "The next station is currently busy or the package has already been cleared."
+          });
+        }
+        resolve({ success: true, affectedRows: result.affectedRows });
+      });
+    }
   });
 };
 
@@ -656,17 +743,35 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
  */
 exports.markOrderAsCompleted = (orderId) => {
   return new Promise((resolve, reject) => {
-    const sql = `
-      UPDATE distributedtargetitems 
-      SET orderStatus = 'Completed' 
+    const checkSql = `
+      SELECT COUNT(*) AS totalBoxes,
+             SUM(CASE WHEN pIndex >= 4 THEN 1 ELSE 0 END) AS completedBoxes
+      FROM positiontracking
       WHERE orderId = ?
     `;
-    db.collectionofficer.query(sql, [orderId], (err, result) => {
+
+    db.collectionofficer.query(checkSql, [orderId], (err, rows) => {
       if (err) {
-        console.error("Error in markOrderAsCompleted:", err);
+        console.error("Error checking box completion status:", err);
         return reject(err);
       }
-      resolve({ success: true, orderStatus: "Completed" });
+
+      const total = rows[0]?.totalBoxes || 0;
+      const completed = rows[0]?.completedBoxes || 0;
+
+      if (total > 0 && completed >= total) {
+        const updateSql = `
+          UPDATE distributedtargetitems 
+          SET orderStatus = 'Completed' 
+          WHERE orderId = ?
+        `;
+        db.collectionofficer.query(updateSql, [orderId], (uErr) => {
+          if (uErr) return reject(uErr);
+          resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+        });
+      } else {
+        resolve({ success: true, isFullyCompleted: false, orderStatus: "Opened" });
+      }
     });
   });
 };
@@ -720,25 +825,157 @@ exports.getOfficerActiveOrder = (officerId) => {
         CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS orderType,
         CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
         dti.orderStatus,
-        COALESCE(pt.pIndex, 0) AS pIndex,
-        pp.pIndex AS officerPosIndex
+        COALESCE(
+          (SELECT pt_sub.pIndex FROM positiontracking pt_sub WHERE pt_sub.orderId = po.id AND pt_sub.pIndex = COALESCE(pp.pIndex, CASE WHEN pp.pType = 'QC' THEN 3 ELSE 1 END) LIMIT 1),
+          (SELECT MIN(pt_sub2.pIndex) FROM positiontracking pt_sub2 WHERE pt_sub2.orderId = po.id AND pt_sub2.pIndex > 0),
+          (SELECT MAX(pt_sub3.pIndex) FROM positiontracking pt_sub3 WHERE pt_sub3.orderId = po.id),
+          0
+        ) AS pIndex,
+        COALESCE(pp.pIndex, CASE WHEN pp.pType = 'QC' THEN 3 ELSE 1 END) AS officerPosIndex,
+        pp.id AS positionId,
+        (SELECT pt_sub4.orderpackageId FROM positiontracking pt_sub4 WHERE pt_sub4.orderId = po.id AND pt_sub4.pIndex = COALESCE(pp.pIndex, CASE WHEN pp.pType = 'QC' THEN 3 ELSE 1 END) LIMIT 1) AS activeOrderPackageId,
+        (SELECT EXISTS(SELECT 1 FROM positiontracking pt_sub5 WHERE pt_sub5.orderId = po.id AND pt_sub5.pIndex = COALESCE(pp.pIndex, CASE WHEN pp.pType = 'QC' THEN 3 ELSE 1 END) AND pt_sub5.orderpackageId IS NULL)) AS isAlacarteActive
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
-      LEFT JOIN positiontracking pt ON po.id = pt.orderId
       WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE() AND DATE(dt.createdAt) = CURDATE()
-      ORDER BY dti.orderStatus = 'Opened' DESC, po.id ASC
+        AND dti.orderStatus = 'Opened'
+      ORDER BY 
+        CASE WHEN EXISTS(SELECT 1 FROM positiontracking pt_ex WHERE pt_ex.orderId = po.id AND pt_ex.pIndex = COALESCE(pp.pIndex, CASE WHEN pp.pType = 'QC' THEN 3 ELSE 1 END)) THEN 0 ELSE 1 END,
+        po.id ASC
       LIMIT 1
     `;
-    db.collectionofficer.query(sql, [officerId], (err, results) => {
+    db.collectionofficer.query(sql, [officerId], async (err, results) => {
       if (err) {
         console.error("Error in getOfficerActiveOrder:", err);
         return resolve(null);
       }
-      resolve(results.length > 0 ? results[0] : null);
+      if (results.length === 0) return resolve(null);
+
+      const activeOrder = results[0];
+
+      try {
+        let itemsSql = "";
+        let queryParams = [];
+
+        if (activeOrder.activeOrderPackageId) {
+          // A specific package box is currently at this packer station!
+          itemsSql = `
+            SELECT 
+              opi.id AS id,
+              mi.displayName AS name,
+              CONCAT(ROUND(COALESCE(opi.qty, 1), 1), ' kg') AS weight,
+              cv.image AS image,
+              mi.id AS mpiId,
+              opi.productType AS productTypeId,
+              mp.displayName AS packName,
+              'package' AS categoryType
+            FROM market_place.orderpackage op
+            JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+            JOIN market_place.orderpackageitems opi ON op.id = opi.orderPackageId
+            JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
+            WHERE op.id = ? AND mi.id IS NOT NULL
+          `;
+          queryParams = [activeOrder.activeOrderPackageId];
+        } else if (activeOrder.isAlacarteActive) {
+          // The À la carte box is currently at this station!
+          itemsSql = `
+            SELECT 
+              mi.id,
+              mi.displayName AS name,
+              CONCAT(ROUND(SUM(COALESCE(oai.qty, 1)), 1), ' kg') AS weight,
+              cv.image AS image,
+              mi.id AS mpiId,
+              NULL AS productTypeId,
+              'À la carte' AS packName,
+              'alacarte' AS categoryType
+            FROM market_place.processorders po
+            JOIN market_place.orderadditionalitems oai ON (po.orderId = oai.orderId OR po.id = oai.orderId)
+            JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+            LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
+            WHERE po.id = ? AND mi.id IS NOT NULL
+            GROUP BY mi.id
+          `;
+          queryParams = [activeOrder.processOrderId];
+        } else {
+          itemsSql = `
+            SELECT 
+              mi.id,
+              mi.displayName AS name,
+              CONCAT(ROUND(SUM(COALESCE(opi.qty, 1)), 1), ' kg') AS weight,
+              cv.image AS image,
+              mi.id AS mpiId,
+              opi.productType AS productTypeId,
+              mp.displayName AS packName,
+              'package' AS categoryType
+            FROM market_place.processorders po
+            JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+            JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+            JOIN market_place.orderpackageitems opi ON op.id = opi.orderPackageId
+            JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
+            WHERE po.id = ?
+            GROUP BY op.id, mi.id, opi.productType, mp.displayName
+
+            UNION ALL
+
+            SELECT 
+              mi.id,
+              mi.displayName AS name,
+              CONCAT(ROUND(SUM(COALESCE(oai.qty, 1)), 1), ' kg') AS weight,
+              cv.image AS image,
+              mi.id AS mpiId,
+              NULL AS productTypeId,
+              'À la carte' AS packName,
+              'alacarte' AS categoryType
+            FROM market_place.processorders po
+            JOIN market_place.orderadditionalitems oai ON (po.orderId = oai.orderId OR po.id = oai.orderId)
+            JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+            LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
+            WHERE po.id = ?
+            GROUP BY mi.id
+          `;
+          queryParams = [activeOrder.processOrderId, activeOrder.processOrderId];
+        }
+
+        const orderItems = await new Promise((res) => {
+          db.collectionofficer.query(itemsSql, queryParams, (e, r) => {
+            if (e) return res([]);
+            res(r || []);
+          });
+        });
+
+        // Fetch position assigned crops from positionscrops
+        const posCropsSql = `SELECT mpiId FROM positionscrops WHERE posId = ? AND mpiId IS NOT NULL`;
+        const posCrops = await new Promise((res) => {
+          db.collectionofficer.query(posCropsSql, [activeOrder.positionId], (e, r) => {
+            if (e) return res([]);
+            res(r || []);
+          });
+        });
+
+        if (posCrops.length > 0) {
+          const posMpiIds = posCrops.map((c) => Number(c.mpiId));
+          // Filter order items that match position crops by marketplaceitem ID OR productType ID
+          activeOrder.orderItems = orderItems.filter(
+            (item) => posMpiIds.includes(Number(item.mpiId)) || posMpiIds.includes(Number(item.productTypeId))
+          );
+        } else {
+          activeOrder.orderItems = orderItems;
+        }
+
+        activeOrder.allOrderItems = orderItems;
+      } catch (e) {
+        console.error("Error populating order items in getOfficerActiveOrder:", e);
+        activeOrder.orderItems = [];
+        activeOrder.allOrderItems = [];
+      }
+
+      resolve(activeOrder);
     });
   });
 };

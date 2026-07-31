@@ -186,6 +186,14 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
     currentPIndex !== undefined ? Number(currentPIndex) : null
   );
 
+  if (!result || !result.success || result.affectedRows === 0) {
+    return res.status(200).json({
+      success: false,
+      message: result?.message || "The next station is currently busy or the package has already been cleared.",
+      data: result
+    });
+  }
+
   const io = req.app.get("io");
   if (io) {
     io.emit("position_index_updated", { orderId: Number(orderId), orderpackageId, currentPIndex });
