@@ -271,4 +271,31 @@ exports.getOfficerActiveOrder = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get distribution center target orders
+ */
+exports.getCenterTarget = asyncHandler(async (req, res) => {
+  const orders = await packingDao.getCenterTargetOrders();
+
+  res.status(200).json({
+    success: true,
+    message: "Center target orders retrieved successfully",
+    data: orders
+  });
+});
+
+/**
+ * Get detailed order tracking breakdown for OrderDetails screen
+ */
+exports.getOrderDetails = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const details = await packingDao.getOrderDetails(Number(orderId));
+
+  res.status(200).json({
+    success: true,
+    message: "Order details retrieved successfully",
+    data: details
+  });
+});
+
 
