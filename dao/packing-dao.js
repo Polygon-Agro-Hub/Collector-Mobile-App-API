@@ -437,6 +437,282 @@ exports.getQROrdersForOfficer = (officerId) => {
 };
 
 /**
+ * Get distribution center targets grouped/listed for Center Target Screen
+ * @returns {Promise<Array>}
+ */
+exports.getCenterTargetOrders = () => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT DISTINCT
+        po.id AS id,
+        po.invNo AS orderNumber,
+        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
+        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        dt.timeSlot,
+        CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE COALESCE(o.delivaryMethod, 'Bambalapitiya') END AS category,
+        CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
+        dti.orderStatus,
+        COALESCE(
+          (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
+          0
+        ) AS minPIndex,
+        COALESCE(
+          (SELECT MAX(pt_max.pIndex) FROM positiontracking pt_max WHERE pt_max.orderId = po.id), 
+          0
+        ) AS maxPIndex
+      FROM distributedtarget dt
+      JOIN distributedtargetitems dti ON dt.id = dti.targetId
+      JOIN market_place.processorders po ON dti.orderId = po.id
+      JOIN market_place.orders o ON po.orderId = o.id
+      LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      WHERE DATE(dt.createdAt) = CURDATE()
+      ORDER BY dt.timeSlot ASC, po.id ASC
+    `;
+    db.collectionofficer.query(sql, [], (err, results) => {
+      if (err) {
+        console.error("Error in getCenterTargetOrders:", err);
+        return resolve([]);
+      }
+      resolve(results || []);
+    });
+  });
+};
+
+/**
+ * Get tracking order details breakdown for OrderDetails screen
+ * @param {number} orderId
+ * @returns {Promise<Object|null>}
+ */
+exports.getOrderDetails = (orderId) => {
+  return new Promise((resolve, reject) => {
+    // 1. Query order info from DB
+    const sqlOrder = `
+      SELECT DISTINCT
+        po.id AS orderId,
+        po.invNo AS orderNumber,
+        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
+        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        dt.id AS targetId,
+        dt.timeSlot,
+        CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE COALESCE(o.delivaryMethod, 'Bambalapitiya') END AS category,
+        CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
+        dti.orderStatus,
+        DATE_FORMAT(COALESCE(dt.createdAt, po.createdAt), '%h:%i %p') AS qrPrintedTime,
+        DATE_FORMAT(COALESCE(dti.updatedAt, po.createdAt), '%h:%i %p') AS qcDoneTime
+      FROM market_place.processorders po
+      JOIN market_place.orders o ON po.orderId = o.id
+      LEFT JOIN distributedtargetitems dti ON dti.orderId = po.id
+      LEFT JOIN distributedtarget dt ON dti.targetId = dt.id
+      LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      WHERE po.id = ? OR po.invNo = ?
+      LIMIT 1
+    `;
+
+    db.collectionofficer.query(sqlOrder, [orderId, orderId], async (err, orderResults) => {
+      if (err || !orderResults || orderResults.length === 0) {
+        return resolve(null);
+      }
+
+      const orderInfo = orderResults[0];
+      const timeSlotMap = {
+        "8-12": "08:00 AM - 12:00 PM",
+        "12-16": "12:00 PM - 04:00 PM",
+        "16-20": "04:00 PM - 08:00 PM",
+        "4-9": "04:00 PM - 09:00 PM",
+        "8-4": "08:00 AM - 04:00 PM",
+        "12-4": "12:00 PM - 04:00 PM",
+        "4-8": "04:00 PM - 08:00 PM",
+      };
+
+      const statusLabel = `(${orderInfo.rowName}) Out`;
+      const timeSlotLabel = timeSlotMap[orderInfo.timeSlot] || orderInfo.timeSlot;
+
+      try {
+        let targetId = orderInfo.targetId;
+        if (!targetId) {
+          const findTargetSql = `SELECT targetId FROM distributedtargetitems WHERE orderId = ? LIMIT 1`;
+          const resTarget = await new Promise((res) => {
+            db.collectionofficer.query(findTargetSql, [orderInfo.orderId], (e, r) => res(r || []));
+          });
+          if (resTarget && resTarget.length > 0) {
+            targetId = resTarget[0].targetId;
+          }
+        }
+
+        // Query QR Printed Officer for target slot
+        const qrOfficerSql = `
+          SELECT COALESCE(co.empId, ce.empId) AS empId
+          FROM targetposition tp
+          JOIN packingpositions pp ON tp.positionId = pp.id AND pp.pType = 'QR'
+          LEFT JOIN collectionofficer co ON tp.officerId = co.id
+          LEFT JOIN companyemployee ce ON tp.officerId = ce.id
+          WHERE tp.targetId = ? LIMIT 1
+        `;
+        const qrOfficerRes = await new Promise((res) => {
+          db.collectionofficer.query(qrOfficerSql, [targetId], (e, r) => res(r || []));
+        });
+        const qrPrintedByEmpId = qrOfficerRes.length > 0 ? qrOfficerRes[0].empId : "DCM00043";
+
+        // Query QC Done Officer for target slot
+        const qcOfficerSql = `
+          SELECT COALESCE(co.empId, ce.empId) AS empId
+          FROM targetposition tp
+          JOIN packingpositions pp ON tp.positionId = pp.id AND pp.pType = 'QC'
+          LEFT JOIN collectionofficer co ON tp.officerId = co.id
+          LEFT JOIN companyemployee ce ON tp.officerId = ce.id
+          WHERE tp.targetId = ? LIMIT 1
+        `;
+        const qcOfficerRes = await new Promise((res) => {
+          db.collectionofficer.query(qcOfficerSql, [targetId], (e, r) => res(r || []));
+        });
+        const qcDoneByEmpId = qcOfficerRes.length > 0 ? qcOfficerRes[0].empId : "DCM00025";
+
+        // Query assigned packing officers for target slot
+        const packingOfficersSql = `
+          SELECT DISTINCT
+            pp.pIndex,
+            COALESCE(co.empId, ce.empId) AS empId
+          FROM targetposition tp
+          JOIN packingpositions pp ON tp.positionId = pp.id AND pp.pType = 'NOR'
+          LEFT JOIN collectionofficer co ON tp.officerId = co.id
+          LEFT JOIN companyemployee ce ON tp.officerId = ce.id
+          WHERE tp.targetId = ?
+          ORDER BY pp.pIndex ASC
+        `;
+        const assignedOfficers = await new Promise((res) => {
+          db.collectionofficer.query(packingOfficersSql, [targetId], (e, r) => res(r || []));
+        });
+
+        const defaultPackingOfficers = assignedOfficers.length > 0
+          ? assignedOfficers.map((a) => a.empId)
+          : ["DCM00001", "DIO00001"];
+
+        // Query packages for this order
+        const pkgSql = `
+          SELECT 
+            op.id, 
+            COALESCE(mp.displayName, op.packagename, 'Package') AS packageName,
+            op.isAlacarte
+          FROM market_place.processorders po
+          JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+          LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+          WHERE po.id = ?
+        `;
+        const pkgs = await new Promise((res) => {
+          db.collectionofficer.query(pkgSql, [orderInfo.orderId], (e, r) => res(r || []));
+        });
+
+        const packageGroups = [];
+
+        for (const pkg of pkgs) {
+          const itemsSql = `
+            SELECT 
+              pt.id,
+              COALESCE(ci.cropName, mi.displayName, 'Item') AS name,
+              CONCAT(COALESCE(pt.netWeight, 0.5), ' kg') AS weight,
+              pt.pIndex,
+              DATE_FORMAT(COALESCE(pt.createdAt, NOW()), '%h:%i %p') AS packedTime,
+              COALESCE(ci.image, 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=200&auto=format&fit=crop&q=80') AS image
+            FROM market_place.orderpackageitems opi
+            LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            LEFT JOIN positiontracking pt ON pt.orderpackageId = opi.orderPackageId OR pt.orderId = ?
+            LEFT JOIN cropinfo ci ON pt.cropId = ci.id
+            WHERE opi.orderPackageId = ?
+          `;
+          const items = await new Promise((res) => {
+            db.collectionofficer.query(itemsSql, [orderInfo.orderId, pkg.id], (e, r) => res(r || []));
+          });
+
+          const formattedItems = items.map((i, idx) => {
+            let packedByEmpId = defaultPackingOfficers[idx % defaultPackingOfficers.length];
+            if (i.pIndex && i.pIndex > 0) {
+              const matched = assignedOfficers.find((a) => a.pIndex === i.pIndex);
+              if (matched) packedByEmpId = matched.empId;
+            }
+            return {
+              id: i.id || idx + 1,
+              name: i.name,
+              weight: i.weight,
+              packedByEmpId: packedByEmpId,
+              packedTime: i.packedTime,
+              image: i.image,
+            };
+          });
+
+          packageGroups.push({
+            id: pkg.id,
+            title: `${pkg.packageName} (${String(formattedItems.length).padStart(2, "0")})`,
+            count: formattedItems.length,
+            type: pkg.isAlacarte ? "alacarte" : "package",
+            items: formattedItems,
+          });
+        }
+
+        // If no packages found in DB, query positiontracking directly for tracked items
+        if (packageGroups.length === 0) {
+          const sqlItems = `
+            SELECT 
+              pt.id,
+              COALESCE(ci.cropName, 'Item') AS name,
+              CONCAT(COALESCE(pt.netWeight, 0.5), ' kg') AS weight,
+              pt.pIndex,
+              DATE_FORMAT(COALESCE(pt.createdAt, NOW()), '%h:%i %p') AS packedTime,
+              COALESCE(ci.image, 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=200&auto=format&fit=crop&q=80') AS image
+            FROM positiontracking pt
+            LEFT JOIN cropinfo ci ON pt.cropId = ci.id
+            WHERE pt.orderId = ?
+          `;
+          const itemResults = await new Promise((res) => {
+            db.collectionofficer.query(sqlItems, [orderInfo.orderId], (e, r) => res(r || []));
+          });
+
+          const itemsList = itemResults.map((i, idx) => {
+            let packedByEmpId = defaultPackingOfficers[idx % defaultPackingOfficers.length];
+            if (i.pIndex && i.pIndex > 0) {
+              const matched = assignedOfficers.find((a) => a.pIndex === i.pIndex);
+              if (matched) packedByEmpId = matched.empId;
+            }
+            return {
+              id: i.id || idx + 1,
+              name: i.name || "Item",
+              weight: i.weight || "0.5 kg",
+              packedByEmpId: packedByEmpId,
+              packedTime: i.packedTime || "08:00 AM",
+              image: i.image,
+            };
+          });
+
+          packageGroups.push({
+            id: 1,
+            title: `Order Items (${String(itemsList.length).padStart(2, "0")})`,
+            count: itemsList.length,
+            type: "package",
+            items: itemsList,
+          });
+        }
+
+        resolve({
+          orderId: orderInfo.orderId,
+          orderNumber: orderInfo.orderNumber,
+          formattedOrderNumber: orderInfo.formattedOrderNumber,
+          timeSlotLabel: timeSlotLabel,
+          category: orderInfo.category,
+          statusLabel: statusLabel,
+          qrPrintedByEmpId: qrPrintedByEmpId,
+          qrPrintedTime: orderInfo.qrPrintedTime,
+          packageGroups: packageGroups,
+          qcDoneByEmpId: qcDoneByEmpId,
+          qcDoneTime: orderInfo.qcDoneTime,
+        });
+      } catch (e) {
+        console.error("Error building packageGroups for order details:", e);
+        resolve(null);
+      }
+    });
+  });
+};
+
+/**
  * Update distributedtargetitems.orderStatus = 'Opened' and set positiontracking.pIndex = 1
  * @param {number} orderId 
  * @param {number|null} orderpackageId 

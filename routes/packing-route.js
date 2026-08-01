@@ -112,4 +112,18 @@ router.get(
   PackingEp.getQROrders
 );
 
+router.get(
+  "/center-target",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getCenterTarget
+);
+
+router.get(
+  "/order-details/:orderId",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getOrderDetails
+);
+
 module.exports = router;
