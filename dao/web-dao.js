@@ -199,6 +199,38 @@ exports.getRowLiveMonitor = (rowId) => {
           return reject(err);
         }
 
+        // Fetch QC pIndex and max packer pIndex for this row dynamically
+        // so status labels are correct regardless of how many packers are configured
+        const rowConfigSql = `
+          SELECT 
+            MAX(CASE WHEN pp.pType = 'QC' THEN pp.pIndex ELSE NULL END) AS qcPIndex,
+            MAX(CASE WHEN pp.pType = 'NOR' THEN pp.pIndex ELSE NULL END) AS maxPackerPIndex
+          FROM packingpositions pp
+          WHERE pp.rowId = ?
+        `;
+        const rowConfig = await new Promise((res) => {
+          db.collectionofficer.query(rowConfigSql, [rowId], (e, r) => res(e || !r || !r[0] ? {} : r[0]));
+        });
+        // qcPIndex: the actual pIndex value assigned to the QC station in this row
+        // If QC pIndex is NULL in DB, derive it as maxPackerPIndex + 1
+        const maxPackerPIndex = Number(rowConfig.maxPackerPIndex) || 1;
+        const qcPIndex = rowConfig.qcPIndex != null ? Number(rowConfig.qcPIndex) : maxPackerPIndex + 1;
+
+        // Helper: map a numeric pIndex to a status object based on row's actual config
+        const getBoxStatus = (pIdx, orderStatus) => {
+          if (orderStatus === "Pending" || pIdx === 0) {
+            return { status: "QR_PENDING", statusLabel: "QR Pending", statusColor: "#6B7280" };
+          }
+          if (pIdx === qcPIndex) {
+            return { status: "AT_QC", statusLabel: "At QC", statusColor: "#059669" };
+          }
+          if (pIdx > qcPIndex) {
+            return { status: "COMPLETED", statusLabel: "Completed", statusColor: "#10B981" };
+          }
+          // Regular packing positions 1..maxPackerPIndex
+          return { status: `AT_PACKER_${pIdx}`, statusLabel: `At Packer ${pIdx}`, statusColor: pIdx === 1 ? "#2563EB" : "#8B5CF6" };
+        };
+
         const boxes = [];
 
         for (const order of orderResults) {
@@ -236,31 +268,7 @@ exports.getRowLiveMonitor = (rowId) => {
           // Process each package box
           for (const pkg of packages) {
             const pIdx = trackingMap.get(String(pkg.orderpackageId)) || 0;
-            let status = "QR_PENDING";
-            let statusLabel = "QR Pending";
-            let statusColor = "#6B7280"; // Gray
-
-            if (order.orderStatus === "Pending" || pIdx === 0) {
-              status = "QR_PENDING";
-              statusLabel = "QR Pending";
-              statusColor = "#6B7280";
-            } else if (pIdx === 1) {
-              status = "AT_PACKER_1";
-              statusLabel = "At Packer 1";
-              statusColor = "#2563EB";
-            } else if (pIdx === 2) {
-              status = "AT_PACKER_2";
-              statusLabel = "At Packer 2";
-              statusColor = "#8B5CF6";
-            } else if (pIdx === 3) {
-              status = "AT_QC";
-              statusLabel = "At QC";
-              statusColor = "#059669";
-            } else if (pIdx >= 4) {
-              status = "COMPLETED";
-              statusLabel = "Completed";
-              statusColor = "#10B981";
-            }
+            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
 
             boxes.push({
               boxId: `pkg_${pkg.orderpackageId}`,
@@ -290,31 +298,7 @@ exports.getRowLiveMonitor = (rowId) => {
 
           if (addRes.length > 0 && addRes[0].cnt > 0) {
             const pIdx = trackingMap.get("null") || 0;
-            let status = "QR_PENDING";
-            let statusLabel = "QR Pending";
-            let statusColor = "#6B7280";
-
-            if (order.orderStatus === "Pending" || pIdx === 0) {
-              status = "QR_PENDING";
-              statusLabel = "QR Pending";
-              statusColor = "#6B7280";
-            } else if (pIdx === 1) {
-              status = "AT_PACKER_1";
-              statusLabel = "At Packer 1";
-              statusColor = "#2563EB";
-            } else if (pIdx === 2) {
-              status = "AT_PACKER_2";
-              statusLabel = "At Packer 2";
-              statusColor = "#8B5CF6";
-            } else if (pIdx === 3) {
-              status = "AT_QC";
-              statusLabel = "At QC";
-              statusColor = "#059669";
-            } else if (pIdx >= 4) {
-              status = "COMPLETED";
-              statusLabel = "Completed";
-              statusColor = "#10B981";
-            }
+            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
 
             boxes.push({
               boxId: `alacarte_${pOrderId}`,
@@ -370,8 +354,8 @@ exports.getRowLiveMonitor = (rowId) => {
             // Box newly printed / at QR station (pIndex === 0)
             activeBox = boxes.find((b) => b.pIndex === 0) || null;
           } else if (pos.pType === "QC") {
-            // Box actively at QC station (pIndex === 3)
-            activeBox = boxes.find((b) => b.pIndex === 3) || null;
+            // Box at QC station — use the dynamic qcPIndex
+            activeBox = boxes.find((b) => b.pIndex === qcPIndex) || null;
           } else {
             // Box at Packer position pIndex
             activeBox = boxes.find((b) => b.pIndex === pos.pIndex) || null;

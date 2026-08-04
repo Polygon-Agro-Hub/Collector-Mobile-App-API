@@ -45,11 +45,11 @@ exports.getGroupTimeslots = asyncHandler(async (req, res) => {
 
   dbResults.forEach(row => {
     const timeSlot = row.sheduleTime;
-    const app = row.orderApp;
+    const buyerType = row.buyerType || 'Retail';
     const totalCount = row.totalCount || 0;
     const leftCount = Number(row.leftCount) || 0;
 
-    const list = app === 'Marketplace' ? retail : wholesale;
+    const list = buyerType === 'Retail' ? retail : wholesale;
     const item = list.find(g => g.timeSlot === timeSlot);
     
     if (item) {
@@ -86,7 +86,8 @@ exports.getUnassignedOrders = asyncHandler(async (req, res) => {
   }
 
   const sheduleTime = timeSlotMap[timeSlotCode];
-  const orderApp = type.toLowerCase() === "retail" ? "Marketplace" : "Dash";
+  // Map frontend type param to exact marketplaceusers.buyerType value
+  const buyerType = type.toLowerCase() === "retail" ? "Retail" : "Wholesale";
 
   if (!sheduleTime) {
     return res.status(400).json({
@@ -109,7 +110,7 @@ exports.getUnassignedOrders = asyncHandler(async (req, res) => {
     });
   }
 
-  const orders = await assignGroupsDao.getUnassignedOrdersForGroup(sheduleTime, orderApp, companyCenterId);
+  const orders = await assignGroupsDao.getUnassignedOrdersForGroup(sheduleTime, buyerType, companyCenterId);
 
   res.status(200).json({
     success: true,
