@@ -365,7 +365,7 @@ exports.getQROrdersForOfficer = (officerId) => {
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
           0
         ) AS minPIndex,
-        (SELECT COUNT(*) FROM market_place.orderpackage op WHERE op.orderId = po.id OR op.orderId = po.orderId) AS packagesCount,
+        (SELECT COUNT(*) FROM market_place.orderpackage op WHERE op.orderId = po.orderId) AS packagesCount,
         (SELECT COUNT(*) FROM market_place.orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
@@ -394,7 +394,7 @@ exports.getQROrdersForOfficer = (officerId) => {
                   COALESCE((SELECT COUNT(*) FROM market_place.packagedetails pd WHERE pd.packageId = op.packageId), 0)
                 ) AS count
               FROM market_place.processorders po
-              JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+              JOIN market_place.orderpackage op ON po.orderId = op.orderId
               JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
               WHERE po.id = ?
             `;
@@ -594,7 +594,7 @@ exports.getOrderDetails = (orderId) => {
             COALESCE(mp.displayName, op.packagename, 'Package') AS packageName,
             op.isAlacarte
           FROM market_place.processorders po
-          JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+          JOIN market_place.orderpackage op ON po.orderId = op.orderId
           LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
           WHERE po.id = ?
         `;
@@ -780,7 +780,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             const getOrderPkgsSql = `
               SELECT op.id 
               FROM market_place.processorders po
-              JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+              JOIN market_place.orderpackage op ON po.orderId = op.orderId
               WHERE po.id = ?
               ORDER BY op.id ASC
             `;
@@ -1170,7 +1170,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               'À la carte' AS packName,
               'alacarte' AS categoryType
             FROM market_place.processorders po
-            JOIN market_place.orderadditionalitems oai ON (po.orderId = oai.orderId OR po.id = oai.orderId)
+            JOIN market_place.orderadditionalitems oai ON po.orderId = oai.orderId
             JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ? AND mi.id IS NOT NULL
@@ -1189,7 +1189,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               mp.displayName AS packName,
               'package' AS categoryType
             FROM market_place.processorders po
-            JOIN market_place.orderpackage op ON (po.orderId = op.orderId OR po.id = op.orderId)
+            JOIN market_place.orderpackage op ON po.orderId = op.orderId
             JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
             JOIN market_place.orderpackageitems opi ON op.id = opi.orderPackageId
             JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
@@ -1209,7 +1209,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               'À la carte' AS packName,
               'alacarte' AS categoryType
             FROM market_place.processorders po
-            JOIN market_place.orderadditionalitems oai ON (po.orderId = oai.orderId OR po.id = oai.orderId)
+            JOIN market_place.orderadditionalitems oai ON po.orderId = oai.orderId
             JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ?
