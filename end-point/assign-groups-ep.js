@@ -1,4 +1,5 @@
 const assignGroupsDao = require("../dao/assign-groups-dao");
+const packingDao = require("../dao/packing-dao");
 const asyncHandler = require("express-async-handler");
 
 // Time slot code mapping helpers
@@ -10,9 +11,24 @@ const timeSlotMap = {
 
 /**
  * Get timeslot groups for today (split into retail & wholesale)
+ * Scoped to the DCM's own distribution company centre.
  */
 exports.getGroupTimeslots = asyncHandler(async (req, res) => {
-  const dbResults = await assignGroupsDao.getGroupTimeslotCounts();
+  const officerId = req.user.id;
+  let companyCenterId = req.user.companycenterId;
+
+  if (!companyCenterId) {
+    companyCenterId = await packingDao.getCompanyCenterIdForOfficer(officerId);
+  }
+
+  if (!companyCenterId) {
+    return res.status(400).json({
+      success: false,
+      message: "Could not determine the distribution centre for this user."
+    });
+  }
+
+  const dbResults = await assignGroupsDao.getGroupTimeslotCounts(companyCenterId);
   
   // Default structure matching Group.tsx expect
   const retail = [
@@ -57,6 +73,7 @@ exports.getGroupTimeslots = asyncHandler(async (req, res) => {
 
 /**
  * Get unassigned orders for a chosen timeslot group
+ * Scoped to the DCM's own distribution company centre.
  */
 exports.getUnassignedOrders = asyncHandler(async (req, res) => {
   const { timeSlotCode, type } = req.query;
@@ -78,7 +95,21 @@ exports.getUnassignedOrders = asyncHandler(async (req, res) => {
     });
   }
 
-  const orders = await assignGroupsDao.getUnassignedOrdersForGroup(sheduleTime, orderApp);
+  const officerId = req.user.id;
+  let companyCenterId = req.user.companycenterId;
+
+  if (!companyCenterId) {
+    companyCenterId = await packingDao.getCompanyCenterIdForOfficer(officerId);
+  }
+
+  if (!companyCenterId) {
+    return res.status(400).json({
+      success: false,
+      message: "Could not determine the distribution centre for this user."
+    });
+  }
+
+  const orders = await assignGroupsDao.getUnassignedOrdersForGroup(sheduleTime, orderApp, companyCenterId);
 
   res.status(200).json({
     success: true,
