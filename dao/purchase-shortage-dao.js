@@ -65,7 +65,7 @@ exports.getShortagesForOfficer = async (officerId) => {
       ceilingPrice: parseFloat(calculatedCeilingPrice.toFixed(2)),
       gradeAPrice: gradeAPrice,
       image: row.image || "https://images.unsplash.com/photo-1570586437263-ab629fccc818?w=200&auto=format&fit=crop&q=80",
-      reqStatus: isCompleted ? "Completed" : "Pending",
+      reqStatus: row.reqStatus || (isCompleted ? "Completed" : "Pending"),
       assignStatus: row.assignStatus,
       prchQty: prchQty,
       prchPrice: row.prchPrice ? parseFloat(row.prchPrice) : null,
@@ -80,6 +80,7 @@ exports.submitShortagePurchase = async ({
   prchQty,
   prchPrice,
   slip,
+  reqStatus = "Pending",
 }) => {
   const checkSql = `
     SELECT 
@@ -114,7 +115,7 @@ exports.submitShortagePurchase = async ({
   const sql = `
     INSERT INTO collection_officer.shortagepurchase 
       (srtAssignId, prchQty, prchPrice, slip, reqStatus)
-    VALUES (?, ?, ?, ?, 'Completed');
+    VALUES (?, ?, ?, ?, ?);
   `;
 
   const [result] = await db.collectionofficer.promise().query(sql, [
@@ -122,6 +123,7 @@ exports.submitShortagePurchase = async ({
     prchQty,
     prchPrice,
     slip || null,
+    reqStatus || "Pending",
   ]);
 
   return result;
