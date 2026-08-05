@@ -27,7 +27,7 @@ exports.getOfficerShortages = async (req, res) => {
 
 exports.submitPurchase = async (req, res) => {
   try {
-    const { srtAssignId, prchQty, prchPrice, slip } = req.body;
+    const { srtAssignId, prchQty, prchPrice, slip, reqStatus } = req.body;
 
     if (!srtAssignId) {
       return res.status(400).json({
@@ -63,6 +63,7 @@ exports.submitPurchase = async (req, res) => {
       prchQty,
       prchPrice,
       slip: slipUrl,
+      reqStatus: reqStatus || "Pending",
     });
 
     return res.status(200).json({

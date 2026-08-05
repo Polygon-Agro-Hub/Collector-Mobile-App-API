@@ -405,7 +405,7 @@ const generateInvoiceHTML = (
           <p class="headerp">Email Address : info@polygon.lk</p>
         </div>
         <div>
-          ${logoBase64Val ? `<img src="${logoBase64Val}" alt="GoviMart Logo" class="logo" />` : ""}
+          ${logoBase64Val ? `<img src="${logoBase64Val}" alt="Polygon Logo" class="logo" />` : ""}
         </div>
       </div>
 

@@ -26,7 +26,7 @@ router.get(
 router.get(
   "/collection-officerslist",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   managerEp.getCollectionOfficersList,
 );
 
@@ -34,7 +34,7 @@ router.get(
 router.post(
   "/collection-officer/add",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   upload.single("image"),
   managerEp.createCollectionOfficer,
 );
@@ -113,28 +113,28 @@ router.get(
 router.post(
   "/driver/add",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   driverEp.createDriverWithVehicle,
 );
 
 router.get(
   "/driver/check-phone/:phoneNumber",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   driverEp.checkPhoneExists,
 );
 
 router.get(
   "/driver/check-nic/:nicNumber",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   driverEp.checkNicExists,
 );
 
 router.get(
   "/driver/check-email/:email",
   authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
+  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
   driverEp.checkemailExists,
 );
 

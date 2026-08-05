@@ -4,6 +4,7 @@ exports.getShortagesForOfficer = async (officerId) => {
   const sql = `
     SELECT 
       sa.id AS srtAssignId,
+      sa.status AS assignStatus,
       s.mpItemId,
       s.shortageQty,
       sa.qty,
@@ -33,7 +34,10 @@ exports.getShortagesForOfficer = async (officerId) => {
       FROM collection_officer.shortagepurchase
       GROUP BY srtAssignId
     ) sp ON sa.id = sp.srtAssignId
-    WHERE sa.assignOfficerId = ?
+    WHERE sa.status = 'Finalize'
+      AND sa.assignOfficerId = ?
+      AND sa.assignOfficerId IS NOT NULL
+      AND DATE(sa.finalizeAt) = CURDATE()
     ORDER BY sa.id DESC;
   `;
 
@@ -48,7 +52,6 @@ exports.getShortagesForOfficer = async (officerId) => {
     const prchQty = parseFloat(row.prchQty || 0);
     const remainingKg = Math.max(0, assignedQty - prchQty);
 
-    // An item is only completed if no remaining kg left to buy
     const isCompleted = remainingKg === 0;
 
     return {
@@ -56,13 +59,14 @@ exports.getShortagesForOfficer = async (officerId) => {
       mpItemId: row.mpItemId,
       name: row.name,
       assignedQty: assignedQty,
-      kg: remainingKg, // Displays remaining shortage KG left to find
+      kg: remainingKg,
       shortageQty: parseFloat(row.shortageQty || 0),
       ceilingPercent: ceilingPercent,
       ceilingPrice: parseFloat(calculatedCeilingPrice.toFixed(2)),
       gradeAPrice: gradeAPrice,
       image: row.image || "https://images.unsplash.com/photo-1570586437263-ab629fccc818?w=200&auto=format&fit=crop&q=80",
-      reqStatus: isCompleted ? "Completed" : "Pending",
+      reqStatus: row.reqStatus || (isCompleted ? "Completed" : "Pending"),
+      assignStatus: row.assignStatus,
       prchQty: prchQty,
       prchPrice: row.prchPrice ? parseFloat(row.prchPrice) : null,
       slip: row.slip || null,
@@ -70,11 +74,13 @@ exports.getShortagesForOfficer = async (officerId) => {
   });
 };
 
+
 exports.submitShortagePurchase = async ({
   srtAssignId,
   prchQty,
   prchPrice,
   slip,
+  reqStatus = "Pending",
 }) => {
   const checkSql = `
     SELECT 
@@ -109,7 +115,7 @@ exports.submitShortagePurchase = async ({
   const sql = `
     INSERT INTO collection_officer.shortagepurchase 
       (srtAssignId, prchQty, prchPrice, slip, reqStatus)
-    VALUES (?, ?, ?, ?, 'Completed');
+    VALUES (?, ?, ?, ?, ?);
   `;
 
   const [result] = await db.collectionofficer.promise().query(sql, [
@@ -117,6 +123,7 @@ exports.submitShortagePurchase = async ({
     prchQty,
     prchPrice,
     slip || null,
+    reqStatus || "Pending",
   ]);
 
   return result;

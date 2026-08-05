@@ -10,16 +10,17 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
     const sql = `
       SELECT 
         o.sheduleTime,
-        o.orderApp,
+        COALESCE(mu.buyerType, 'Retail') AS buyerType,
         COUNT(po.id) AS totalCount,
         SUM(CASE WHEN dti.id IS NULL AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0) THEN 1 ELSE 0 END) AS leftCount
       FROM market_place.processorders po
       JOIN market_place.orders o ON po.orderId = o.id
-      JOIN distributedcompanycenter dcen ON o.centerId = dcen.centerId
+      JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
+      LEFT JOIN market_place.marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(o.sheduleDate) = CURDATE()
         AND dcen.id = ?
-      GROUP BY o.sheduleTime, o.orderApp
+      GROUP BY o.sheduleTime, COALESCE(mu.buyerType, 'Retail')
     `;
     db.collectionofficer.query(sql, [companyCenterId], (err, results) => {
       if (err) {
@@ -38,7 +39,7 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
  * @param {number} companyCenterId
  * @returns {Promise<Array>}
  */
-exports.getUnassignedOrdersForGroup = (sheduleTime, orderApp, companyCenterId) => {
+exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT 
@@ -51,18 +52,19 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, orderApp, companyCenterId) =
         END AS subtitle
       FROM market_place.processorders po
       JOIN market_place.orders o ON po.orderId = o.id
-      JOIN distributedcompanycenter dcen ON o.centerId = dcen.centerId
+      JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
+      LEFT JOIN market_place.marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN market_place.orderhouse oh ON o.id = oh.orderId
       LEFT JOIN market_place.orderapartment oa ON o.id = oa.orderId
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(o.sheduleDate) = CURDATE()
         AND dti.id IS NULL
         AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0)
-        AND o.orderApp = ?
+        AND COALESCE(mu.buyerType, 'Retail') = ?
         AND o.sheduleTime = ?
         AND dcen.id = ?
     `;
-    db.collectionofficer.query(sql, [orderApp, sheduleTime, companyCenterId], (err, results) => {
+    db.collectionofficer.query(sql, [buyerType, sheduleTime, companyCenterId], (err, results) => {
       if (err) {
         console.error("Error in getUnassignedOrdersForGroup:", err);
         return reject(err);

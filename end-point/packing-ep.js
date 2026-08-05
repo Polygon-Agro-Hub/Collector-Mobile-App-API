@@ -1,4 +1,5 @@
 const packingDao = require("../dao/packing-dao");
+const invoicePdfEp = require("./invoice-pdf-ep");
 const asyncHandler = require("express-async-handler");
 
 /**
@@ -66,6 +67,13 @@ exports.assignPosition = asyncHandler(async (req, res) => {
 
   try {
     const result = await packingDao.assignOfficerToPosition(officerId, Number(positionId));
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("rows_updated");
+      io.emit("position_updated", { positionId: Number(positionId), status: "Occupied", officerId });
+    }
+
     res.status(200).json({
       success: true,
       message: "Officer assigned to position successfully",
@@ -212,6 +220,7 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
  */
 exports.markOrderAsCompleted = asyncHandler(async (req, res) => {
   const { orderId, rowId } = req.body;
+  const officerId = req.user?.id || null;
 
   if (!orderId) {
     return res.status(400).json({
@@ -220,12 +229,20 @@ exports.markOrderAsCompleted = asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await packingDao.markOrderAsCompleted(Number(orderId));
+  const result = await packingDao.markOrderAsCompleted(Number(orderId), officerId);
 
   const io = req.app.get("io");
   if (io) {
     io.emit("order_completed", { orderId: Number(orderId), orderStatus: "Completed" });
     if (rowId) io.to(`row_${rowId}`).emit("order_completed", { orderId: Number(orderId), orderStatus: "Completed" });
+  }
+
+  // If the last box just completed QC → automatically send Post Invoice to customer's email
+  if (result?.isFullyCompleted) {
+    // Fire-and-forget: do NOT await so API response is not delayed
+    invoicePdfEp.sendSinglePostInvoiceEmail(Number(orderId)).catch((err) => {
+      console.error(`❌ Background invoice email failed for orderId=${orderId}:`, err);
+    });
   }
 
   res.status(200).json({
