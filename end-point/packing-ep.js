@@ -67,6 +67,13 @@ exports.assignPosition = asyncHandler(async (req, res) => {
 
   try {
     const result = await packingDao.assignOfficerToPosition(officerId, Number(positionId));
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("rows_updated");
+      io.emit("position_updated", { positionId: Number(positionId), status: "Occupied", officerId });
+    }
+
     res.status(200).json({
       success: true,
       message: "Officer assigned to position successfully",

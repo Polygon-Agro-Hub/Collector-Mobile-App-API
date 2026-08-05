@@ -334,6 +334,7 @@ exports.getCropsForPosition = (positionId) => {
       JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
       LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
       WHERE pc.posId = ?
+      ORDER BY mi.displayName ASC
     `;
     db.collectionofficer.query(sql, [positionId], (err, results) => {
       if (err) {
@@ -359,7 +360,10 @@ exports.getQROrdersForOfficer = (officerId) => {
         po.invNo AS orderNumber,
         CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
         dt.timeSlot,
-        CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE 'Delivery' END AS category,
+        CASE 
+          WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
+          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+        END AS category,
         dti.orderStatus,
         COALESCE(
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
@@ -373,6 +377,7 @@ exports.getQROrdersForOfficer = (officerId) => {
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
+      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
       WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE() AND DATE(dt.createdAt) = CURDATE()
       ORDER BY po.id ASC
     `;
@@ -449,7 +454,10 @@ exports.getCenterTargetOrders = () => {
         CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
         CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
         dt.timeSlot,
-        CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE COALESCE(o.delivaryMethod, 'Bambalapitiya') END AS category,
+        CASE 
+          WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
+          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+        END AS category,
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
         COALESCE(
@@ -465,6 +473,7 @@ exports.getCenterTargetOrders = () => {
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
       WHERE DATE(dt.createdAt) = CURDATE()
       ORDER BY dt.timeSlot ASC, po.id ASC
     `;
@@ -494,16 +503,20 @@ exports.getOrderDetails = (orderId) => {
         CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
         dt.id AS targetId,
         dt.timeSlot,
-        CASE WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' ELSE COALESCE(o.delivaryMethod, 'Bambalapitiya') END AS category,
+        CASE 
+          WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
+          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+        END AS category,
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
-        DATE_FORMAT(COALESCE(dt.createdAt, po.createdAt), '%h:%i %p') AS qrPrintedTime,
+        DATE_FORMAT(COALESCE(dti.qrPrintTime, dt.createdAt, po.createdAt), '%h:%i %p') AS qrPrintedTime,
         DATE_FORMAT(po.packTime, '%h:%i %p') AS qcDoneTime
       FROM market_place.processorders po
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN distributedtargetitems dti ON dti.orderId = po.id
       LEFT JOIN distributedtarget dt ON dti.targetId = dt.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
       WHERE po.id = ? OR po.invNo = ?
       LIMIT 1
     `;
@@ -734,7 +747,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           const updateStatusSql = `
             UPDATE distributedtargetitems 
             SET orderStatus = 'Opened',
-                qrPrintTime = CASE WHEN qrPrintTime IS NULL THEN NOW() ELSE qrPrintTime END
+                qrPrintTime = NOW()
             WHERE orderId = ?
           `;
           await new Promise((res, rej) => {
@@ -796,6 +809,35 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               const idx = Math.min(Math.max(packageIndex, 0), pkgs.length - 1);
               validPackageId = pkgs[idx].id;
             }
+          }
+
+          // 2a. Officer Assignment Check for Position 1 (pIndex = 1)
+          const checkOfficerP1Sql = `
+            SELECT tp.id, tp.officerId
+            FROM targetposition tp
+            JOIN packingpositions pp ON tp.positionId = pp.id
+            JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
+            JOIN distributedtargetitems dti ON dt.id = dti.targetId
+            WHERE dti.orderId = ? AND pp.pIndex = 1 AND DATE(tp.createdAt) = CURDATE()
+            LIMIT 1
+          `;
+
+          const officerP1Res = await new Promise((res) => {
+            connection.query(checkOfficerP1Sql, [orderId], (err, results) => {
+              res(err ? [] : results || []);
+            });
+          });
+
+          if (!officerP1Res || officerP1Res.length === 0) {
+            connection.rollback(() => {
+              connection.release();
+              resolve({
+                success: false,
+                code: "NO_OFFICER_ASSIGNED",
+                message: "No packing position user assigned for Packing Position 1. Please assign an officer to this position first."
+              });
+            });
+            return;
           }
 
           // 2b. Station Occupied Validation Check for Position 1 (pIndex = 1)
@@ -869,7 +911,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             const updateTrackingSql = `
               UPDATE positiontracking 
               SET pIndex = 1 
-              WHERE orderId = ? AND orderpackageId IS NULL
+              WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0)
             `;
             const updateRes = await new Promise((res, rej) => {
               connection.query(updateTrackingSql, [orderId], (err, result) => {
@@ -879,6 +921,13 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             });
 
             if (updateRes.affectedRows === 0) {
+              await new Promise((res) => {
+                connection.query(
+                  `DELETE FROM positiontracking WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0)`,
+                  [orderId],
+                  () => res(true)
+                );
+              });
               const insertTrackingSql = `
                 INSERT INTO positiontracking (orderId, orderpackageId, pIndex, createdAt) 
                 VALUES (?, NULL, 1, NOW())
@@ -929,13 +978,15 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
     const getQcPIndexSql = `
       SELECT 
         COALESCE(
-          MAX(CASE WHEN pp.pType = 'QC' THEN pp.pIndex ELSE NULL END),
-          MAX(CASE WHEN pp.pType = 'NOR' THEN pp.pIndex ELSE NULL END) + 1,
-          3
+          (
+            SELECT MAX(pp.pIndex)
+            FROM packingpositions pp
+            WHERE pp.rowId = dt.rowId AND pp.pType = 'NOR'
+          ) + 1,
+          2
         ) AS qcPIndex
       FROM distributedtargetitems dti
       JOIN distributedtarget dt ON dti.targetId = dt.id
-      JOIN packingpositions pp ON dt.rowId = pp.rowId
       WHERE dti.orderId = ?
       LIMIT 1
     `;
@@ -947,38 +998,78 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
       // Only check for station busy if nextStep is <= qcPIndex (still a real station)
       // If nextStep > qcPIndex, the box is leaving QC — no next station to block it
       if (nextStep && nextStep <= qcPIndex) {
-        const checkOccupiedSql = `
-          SELECT pt.id, pt.orderpackageId, pt.orderId, pt.pIndex
-          FROM positiontracking pt
-          JOIN distributedtargetitems dti ON pt.orderId = dti.orderId
-          JOIN distributedtarget dt ON dti.targetId = dt.id
-          WHERE dt.rowId = (
-            SELECT dt_sub.rowId 
-            FROM positiontracking pt_sub
-            JOIN distributedtargetitems dti_sub ON pt_sub.orderId = dti_sub.orderId
-            JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
-            WHERE pt_sub.orderId = ? LIMIT 1
-          )
-          AND dti.orderStatus = 'Opened'
-          AND pt.pIndex = ?
+        const targetStationName = nextStep === qcPIndex ? "QC Station" : `Packing Position ${nextStep}`;
+
+        // 1. Officer Assignment Check for target position
+        const checkOfficerNextSql = `
+          SELECT tp.id, tp.officerId
+          FROM targetposition tp
+          JOIN packingpositions pp ON tp.positionId = pp.id
+          JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
+          JOIN distributedtargetitems dti ON dt.id = dti.targetId
+          WHERE dti.orderId = ? 
+            AND DATE(tp.createdAt) = CURDATE()
+            AND (
+              (${nextStep} = ${qcPIndex} AND pp.pType = 'QC') OR
+              (pp.pType = 'NOR' AND pp.pIndex = ${nextStep})
+            )
           LIMIT 1
         `;
 
-        db.collectionofficer.query(checkOccupiedSql, [orderId, nextStep], (checkErr, checkRows) => {
-          if (checkErr) {
-            console.error("Error checking next station occupancy:", checkErr);
+        db.collectionofficer.query(checkOfficerNextSql, [orderId], (offErr, offRows) => {
+          if (offErr) {
+            console.error("Error checking officer assignment for next station:", offErr);
           }
 
-          if (checkRows && checkRows.length > 0) {
-            const targetStationName = nextStep === qcPIndex ? "QC Station" : `Packing Position ${nextStep}`;
+          if (!offRows || offRows.length === 0) {
             return resolve({
               success: false,
-              isOccupied: true,
-              message: `The ${targetStationName} is currently busy with another package box. Please wait until they clear their current box.`
+              code: "NO_OFFICER_ASSIGNED",
+              message: `No packing position user assigned for ${targetStationName}. Please assign an officer to this position first.`
             });
           }
 
-          executeUpdate(qcPIndex, maxPIndex);
+          const validPkg = (orderpackageId !== null && orderpackageId !== undefined && orderpackageId !== "alacarte" && !isNaN(Number(orderpackageId)))
+            ? Number(orderpackageId)
+            : null;
+
+          const checkOccupiedSql = `
+            SELECT pt.id, pt.orderpackageId, pt.orderId, pt.pIndex
+            FROM positiontracking pt
+            JOIN distributedtargetitems dti ON pt.orderId = dti.orderId
+            JOIN distributedtarget dt ON dti.targetId = dt.id
+            WHERE dt.rowId = (
+              SELECT dt_sub.rowId 
+              FROM distributedtargetitems dti_sub
+              JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
+              WHERE dti_sub.orderId = ? LIMIT 1
+            )
+            AND dti.orderStatus = 'Opened'
+            AND DATE(dt.createdAt) = CURDATE()
+            AND pt.pIndex = ?
+            AND NOT (pt.orderId = ? AND (${validPkg ? 'pt.orderpackageId = ?' : '(pt.orderpackageId IS NULL OR pt.orderpackageId = 0)'}))
+            LIMIT 1
+          `;
+
+          const checkParams = validPkg
+            ? [orderId, nextStep, orderId, validPkg]
+            : [orderId, nextStep, orderId];
+
+          db.collectionofficer.query(checkOccupiedSql, checkParams, (checkErr, checkRows) => {
+            if (checkErr) {
+              console.error("Error checking next station occupancy:", checkErr);
+            }
+
+            if (checkRows && checkRows.length > 0) {
+              return resolve({
+                success: false,
+                isOccupied: true,
+                message: `The ${targetStationName} is currently busy with another package box. Please wait until they clear their current box.`
+              });
+            }
+
+            executeUpdate(qcPIndex, maxPIndex);
+          });
         });
       } else {
         // nextStep > qcPIndex → advancing past QC (completing QC) — no busy check needed
@@ -1004,7 +1095,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         sql += ` AND orderpackageId = ?`;
         params.push(Number(orderpackageId));
       } else {
-        sql += ` AND orderpackageId IS NULL`;
+        sql += ` AND (orderpackageId IS NULL OR orderpackageId = 0)`;
       }
 
       if (currentPIndex !== null && currentPIndex > 0) {
@@ -1024,11 +1115,34 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         console.log("=== DAO EXECUTE UPDATE RESULT ===", result);
 
         if (!result || result.affectedRows === 0) {
-          return resolve({
-            success: false,
-            affectedRows: 0,
-            message: "The next station is currently busy or the package has already been cleared."
+          // Fallback: If positiontracking row did not exist yet for this package, insert it directly at nextStep
+          const targetPkgId = isPackageIdValid ? Number(orderpackageId) : null;
+          const targetStep = nextStep || 1;
+
+          // Delete any existing stale row for this package/order before inserting to prevent duplicate records
+          const deleteStaleSql = isPackageIdValid
+            ? `DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId = ?`
+            : `DELETE FROM positiontracking WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0)`;
+          const deleteParams = isPackageIdValid ? [orderId, targetPkgId] : [orderId];
+
+          db.collectionofficer.query(deleteStaleSql, deleteParams, () => {
+            const insertSql = `
+              INSERT INTO positiontracking (orderId, orderpackageId, pIndex, createdAt) 
+              VALUES (?, ?, ?, NOW())
+            `;
+            db.collectionofficer.query(insertSql, [orderId, targetPkgId, targetStep], (insErr, insRes) => {
+              if (insErr) {
+                console.error("Error inserting fallback positiontracking:", insErr);
+                return resolve({
+                  success: false,
+                  affectedRows: 0,
+                  message: "The next station is currently busy or the package has already been cleared."
+                });
+              }
+              resolve({ success: true, affectedRows: insRes.affectedRows || 1 });
+            });
           });
+          return;
         }
         resolve({ success: true, affectedRows: result.affectedRows });
       });
@@ -1048,13 +1162,15 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
     const getQcPIndexSql = `
       SELECT 
         COALESCE(
-          MAX(CASE WHEN pp.pType = 'QC' THEN pp.pIndex ELSE NULL END),
-          MAX(CASE WHEN pp.pType = 'NOR' THEN pp.pIndex ELSE NULL END) + 1,
-          3
+          (
+            SELECT MAX(pp.pIndex)
+            FROM packingpositions pp
+            WHERE pp.rowId = dt.rowId AND pp.pType = 'NOR'
+          ) + 1,
+          2
         ) AS qcPIndex
       FROM distributedtargetitems dti
       JOIN distributedtarget dt ON dti.targetId = dt.id
-      JOIN packingpositions pp ON dt.rowId = pp.rowId
       WHERE dti.orderId = ?
       LIMIT 1
     `;
@@ -1108,7 +1224,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
             `;
             db.collectionofficer.query(updatePoSql, [officerId, orderId], (poErr) => {
               if (poErr) {
-                console.error("Error updating packBy/packTime/status on processorders:", poErr);
+                console.error("Error updating processorders on QC completion:", poErr);
               }
               resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
             });
@@ -1237,7 +1353,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               opi.id AS id,
               mi.displayName AS name,
-              CONCAT(ROUND(COALESCE(opi.qty, 1), 1), ' kg') AS weight,
+              CONCAT(ROUND(COALESCE(opi.qty, 1), 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
@@ -1276,7 +1392,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               mi.id,
               mi.displayName AS name,
-              CONCAT(ROUND(SUM(COALESCE(opi.qty, 1)), 1), ' kg') AS weight,
+              CONCAT(ROUND(SUM(COALESCE(opi.qty, 1)), 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
@@ -1338,6 +1454,8 @@ exports.getOfficerActiveOrder = (officerId) => {
           activeOrder.orderItems = orderItems;
         }
 
+        // Sort items A to Z (ascending alphabetical order by item name)
+        activeOrder.orderItems.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         activeOrder.allOrderItems = orderItems;
       } catch (e) {
         console.error("Error populating order items in getOfficerActiveOrder:", e);
