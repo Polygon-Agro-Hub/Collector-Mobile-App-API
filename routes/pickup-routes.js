@@ -49,4 +49,17 @@ router.post(
   pickupEp.updateCashReceived,
 );
 
+router.post(
+  "/deposit-cash",
+  auth,
+  checkRole([
+    ROLES.COLLECTION_OFFICER,
+    ROLES.COLLECTION_MANAGER,
+    ROLES.DISTRIBUTION_OFFICER,
+    ROLES.DISTRIBUTION_MANAGER,
+  ]),
+  upload.single("slip"),
+  pickupEp.depositCash,
+);
+
 module.exports = router;

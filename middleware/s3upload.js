@@ -32,6 +32,8 @@ const uploadFileToS3 = async (fileBuffer, fileName, keyPrefix) => {
         webp: "image/webp",
         svg: "image/svg+xml",
         pdf: "application/pdf",
+        heic: "image/heic",
+        heif: "image/heif",
         txt: "text/plain",
         json: "application/json",
         mp4: "video/mp4",

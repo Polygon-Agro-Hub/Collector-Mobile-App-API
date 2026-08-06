@@ -256,3 +256,81 @@ exports.updateCashReceived = asyncHandler(async (req, res) => {
         });
     }
 });
+
+exports.depositCash = async (req, res) => {
+    try {
+        const officerId = req.user.id;
+        const { pickupOrderIds } = req.body;
+        const slipFile = req.file;
+
+        if (!slipFile) {
+            return res.status(400).json({
+                status: "error",
+                message: "Transfer slip is required",
+            });
+        }
+
+        let parsedIds;
+        try {
+            parsedIds =
+                typeof pickupOrderIds === "string"
+                    ? JSON.parse(pickupOrderIds)
+                    : pickupOrderIds;
+        } catch (parseError) {
+            return res.status(400).json({
+                status: "error",
+                message: "Invalid pickupOrderIds format",
+            });
+        }
+
+        if (!Array.isArray(parsedIds) || parsedIds.length === 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "pickupOrderIds is required",
+            });
+        }
+
+        const allowedTypes = [
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "application/pdf",
+            "image/heic",
+            "image/heif",
+        ];
+        if (!allowedTypes.includes(slipFile.mimetype)) {
+            return res.status(400).json({
+                status: "error",
+                message: "Only JPEG, PNG, HEIC, HEIF images and PDF files are allowed",
+            });
+        }
+
+        const slipUrl = await uploadFileToS3(
+            slipFile.buffer,
+            slipFile.originalname,
+            "pickup-transaction-slips",
+        );
+
+        const result = await pickupDao.depositCash(officerId, parsedIds, slipUrl);
+
+        return res.status(201).json({
+            status: "success",
+            message: "Deposit submitted for review",
+            data: result,
+        });
+    } catch (error) {
+        console.error("Error depositing cash:", error);
+
+        if (error.message === "Failed to upload file to R2") {
+            return res.status(500).json({
+                status: "error",
+                message: "Failed to upload transfer slip",
+            });
+        }
+
+        return res.status(500).json({
+            status: "error",
+            message: "Internal Server Error",
+        });
+    }
+};
