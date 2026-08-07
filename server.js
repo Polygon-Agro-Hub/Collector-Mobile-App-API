@@ -36,6 +36,7 @@ const purchaseShortageRoute = require("./routes/purchase-shortage-route");
 const webRoute = require("./routes/web-route");
 const farmerEp = require("./end-point/farmer-ep");
 
+// Initialize Express app and HTTP server with Socket.IO
 const mainApp = express();
 const server = http.createServer(mainApp);
 const io = new Server(server, {
