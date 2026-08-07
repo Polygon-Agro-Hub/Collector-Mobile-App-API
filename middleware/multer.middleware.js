@@ -4,7 +4,7 @@ const path = require("path");
 const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png/;
+    const filetypes = /jpeg|jpg|png|pdf|heic|heif/;
     const extname = filetypes.test(
       path.extname(file.originalname).toLowerCase(),
     );
@@ -13,7 +13,7 @@ const upload = multer({
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      return cb(new Error("Only images are allowed"));
+      return cb(new Error("Only images (JPEG, PNG, HEIC, HEIF) and PDFs are allowed"));
     }
   },
 });

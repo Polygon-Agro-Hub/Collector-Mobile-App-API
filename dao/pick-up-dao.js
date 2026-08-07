@@ -124,7 +124,7 @@ exports.updatePickupDetails = async (
             WHERE invNo = ?
         `;
 
-        const [processOrderResult] = await connection.promise().query(getProcessOrderQuery, [
+        const [processOrderResult] = await connection.query(getProcessOrderQuery, [
             orderId,
         ]);
 
@@ -147,7 +147,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            const [orderResult] = await connection.promise().query(getOrderAmountQuery, [
+            const [orderResult] = await connection.query(getOrderAmountQuery, [
                 processOrder.orderId,
             ]);
 
@@ -170,7 +170,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            await connection.promise().query(updateProcessOrderQuery, [
+            await connection.query(updateProcessOrderQuery, [
                 "Picked up",
                 fullTotalAmount,
                 moneyPaidAmount,
@@ -185,7 +185,7 @@ exports.updatePickupDetails = async (
                 WHERE id = ?
             `;
 
-            await connection.promise().query(updateStatusQuery, [processOrderId]);
+            await connection.query(updateStatusQuery, [processOrderId]);
         }
 
         let insertQuery;
@@ -220,7 +220,7 @@ exports.updatePickupDetails = async (
             throw new Error("Invalid role for pickup details update");
         }
 
-        const [result] = await connection.promise().query(insertQuery, insertParams);
+        const [result] = await connection.query(insertQuery, insertParams);
 
         await connection.commit();
 
@@ -252,6 +252,7 @@ exports.getReceivedOrders = (officerId) => {
                 po.id AS pickupOrderId,
                 po.orderId AS pickupOrderOrderId,
                 po.orderIssuedOfficer,
+                po.transId,
                 po.handOverOfficer,
                 po.signature,
                 po.handOverPrice,
@@ -292,6 +293,7 @@ exports.getReceivedOrders = (officerId) => {
                 ON pr.orderId = o.id
             WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
                 AND pr.paymentMethod = 'Cash'
+                AND po.transId IS NULL
             
             UNION ALL
             
@@ -349,14 +351,17 @@ exports.getReceivedOrders = (officerId) => {
             [officerId, officerId, officerId],
             (error, results) => {
                 if (error) {
-                    console.warn("⚠️ Querying driverorders failed due to schema mismatch. Falling back to pickuporders only.");
-                    
+                    console.warn(
+                        "⚠️ Querying driverorders failed due to schema mismatch. Falling back to pickuporders only.",
+                    );
+
                     const fallbackQuery = `
                         SELECT 
                             'pickup' AS orderType,
                             po.id AS pickupOrderId,
                             po.orderId AS pickupOrderOrderId,
                             po.orderIssuedOfficer,
+                            po.transId,
                             po.handOverOfficer,
                             po.signature,
                             po.handOverPrice,
@@ -397,19 +402,20 @@ exports.getReceivedOrders = (officerId) => {
                             ON pr.orderId = o.id
                         WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
                             AND pr.paymentMethod = 'Cash'
+                            AND po.transId IS NULL
                         ORDER BY orderCreatedAt DESC
                     `;
-                    
+
                     db.collectionofficer.query(
                         fallbackQuery,
                         [officerId, officerId],
                         (fallbackError, fallbackResults) => {
                             if (fallbackError) {
                                 console.error("❌ Fallback query also failed:", fallbackError);
-                                return resolve([]); // Return empty to prevent 500 error
+                                return resolve([]);
                             }
                             resolve(fallbackResults);
-                        }
+                        },
                     );
                     return;
                 }
@@ -674,4 +680,101 @@ exports.getOfficerByEmpId = (empId) => {
             });
         });
     });
+};
+
+exports.depositCash = async (officerId, pickupOrderIds, slipUrl) => {
+    const connection = await db.collectionofficer.promise().getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const getEmpIdQuery = `
+            SELECT empId 
+            FROM collection_officer.collectionofficer 
+            WHERE id = ?
+        `;
+        const [officerResult] = await connection.query(getEmpIdQuery, [officerId]);
+
+        if (!officerResult || officerResult.length === 0) {
+            throw new Error("Officer not found");
+        }
+
+        const empId = officerResult[0].empId;
+
+        if (!empId) {
+            throw new Error("Officer does not have a valid empId");
+        }
+
+        const digitsOnly = empId.match(/\d+/g)?.join("") || "";
+
+        if (!digitsOnly) {
+            throw new Error("Officer empId does not contain any digits");
+        }
+
+        const empIdPadded = digitsOnly.padStart(5, "0").slice(-5);
+
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const dateStr = `${yy}${mm}${dd}`;
+        const prefix = `P${empIdPadded}${dateStr}`;
+
+        const countQuery = `
+            SELECT COUNT(*) AS count 
+            FROM collection_officer.pickuptransaction 
+            WHERE transactionId LIKE ?
+            FOR UPDATE
+        `;
+        const [countResult] = await connection.query(countQuery, [`${prefix}%`]);
+
+        const seq = String(countResult[0].count + 1).padStart(2, "0");
+        const transactionId = `${prefix}${seq}`;
+
+        const insertTransactionQuery = `
+            INSERT INTO collection_officer.pickuptransaction 
+            (transactionId, officerId, slip, transactionStatus, createdAt) 
+            VALUES (?, ?, ?, 'Pending', NOW())
+        `;
+
+        const [insertResult] = await connection.query(insertTransactionQuery, [
+            transactionId,
+            officerId,
+            slipUrl,
+        ]);
+
+        const pickupTransactionRowId = insertResult.insertId;
+
+        const validIds = pickupOrderIds.filter(
+            (id) => id !== undefined && id !== null,
+        );
+
+        if (validIds.length > 0) {
+            const updatePickupOrdersQuery = `
+                UPDATE collection_officer.pickuporders 
+                SET transId = ? 
+                WHERE id IN (?)
+            `;
+
+            await connection.query(updatePickupOrdersQuery, [
+                pickupTransactionRowId,
+                validIds,
+            ]);
+        }
+
+        await connection.commit();
+
+        return {
+            transactionId,
+            insertId: pickupTransactionRowId,
+            transactionStatus: "Pending",
+            updatedOrders: validIds,
+        };
+    } catch (error) {
+        await connection.rollback();
+        console.error("Error in depositCash DAO:", error);
+        throw error;
+    } finally {
+        connection.release();
+    }
 };
