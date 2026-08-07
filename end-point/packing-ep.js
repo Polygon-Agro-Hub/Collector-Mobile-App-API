@@ -155,7 +155,8 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
     orderpackageId ? Number(orderpackageId) : null,
     isPackage !== undefined ? Number(isPackage) : null,
     packageIndex !== undefined ? Number(packageIndex) : 0,
-    Boolean(isMainContainer)
+    Boolean(isMainContainer),
+    req.user ? Number(req.user.id) : null
   );
 
   if (result && result.success === false) {
@@ -188,10 +189,13 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
     });
   }
 
+  const officerId = req.user?.id || null;
+
   const result = await packingDao.advancePositionIndex(
     Number(orderId),
     orderpackageId ? Number(orderpackageId) : null,
-    currentPIndex !== undefined ? Number(currentPIndex) : null
+    currentPIndex !== undefined ? Number(currentPIndex) : null,
+    officerId
   );
 
   if (!result || !result.success || result.affectedRows === 0) {

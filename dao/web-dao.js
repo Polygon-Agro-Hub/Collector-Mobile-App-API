@@ -251,7 +251,7 @@ exports.getRowLiveMonitor = (rowId) => {
 
           // Fetch position tracking for this order
           const trackingSql = `
-            SELECT id, orderpackageId, pIndex 
+            SELECT id, orderpackageId, pIndex, isMainContainer 
             FROM positiontracking 
             WHERE orderId = ?
           `;
@@ -261,9 +261,46 @@ exports.getRowLiveMonitor = (rowId) => {
 
           const trackingMap = new Map();
           trackingRows.forEach((t) => {
-            const key = t.orderpackageId ? String(t.orderpackageId) : "null";
+            const key = t.isMainContainer === 1 
+              ? "-1" 
+              : t.orderpackageId 
+                ? String(t.orderpackageId) 
+                : "null";
             trackingMap.set(key, t.pIndex);
           });
+
+          // Check if à la carte items exist
+          const addSql = `
+            SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
+            WHERE orderId = ?
+          `;
+          const addRes = await new Promise((res) => {
+            db.collectionofficer.query(addSql, [mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
+          });
+          const hasAlacarte = addRes.length > 0 && addRes[0].cnt > 0;
+
+          // If multiple boxes exist, display Main Container (orderpackageId = -1) first
+          const totalPhysicalBoxes = packages.length + (hasAlacarte ? 1 : 0);
+          if (totalPhysicalBoxes > 1) {
+            const pIdx = trackingMap.get("-1") || 0;
+            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+
+            boxes.push({
+              boxId: `main_${pOrderId}`,
+              orderpackageId: -1,
+              processOrderId: pOrderId,
+              invoiceNumber: order.invoiceNumber,
+              formattedInvoice: order.formattedInvoice,
+              timeSlot: order.timeSlot,
+              boxTitle: "Main Container",
+              boxType: "Package",
+              qrCode: order.invoiceNumber,
+              pIndex: pIdx,
+              status: status,
+              statusLabel: statusLabel,
+              statusColor: statusColor,
+            });
+          }
 
           // Process each package box
           for (const pkg of packages) {
@@ -287,16 +324,7 @@ exports.getRowLiveMonitor = (rowId) => {
             });
           }
 
-          // Check if à la carte items exist
-          const addSql = `
-            SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
-            WHERE orderId = ?
-          `;
-          const addRes = await new Promise((res) => {
-            db.collectionofficer.query(addSql, [mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
-          });
-
-          if (addRes.length > 0 && addRes[0].cnt > 0) {
+          if (hasAlacarte) {
             const pIdx = trackingMap.get("null") || 0;
             const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
 

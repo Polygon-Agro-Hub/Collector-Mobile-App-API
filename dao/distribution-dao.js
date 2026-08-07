@@ -1558,7 +1558,7 @@ exports.updateoutForDelivery = (orderId, userId) => {
 
     const insertNotificationSql = `
             INSERT INTO market_place.dashnotification (orderId, title)
-            SELECT po.id, 'Order is Out for Delivery'
+            SELECT po.id, 'Order is Out For Delivery'
             FROM market_place.processorders AS po
             INNER JOIN market_place.orders AS o ON po.orderId = o.id
             WHERE po.orderId = ? AND o.delivaryMethod != 'Pickup'

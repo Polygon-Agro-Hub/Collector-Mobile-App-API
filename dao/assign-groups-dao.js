@@ -234,13 +234,13 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds) => {
               });
             });
 
-            // Query additional items linked to master orders.id OR processorders.id
+            // Query additional items linked only to master orders.id (processOrderId collisions avoided)
             const getAdditionalSql = `
               SELECT id FROM market_place.orderadditionalitems 
-              WHERE orderId = ? OR orderId = ?
+              WHERE orderId = ?
             `;
             additionalItems = await new Promise((res, rej) => {
-              connection.query(getAdditionalSql, [masterOrderId, orderId], (err, results) => {
+              connection.query(getAdditionalSql, [masterOrderId], (err, results) => {
                 if (err) return rej(err);
                 res(results);
               });
