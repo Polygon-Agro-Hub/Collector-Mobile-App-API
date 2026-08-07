@@ -8,15 +8,15 @@ exports.getDCenterTarget = (irmId = null) => {
           co.irmId,
 
           dt.id AS distributedTargetId,
-          dt.companycenterId,
-          dt.userId,
-          dt.target,
-          dt.complete,
+          pr.companyCenterId AS companycenterId,
+          co.id AS userId,
+          (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id) AS target,
+          (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id AND orderStatus = 'Completed') AS complete,
           dt.createdAt AS targetCreatedAt,
 
           dti.id AS distributedTargetItemId,
           dti.orderId,
-          dti.isComplete,
+          (CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) AS isComplete,
           dti.completeTime,
           dti.createdAt AS itemCreatedAt,
 
@@ -120,8 +120,12 @@ exports.getDCenterTarget = (irmId = null) => {
 
       FROM 
           distributedtarget dt
+      LEFT JOIN
+          targetposition tp ON dt.id = tp.targetId
       LEFT JOIN 
-          collectionofficer co ON dt.userId = co.id
+          collectionofficer co ON tp.officerId = co.id
+      LEFT JOIN
+          packingrows pr ON dt.rowId = pr.id
       INNER JOIN 
           distributedtargetitems dti ON dt.id = dti.targetId
       LEFT JOIN 
@@ -177,13 +181,13 @@ exports.getDCenterTarget = (irmId = null) => {
 
       WHERE
           DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
-          ${irmId ? "AND (co.irmId = ? OR dt.userId = ?)" : ""}
+          ${irmId ? "AND (co.irmId = ? OR tp.officerId = ?)" : ""}
 
       ORDER BY 
-          dt.companycenterId ASC,
-          dt.userId DESC,
-          dt.target ASC,
-          dt.complete ASC,
+          pr.companyCenterId ASC,
+          tp.officerId DESC,
+          (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id) ASC,
+          (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id AND orderStatus = 'Completed') ASC,
           o.id ASC
     `;
 
@@ -660,20 +664,21 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
     const query = `
       SELECT 
         COUNT(dti.id) AS totalTasks,
-        SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) AS completedTasks,
-        SUM(CASE WHEN dti.isComplete = 1 THEN 1 ELSE 0 END) AS totalComplete,
+        SUM(CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) AS completedTasks,
+        SUM(CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) AS totalComplete,
         COUNT(dti.id) AS totalTarget
-      FROM distributedtarget dt
-      INNER JOIN distributedtargetitems dti
+      FROM collection_officer.targetposition tp
+      INNER JOIN collection_officer.distributedtarget dt
+        ON tp.targetId = dt.id
+      INNER JOIN collection_officer.distributedtargetitems dti
         ON dti.targetId = dt.id
       INNER JOIN market_place.processorders po
         ON po.id = dti.orderId
       INNER JOIN market_place.orders o
         ON o.id = po.orderId
       WHERE
-        dt.userId = ?
-        AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
-        AND DATE(o.sheduleDate) = CURDATE()
+        tp.officerId = ?
+        AND DATE(tp.createdAt) = CURDATE()
     `;
 
     const [results] = await db.collectionofficer

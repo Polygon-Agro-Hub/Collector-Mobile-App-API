@@ -9,15 +9,15 @@ exports.getTargetForOfficerDao = (officerId) => {
     const sql = `
             SELECT 
                 dt.id AS distributedTargetId,
-                dt.companycenterId,
-                dt.userId,
-                dt.target,
-                dt.complete,
+                pr.companyCenterId AS companycenterId,
+                tp.officerId AS userId,
+                (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id) AS target,
+                (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id AND orderStatus = 'Completed') AS complete,
                 dt.createdAt AS targetCreatedAt,
 
                 dti.id AS distributedTargetItemId,
                 dti.orderId,
-                dti.isComplete,
+                (CASE WHEN dti.orderStatus = 'Completed' THEN 1 ELSE 0 END) AS isComplete,
                 dti.completeTime,
                 dti.createdAt AS itemCreatedAt,
 
@@ -128,6 +128,10 @@ exports.getTargetForOfficerDao = (officerId) => {
 
             FROM 
                 distributedtarget dt
+            INNER JOIN
+                targetposition tp ON dt.id = tp.targetId
+            LEFT JOIN
+                packingrows pr ON dt.rowId = pr.id
             INNER JOIN 
                 distributedtargetitems dti ON dt.id = dti.targetId
             INNER JOIN 
@@ -173,19 +177,19 @@ exports.getTargetForOfficerDao = (officerId) => {
                     op.orderId  -- Group by processorders.id to get one row per order
             ) package_item_counts ON po.id = package_item_counts.orderId
             WHERE 
-                dt.userId = ?
+                tp.officerId = ?
                 AND (
                     -- Last 3 days: get all data without filtering
                     DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
                     OR 
                     -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.isComplete IS NULL OR dti.isComplete = 0))
+                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.orderStatus IS NULL OR dti.orderStatus != 'Completed'))
                 )
             ORDER BY 
-                dt.companycenterId ASC,
-                dt.userId DESC,
-                dt.target ASC,
-                dt.complete ASC,
+                pr.companyCenterId ASC,
+                tp.officerId DESC,
+                (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id) ASC,
+                (SELECT COUNT(*) FROM distributedtargetitems WHERE targetId = dt.id AND orderStatus = 'Completed') ASC,
                 o.id ASC
         `;
 

@@ -1436,7 +1436,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
           // All boxes have passed QC — mark order as Completed
           const updateDtiSql = `
             UPDATE distributedtargetitems 
-            SET orderStatus = 'Completed' 
+            SET orderStatus = 'Completed', isComplete = 1, completeTime = NOW()
             WHERE orderId = ?
           `;
           db.collectionofficer.query(updateDtiSql, [orderId], (uErr) => {
