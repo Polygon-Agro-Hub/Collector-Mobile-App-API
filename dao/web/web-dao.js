@@ -85,7 +85,7 @@ exports.getAvailableRows = (companyCenterId = null) => {
           SELECT COUNT(DISTINCT tp.officerId) 
           FROM targetposition tp 
           JOIN packingpositions pp ON tp.positionId = pp.id 
-          WHERE pp.rowId = pr.id AND DATE(tp.createdAt) = CURDATE()
+          WHERE pp.rowId = pr.id AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
         ) AS staffCount,
         (
           SELECT COUNT(DISTINCT dti.orderId) 
@@ -125,6 +125,8 @@ exports.getRowLiveMonitor = (rowId) => {
     const staffSql = `
       SELECT DISTINCT
         tp.officerId,
+        tp.id AS targetPositionId,
+        tp.isFinished,
         CONCAT(COALESCE(u.firstNameEnglish, ''), ' ', COALESCE(u.lastNameEnglish, '')) AS officerName,
         u.empId,
         u.image,
@@ -133,7 +135,7 @@ exports.getRowLiveMonitor = (rowId) => {
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN collectionofficer u ON tp.officerId = u.id
-      WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE()
+      WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
       ORDER BY pp.pIndex ASC
     `;
 
@@ -165,6 +167,8 @@ exports.getRowLiveMonitor = (rowId) => {
 
         return {
           officerId: s.officerId,
+          targetPositionId: s.targetPositionId,
+          isFinished: s.isFinished,
           name: s.officerName.trim() || s.empId,
           empId: s.empId,
           image: s.image,
@@ -371,6 +375,7 @@ exports.getRowLiveMonitor = (rowId) => {
         // Map positions into Station Lanes with active boxes
         const stations = positionRows.map((pos) => {
           const matchingStaff = staffList.find((s) => {
+            if (s.isFinished !== 1) return false;
             if (pos.pType === "QR") return s.role === "QR_OFFICER";
             if (pos.pType === "QC") return s.role === "QC_OFFICER";
             return s.positionIndex === pos.pIndex;
@@ -397,6 +402,8 @@ exports.getRowLiveMonitor = (rowId) => {
             assignedOfficer: matchingStaff,
             activeBox: activeBox,
             isOccupied: activeBox !== null,
+            targetPositionId: matchingStaff ? matchingStaff.targetPositionId : null,
+            isFinished: matchingStaff ? matchingStaff.isFinished : null,
           };
         });
 
@@ -544,6 +551,53 @@ exports.getWebOrderDetails = (processOrderId) => {
         console.error("Error in getWebOrderDetails:", e);
         reject(e);
       }
+    });
+  });
+};
+
+/**
+ * Toggle or set isFinished status for a position today
+ */
+exports.togglePositionOccupancy = (positionId, isFinished = 0) => {
+  return new Promise((resolve, reject) => {
+    // Look up targetposition for today
+    const findSql = `
+      SELECT id, isFinished FROM targetposition 
+      WHERE positionId = ? AND DATE(createdAt) = CURDATE()
+      ORDER BY id DESC LIMIT 1
+    `;
+    db.collectionofficer.query(findSql, [positionId], (err, results) => {
+      if (err) {
+        console.error("Error finding targetposition:", err);
+        return reject(err);
+      }
+      
+      if (results.length === 0) {
+        return resolve({
+          success: false,
+          message: "No active target position assignment found for today."
+        });
+      }
+      
+      const tpId = results[0].id;
+      const targetFinishedVal = isFinished; 
+      
+      const updateSql = `
+        UPDATE targetposition 
+        SET isFinished = ? 
+        WHERE id = ?
+      `;
+      db.collectionofficer.query(updateSql, [targetFinishedVal, tpId], (upErr, upResults) => {
+        if (upErr) {
+          console.error("Error updating targetposition occupancy:", upErr);
+          return reject(upErr);
+        }
+        resolve({
+          success: true,
+          message: `Position status updated to ${targetFinishedVal === 1 ? 'Occupied' : 'Available'}.`,
+          data: { targetPositionId: tpId, isFinished: targetFinishedVal }
+        });
+      });
     });
   });
 };

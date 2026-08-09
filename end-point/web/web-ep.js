@@ -77,3 +77,32 @@ exports.getWebOrderDetails = asyncHandler(async (req, res) => {
     data: details,
   });
 });
+
+/**
+ * Toggle / Free occupied position
+ */
+exports.togglePositionOccupancy = asyncHandler(async (req, res) => {
+  const { positionId } = req.params;
+  const { isFinished } = req.body;
+
+  if (!positionId) {
+    return res.status(400).json({
+      success: false,
+      message: "positionId is required.",
+    });
+  }
+
+  const result = await webDao.togglePositionOccupancy(
+    Number(positionId),
+    isFinished !== undefined ? Number(isFinished) : 0
+  );
+  
+  if (result.success) {
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("position_freed", { positionId: Number(positionId), targetPositionId: result.data?.targetPositionId });
+    }
+  }
+  
+  res.status(200).json(result);
+});
