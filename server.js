@@ -15,26 +15,26 @@ const {
 } = require("./startup/database");
 
 // Route import
-const addCropDetails = require("./routes/unregistered-crop-farmer-routes");
-const farmerRoutes = require("./routes/farmer-routes");
-const getUserdata = require("./routes/qr-routes");
-const complainRoutes = require("./routes/complains-routes");
-const priceUpdatesRoutes = require("./routes/price-routes");
-const managerRoutes = require("./routes/manager-routes");
-const collectionrequest = require("./routes/collection-routes");
-const heathRoutes = require("./routes/heath-routes");
-const distribution = require("./routes/distribution-routes");
-const distributionManager = require("./routes/distibution-manager-routes");
-const pickupRoute = require("./routes/pickup-routes");
-const pensionRoute = require("./routes/pension-routes");
-const collectionOfficerRoutes = require("./routes/user-routes");
-const searchRoutes = require("./routes/search-routes");
-const targetRoutes = require("./routes/target-routes");
-const emailRoutes = require("./routes/email-routes");
-const packingRoute = require("./routes/packing-route");
-const purchaseShortageRoute = require("./routes/purchase-shortage-route");
-const webRoute = require("./routes/web-route");
-const farmerEp = require("./end-point/farmer-ep");
+const addCropDetails = require("./routes/collection/unregistered-crop-farmer-routes");
+const farmerRoutes = require("./routes/collection/farmer-routes");
+const getUserdata = require("./routes/common/qr-routes");
+const complainRoutes = require("./routes/common/complains-routes");
+const priceUpdatesRoutes = require("./routes/collection/price-routes");
+const managerRoutes = require("./routes/common/manager-routes");
+const collectionrequest = require("./routes/collection/collection-routes");
+const heathRoutes = require("./routes/common/heath-routes");
+const distribution = require("./routes/distribution/distribution-routes");
+const distributionManager = require("./routes/distribution/distibution-manager-routes");
+const pickupRoute = require("./routes/common/pickup-routes");
+const pensionRoute = require("./routes/collection/pension-routes");
+const collectionOfficerRoutes = require("./routes/common/user-routes");
+const searchRoutes = require("./routes/common/search-routes");
+const targetRoutes = require("./routes/collection/target-routes");
+const emailRoutes = require("./routes/common/email-routes");
+const packingRoute = require("./routes/distribution/packing-route");
+const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
+const webRoute = require("./routes/web/web-route");
+const farmerEp = require("./end-point/collection/farmer-ep");
 
 // Initialize Express app and HTTP server with Socket.IO
 const mainApp = express();
