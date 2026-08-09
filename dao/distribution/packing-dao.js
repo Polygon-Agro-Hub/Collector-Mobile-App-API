@@ -53,7 +53,7 @@ exports.getOfficerActiveAssignment = (officerId) => {
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN packingrows pr ON pp.rowId = pr.id
       LEFT JOIN distributedtarget dt ON tp.targetId = dt.id
-      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE()
+      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
       ORDER BY tp.id DESC
       LIMIT 1
     `;
@@ -82,12 +82,12 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
         pr.id,
         CONCAT('Row ', pr.rowIndex) AS name,
         CAST(COALESCE(
-          COUNT(pp.id) - COUNT(DISTINCT CASE WHEN tp.id IS NOT NULL THEN pp.id END),
+          COUNT(pp.id) - COUNT(tp.id),
           0
         ) AS UNSIGNED) AS positionsCount
       FROM packingrows pr
       LEFT JOIN packingpositions pp ON pr.id = pp.rowId
-      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE()
+      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
       WHERE pr.companyCenterId = ? AND pr.isEnabled = 1
       GROUP BY pr.id, pr.rowIndex
       ORDER BY pr.rowIndex ASC
@@ -128,7 +128,7 @@ exports.getPositionsForRow = (rowId) => {
           ELSE LPAD(pp.pIndex, 2, '0')
         END AS leftLabel
       FROM packingpositions pp
-      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE()
+      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
       WHERE pp.rowId = ?
       ORDER BY 
         CASE WHEN pp.pType = 'QR' THEN 1 WHEN pp.pType = 'NOR' THEN 2 ELSE 3 END,
@@ -240,7 +240,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           // 4. Check if position is occupied by another officer today
           const checkPosSql = `
             SELECT id, officerId FROM targetposition 
-            WHERE positionId = ? AND DATE(createdAt) = CURDATE()
+            WHERE positionId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
             LIMIT 1
           `;
           const posOccupant = await new Promise((res, rej) => {
@@ -261,7 +261,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           // 5. Upsert targetposition with officerId, positionId (= packingPositionId), and targetId
           const checkOfficerSql = `
             SELECT id FROM targetposition 
-            WHERE officerId = ? AND DATE(createdAt) = CURDATE()
+            WHERE officerId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
             LIMIT 1
           `;
           const existingAssignment = await new Promise((res, rej) => {
@@ -274,7 +274,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           if (existingAssignment) {
             const updateSql = `
               UPDATE targetposition 
-              SET positionId = ?, targetId = ?, createdAt = NOW() 
+              SET positionId = ?, targetId = ?, isFinished = 1, createdAt = NOW() 
               WHERE id = ?
             `;
             await new Promise((res, rej) => {
@@ -285,8 +285,8 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
             });
           } else {
             const insertSql = `
-              INSERT INTO targetposition (officerId, positionId, targetId, createdAt) 
-              VALUES (?, ?, ?, NOW())
+              INSERT INTO targetposition (officerId, positionId, targetId, isFinished, createdAt) 
+              VALUES (?, ?, ?, 1, NOW())
             `;
             await new Promise((res, rej) => {
               connection.query(insertSql, [officerId, packingPositionId, targetId], (err, result) => {

@@ -14,4 +14,7 @@ router.get("/rows/:rowId/live-monitor", webEp.getRowLiveMonitor);
 // Get web order package details
 router.get("/orders/:processOrderId/details", webEp.getWebOrderDetails);
 
+// Toggle/Free position occupancy status
+router.post("/positions/:positionId/toggle", webEp.togglePositionOccupancy);
+
 module.exports = router;
