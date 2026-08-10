@@ -80,14 +80,7 @@ router.get(
 
 //target routes
 
-router.get("/get-crop-category", TargetEP.getAllCropCatogory);
 
-router.post(
-  "/create-daily-target",
-  authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
-  TargetEP.addDailyTarget,
-);
 
 router.get(
   "/get-daily-target",
@@ -97,24 +90,8 @@ router.get(
 );
 
 router.get(
-  "/download-daily-target",
-  authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER]),
-  TargetEP.downloadDailyTarget,
-);
-
-router.get("/targets", TargetEP.getAllTargets);
-
-router.get(
   "/get-officer-online/:collectionOfficerId",
   managerEp.getofficeronline,
-);
-
-router.post(
-  "/driver/add",
-  authenticate,
-  checkRole([ROLES.COLLECTION_MANAGER, ROLES.DISTRIBUTION_MANAGER]),
-  driverEp.createDriverWithVehicle,
 );
 
 router.get(

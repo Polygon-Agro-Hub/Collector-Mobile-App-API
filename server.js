@@ -17,11 +17,9 @@ const {
 // Route import
 const addCropDetails = require("./routes/collection/unregistered-crop-farmer-routes");
 const farmerRoutes = require("./routes/collection/farmer-routes");
-const getUserdata = require("./routes/common/qr-routes");
 const complainRoutes = require("./routes/common/complains-routes");
 const priceUpdatesRoutes = require("./routes/collection/price-routes");
 const managerRoutes = require("./routes/common/manager-routes");
-const collectionrequest = require("./routes/collection/collection-routes");
 const heathRoutes = require("./routes/common/heath-routes");
 const distribution = require("./routes/distribution/distribution-routes");
 const distributionManager = require("./routes/distribution/distibution-manager-routes");
@@ -119,13 +117,11 @@ mainApp.use(`${basePathMain}`, heathRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
 mainApp.use(`${basePathMain}/api/unregisteredfarmercrop`, addCropDetails);
-mainApp.use(`${basePathMain}/api/getUserData`, getUserdata);
 mainApp.use(`${basePathMain}/api/auth`, searchRoutes);
 mainApp.use(`${basePathMain}/api/complain`, complainRoutes);
 mainApp.use(`${basePathMain}/api/auth`, priceUpdatesRoutes);
 mainApp.use(`${basePathMain}/api/collection-manager`, managerRoutes);
 mainApp.use(`${basePathMain}/api/target`, targetRoutes);
-mainApp.use(`${basePathMain}/api/collectionrequest`, collectionrequest);
 mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
 mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
