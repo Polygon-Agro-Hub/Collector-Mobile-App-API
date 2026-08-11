@@ -1,65 +1,8 @@
 const TargetDAO = require("../../dao/collection/Target-dao");
 const TargetValidate = require("../../validation/target-validations");
 
-exports.getAllCropCatogory = async (req, res) => {
-    const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-    try {
-        const result = await TargetDAO.getAllCropNameDAO();
 
-        return res.status(200).json(result);
-    } catch (error) {
-        if (error.isJoi) {
-            return res.status(400).json({ error: error.details[0].message });
-        }
-
-        console.error("Error fetching crop names and verity:", error);
-        return res
-            .status(500)
-            .json({
-                error: "An error occurred while fetching crop names and verity",
-            });
-    }
-};
-
-exports.addDailyTarget = async (req, res) => {
-    try {
-        const target = req.body;
-
-        const companyId = req.user.companyId;
-        const userId = req.user.id;
-
-        const targetId = await TargetDAO.createDailyTargetDao(
-            target,
-            companyId,
-            userId,
-        );
-
-        if (!targetId) {
-            return res.json({
-                message: "Faild create target try again!",
-                status: false,
-            });
-        }
-
-        for (let i = 0; i < target.TargetItems.length; i++) {
-            await TargetDAO.createDailyTargetItemsDao(
-                target.TargetItems[i],
-                targetId,
-            );
-        }
-
-        res.json({ message: "Daily Target Created Successfully!", status: true });
-    } catch (err) {
-        if (err.isJoi) {
-            console.error("Validation error:", err.details[0].message);
-            return res.status(400).json({ error: err.details[0].message });
-        }
-
-        console.error("Error fetching news:", err);
-        res.status(500).json({ error: "An error occurred while fetching news" });
-    }
-};
 
 exports.getAllDailyTarget = async (req, res) => {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
@@ -161,103 +104,7 @@ exports.getAllDailyTarget = async (req, res) => {
     }
 };
 
-exports.downloadDailyTarget = async (req, res) => {
-    const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-    try {
-        const { fromDate, toDate } =
-            await TargetValidate.downloadDailyTargetSchema.validateAsync(req.query);
-        const companyId = req.user.companyId;
-
-        const resultTarget = await TargetDAO.downloadAllDailyTargetDao(
-            companyId,
-            fromDate,
-            toDate,
-        );
-        const resultComplete = await TargetDAO.downloadAllDailyTargetCompleteDAO(
-            companyId,
-            fromDate,
-            toDate,
-        );
-        const combinedData = [];
-
-        for (const target of resultTarget) {
-            const completeMatch = resultComplete.find(
-                (complete) =>
-                    complete.cropNameEnglish === target.cropNameEnglish &&
-                    complete.varietyNameEnglish === target.varietyNameEnglish &&
-                    complete.grade === target.grade,
-            );
-
-            if (target.qtyA !== undefined) {
-                combinedData.push({
-                    cropNameEnglish: target.cropNameEnglish,
-                    varietyNameEnglish: target.varietyNameEnglish,
-                    toDate: target.toDate,
-                    toTime: target.toTime,
-                    grade: "A",
-                    status:
-                        parseFloat(completeMatch?.totA) >= parseFloat(target.qtyA)
-                            ? "Completed"
-                            : "Pending",
-                    TargetQty: target.qtyA,
-                    CompleteQty: completeMatch?.totA || "0.00",
-                });
-            }
-
-            if (target.qtyB !== undefined) {
-                combinedData.push({
-                    cropNameEnglish: target.cropNameEnglish,
-                    varietyNameEnglish: target.varietyNameEnglish,
-                    toDate: target.toDate,
-                    toTime: target.toTime,
-                    grade: "B",
-                    status:
-                        parseFloat(completeMatch?.totB) >= parseFloat(target.qtyB)
-                            ? "Completed"
-                            : "Pending",
-                    TargetQty: target.qtyB,
-                    CompleteQty: completeMatch?.totB || "0.00",
-                });
-            }
-
-            if (target.qtyC !== undefined) {
-                combinedData.push({
-                    cropNameEnglish: target.cropNameEnglish,
-                    varietyNameEnglish: target.varietyNameEnglish,
-                    toDate: target.toDate,
-                    toTime: target.toTime,
-                    grade: "C",
-                    status:
-                        parseFloat(completeMatch?.totC) >= parseFloat(target.qtyC)
-                            ? "Completed"
-                            : "Pending",
-                    TargetQty: target.qtyC,
-                    CompleteQty: completeMatch?.totC || "0.00",
-                });
-            }
-        }
-
-        return res
-            .status(200)
-            .json({
-                message: "Daily tartget find",
-                status: true,
-                data: combinedData,
-            });
-    } catch (error) {
-        if (error.isJoi) {
-            return res.status(400).json({ error: error.details[0].message });
-        }
-
-        console.error("Error fetching crop names and verity:", error);
-        return res
-            .status(500)
-            .json({
-                error: "An error occurred while fetching crop names and verity",
-            });
-    }
-};
 
 exports.deleteTargetById = async (req, res) => {
     const targetId = req.params.id;
@@ -275,65 +122,7 @@ exports.deleteTargetById = async (req, res) => {
     }
 };
 
-exports.getAllTargets = async (req, res) => {
-    try {
-        const targets = await TargetDAO.getAllTargetsDao();
 
-        const currentDate = new Date();
-        currentDate.setHours(0, 0, 0, 0);
-
-        const formattedTargets = targets.reduce(
-            (acc, target) => {
-                const targetToDate = new Date(target.toDate);
-                targetToDate.setHours(0, 0, 0, 0);
-
-                const targetType = targetToDate < currentDate ? "expired" : "active";
-
-                const existing = acc[targetType].find(
-                    (t) => t.targetId === target.targetId,
-                );
-                if (existing) {
-                    existing.items.push({
-                        itemId: target.itemId,
-                        varietyId: target.varietyId,
-                        qtyA: target.qtyA,
-                        qtyB: target.qtyB,
-                        qtyC: target.qtyC,
-                    });
-                } else {
-                    acc[targetType].push({
-                        targetId: target.targetId,
-                        companyId: target.companyId,
-                        fromDate: target.fromDate,
-                        toDate: target.toDate,
-                        fromTime: target.fromTime,
-                        toTime: target.toTime,
-                        createdBy: target.createdBy,
-                        createdAt: target.createdAt,
-                        items: target.itemId
-                            ? [
-                                {
-                                    itemId: target.itemId,
-                                    varietyId: target.varietyId,
-                                    qtyA: target.qtyA,
-                                    qtyB: target.qtyB,
-                                    qtyC: target.qtyC,
-                                },
-                            ]
-                            : [],
-                    });
-                }
-                return acc;
-            },
-            { active: [], expired: [] },
-        );
-
-        res.status(200).json(formattedTargets);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to fetch targets" });
-    }
-};
 
 exports.getTargetsByCompanyId = async (req, res) => {
     try {
