@@ -180,7 +180,7 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
  * Increment positiontracking.pIndex when packer completes or skips item
  */
 exports.advancePositionIndex = asyncHandler(async (req, res) => {
-  const { orderId, orderpackageId, currentPIndex, rowId } = req.body;
+  const { orderId, orderpackageId, currentPIndex, rowId, trackingId } = req.body;
 
   if (!orderId) {
     return res.status(400).json({
@@ -195,7 +195,8 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
     Number(orderId),
     orderpackageId ? Number(orderpackageId) : null,
     currentPIndex !== undefined ? Number(currentPIndex) : null,
-    officerId
+    officerId,
+    trackingId ? Number(trackingId) : null
   );
 
   if (!result || !result.success || result.affectedRows === 0) {
@@ -288,6 +289,34 @@ exports.getOfficerActiveOrder = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Officer active order retrieved successfully",
+    data: activeOrder
+  });
+});
+
+/**
+ * Get active process order for Packer Officer
+ */
+exports.getPackerActiveOrder = asyncHandler(async (req, res) => {
+  const officerId = req.user.id;
+  const activeOrder = await packingDao.getPackerActiveOrder(officerId);
+
+  res.status(200).json({
+    success: true,
+    message: "Packer active order retrieved successfully",
+    data: activeOrder
+  });
+});
+
+/**
+ * Get active process order for QC Officer
+ */
+exports.getQCActiveOrder = asyncHandler(async (req, res) => {
+  const officerId = req.user.id;
+  const activeOrder = await packingDao.getQCActiveOrder(officerId);
+
+  res.status(200).json({
+    success: true,
+    message: "QC active order retrieved successfully",
     data: activeOrder
   });
 });

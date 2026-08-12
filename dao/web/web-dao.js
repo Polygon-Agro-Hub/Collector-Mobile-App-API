@@ -254,9 +254,9 @@ exports.getRowLiveMonitor = (rowId) => {
           const pOrderId = order.processOrderId;
           const mOrderId = order.masterOrderId;
 
-          // Fetch package records for this order
+          // Fetch package records with quantity for this order
           const pkgSql = `
-            SELECT op.id AS orderpackageId, mp.displayName AS packageName
+            SELECT op.id AS orderpackageId, GREATEST(COALESCE(op.qty, 1), 1) AS qty, mp.displayName AS packageName
             FROM market_place.orderpackage op
             JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
             WHERE op.orderId = ? OR op.orderId = ?
@@ -276,14 +276,20 @@ exports.getRowLiveMonitor = (rowId) => {
             db.collectionofficer.query(trackingSql, [pOrderId], (e, r) => res(e ? [] : r));
           });
 
-          const trackingMap = new Map();
+          // Build separate tracking lists per box type:
+          // - Main Container: all rows with isMainContainer=1
+          // - Per package: all rows with that orderpackageId
+          // - Alacarte: all rows with orderpackageId IS NULL and isMainContainer=0
+          const mainTrackingRows = trackingRows.filter((t) => t.isMainContainer === 1);
+          const pkgTrackingMap = new Map(); // orderpackageId -> array of pIndex values
+          const alacarteTrackingRows = trackingRows.filter((t) => !t.isMainContainer && !t.orderpackageId);
+
           trackingRows.forEach((t) => {
-            const key = t.isMainContainer === 1 
-              ? "-1" 
-              : t.orderpackageId 
-                ? String(t.orderpackageId) 
-                : "null";
-            trackingMap.set(key, t.pIndex);
+            if (!t.isMainContainer && t.orderpackageId) {
+              const key = String(t.orderpackageId);
+              if (!pkgTrackingMap.has(key)) pkgTrackingMap.set(key, []);
+              pkgTrackingMap.get(key).push(t.pIndex);
+            }
           });
 
           // Check if à la carte items exist
@@ -296,11 +302,13 @@ exports.getRowLiveMonitor = (rowId) => {
           });
           const hasAlacarte = addRes.length > 0 && addRes[0].cnt > 0;
 
-          // If multiple boxes exist, display Main Container (orderpackageId = -1) first
-          const totalPhysicalBoxes = packages.length + (hasAlacarte ? 1 : 0);
+          // If multiple boxes exist, display Main Container row(s) first
+          const totalPhysicalPackages = packages.reduce((acc, p) => acc + Number(p.qty || 1), 0);
+          const totalPhysicalBoxes = totalPhysicalPackages + (hasAlacarte ? 1 : 0);
           if (totalPhysicalBoxes > 1) {
-            const pIdx = trackingMap.get("-1") || 0;
-            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+            // There is always exactly 1 Main Container row (or 0 if not yet printed)
+            const mainPIdx = mainTrackingRows.length > 0 ? mainTrackingRows[0].pIndex : 0;
+            const { status, statusLabel, statusColor } = getBoxStatus(mainPIdx, order.orderStatus);
 
             boxes.push({
               boxId: `main_${pOrderId}`,
@@ -312,37 +320,46 @@ exports.getRowLiveMonitor = (rowId) => {
               boxTitle: "Main Container",
               boxType: "Package",
               qrCode: order.invoiceNumber,
-              pIndex: pIdx,
+              pIndex: mainPIdx,
               status: status,
               statusLabel: statusLabel,
               statusColor: statusColor,
             });
           }
 
-          // Process each package box
+          // Process each package box — one entry per physical printed instance (qty copies)
           for (const pkg of packages) {
-            const pIdx = trackingMap.get(String(pkg.orderpackageId)) || 0;
-            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+            const key = String(pkg.orderpackageId);
+            const pIndexList = pkgTrackingMap.get(key) || [];
+            const qty = Number(pkg.qty) || 1;
 
-            boxes.push({
-              boxId: `pkg_${pkg.orderpackageId}`,
-              orderpackageId: pkg.orderpackageId,
-              processOrderId: pOrderId,
-              invoiceNumber: order.invoiceNumber,
-              formattedInvoice: order.formattedInvoice,
-              timeSlot: order.timeSlot,
-              boxTitle: pkg.packageName,
-              boxType: "Package",
-              qrCode: order.invoiceNumber,
-              pIndex: pIdx,
-              status: status,
-              statusLabel: statusLabel,
-              statusColor: statusColor,
-            });
+            for (let i = 0; i < qty; i++) {
+              // Pick pIndex for this physical instance (i-th element in the sorted list)
+              const pIdx = pIndexList[i] !== undefined ? pIndexList[i] : 0;
+              const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+              const instanceLabel = qty > 1 ? ` (${i + 1}/${qty})` : "";
+
+              boxes.push({
+                boxId: `pkg_${pkg.orderpackageId}_${i}`,
+                orderpackageId: pkg.orderpackageId,
+                processOrderId: pOrderId,
+                invoiceNumber: order.invoiceNumber,
+                formattedInvoice: order.formattedInvoice,
+                timeSlot: order.timeSlot,
+                boxTitle: `${pkg.packageName}${instanceLabel}`,
+                boxType: "Package",
+                qrCode: order.invoiceNumber,
+                pIndex: pIdx,
+                status: status,
+                statusLabel: statusLabel,
+                statusColor: statusColor,
+              });
+            }
           }
+
 
           if (hasAlacarte) {
-            const pIdx = trackingMap.get("null") || 0;
+            const pIdx = alacarteTrackingRows.length > 0 ? alacarteTrackingRows[0].pIndex : 0;
             const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
 
             boxes.push({
