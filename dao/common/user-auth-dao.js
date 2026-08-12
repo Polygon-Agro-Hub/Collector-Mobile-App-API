@@ -1,0 +1,345 @@
+const db = require("../../startup/database");
+
+exports.getOfficerByEmpId = (empId) => {
+  return new Promise((resolve, reject) => {
+    const normalizedEmpId = empId.toUpperCase();
+
+    const sql =
+      "SELECT id, jobRole, status, empId FROM collectionofficer WHERE UPPER(empId) = ?";
+
+    db.collectionofficer.query(sql, [normalizedEmpId], (err, results) => {
+      if (err) {
+        console.error("Database Query Error:", err.message);
+        return reject(new Error("Database query failed. Please try again."));
+      }
+
+      if (results.length === 0) {
+        console.warn(`No officer found for Employee ID: ${empId}`);
+        return resolve(null);
+      }
+
+      resolve(results);
+    });
+  });
+};
+
+exports.getOfficerByEmpIdChangePass = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql =
+      "SELECT id, empId, password FROM collectionofficer WHERE id = ?";
+
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Database Query Error:", err.message);
+        return reject(new Error("Database query failed. Please try again."));
+      }
+
+      if (results.length === 0) {
+        console.warn(`No officer found for Officer ID: ${officerId}`);
+        return resolve([]);
+      }
+
+      resolve(results);
+    });
+  });
+};
+
+exports.getOfficerPasswordById = (id, jobRole) => {
+  return new Promise((resolve, reject) => {
+    let sql;
+
+    if (
+      jobRole === "Collection Officer" ||
+      jobRole === "Collection Centre Manager"
+    ) {
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil,  
+                    ccen.id AS companycenterId
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             JOIN
+                companycenter ccen ON co.centerId = ccen.centerId 
+             LEFT JOIN
+                collectioncenter cc ON co.centerId = cc.id
+             WHERE co.id = ?`;
+    } else if (
+      jobRole === "Distribution Centre Manager" ||
+      jobRole === "Distribution Officer"
+    ) {
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil,  
+                    dcen.id AS companycenterId
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             JOIN
+                distributedcompanycenter dcen ON co.distributedCenterId = dcen.centerId 
+             LEFT JOIN
+                distributedcenter dc ON co.distributedCenterId = dc.id
+             WHERE co.id = ?`;
+    } else {
+      sql = `SELECT co.*, 
+                    cod.companyNameEnglish AS companyNameEnglish, 
+                    cod.companyNameSinhala AS companyNameSinhala, 
+                    cod.companyNameTamil AS companyNameTamil
+             FROM 
+                collectionofficer co
+             JOIN 
+                company cod ON co.companyId = cod.id
+             WHERE co.id = ?`;
+    }
+
+    db.collectionofficer.query(sql, [id], (err, results) => {
+      if (err) {
+        console.error("Database query error:", err);
+        return reject(new Error("Database error"));
+      }
+      if (results.length === 0) {
+        console.warn(
+          `No officer found with ID: ${id} and job role: ${jobRole}`,
+        );
+        return reject(new Error("Officer not found", err));
+      }
+
+      resolve(results);
+    });
+  });
+};
+
+exports.updateLoginStatus = (collectionOfficerId, status) => {
+  return new Promise((resolve, reject) => {
+    const sql = "UPDATE collectionofficer SET OnlineStatus = ? WHERE id = ?";
+    db.collectionofficer.query(
+      sql,
+      [status, collectionOfficerId],
+      (err, results) => {
+        if (err) {
+          return reject(new Error("Database error"));
+        }
+        resolve(results);
+      },
+    );
+  });
+};
+
+exports.updatePasswordInDatabase = (officerId, hashedPassword) => {
+  return new Promise((resolve, reject) => {
+    const updatePasswordSql = `
+            UPDATE collectionofficer
+            SET password = ? , passwordUpdated = 1
+            WHERE id = ?
+        `;
+    db.collectionofficer.query(
+      updatePasswordSql,
+      [hashedPassword, officerId],
+      (err, result) => {
+        if (err) {
+          return reject("Database error while updating password");
+        }
+        resolve();
+      },
+    );
+  });
+};
+
+exports.getProfileById = (userId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+            SELECT 
+                firstNameEnglish, firstNameSinhala, firstNameTamil,
+                lastNameEnglish, lastNameSinhala, lastNameTamil,
+                phoneNumber01, phoneNumber02, image, nic, email, 
+                houseNumber, streetName, city, district, province, 
+                country, languages
+            FROM collectionofficer
+            WHERE id = ?
+        `;
+
+    db.collectionofficer.query(sql, [userId], (err, results) => {
+      if (err) {
+        return reject(new Error("Database error: " + err));
+      }
+
+      if (results.length === 0) {
+        return reject(new Error("User not found"));
+      }
+
+      resolve(results[0]);
+    });
+  });
+};
+
+exports.updatePhoneNumberById = (userId, phoneNumber, phoneNumber02) => {
+  return new Promise((resolve, reject) => {
+    const query =
+      "UPDATE collectionofficer SET phoneNumber01 = ?, phoneNumber02 =? WHERE id = ?";
+    db.collectionofficer.query(
+      query,
+      [phoneNumber, phoneNumber02, userId],
+      (error, results) => {
+        if (error) {
+          return reject(new Error("Database error: " + error));
+        }
+        resolve(results);
+      },
+    );
+  });
+};
+
+exports.getOfficerDetailsById = (officerId, jobRole) => {
+  return new Promise((resolve, reject) => {
+    let sql = `
+      SELECT 
+        co.*, 
+        co.empId,
+        cc.regCode,
+        cc.centerName AS collectionCenterName,
+        cc.contact01 AS centerContact01,
+        cc.contact02 AS centerContact02,
+        cc.buildingNumber AS centerBuildingNumber,
+        cc.street AS centerStreet,
+        cc.district AS centerDistrict,
+        cc.province AS centerProvince,
+        com.companyNameEnglish AS companyNameEnglish,
+        com.companyNameSinhala AS companyNameSinhala,
+        com.companyNameTamil AS companyNameTamil,
+        com.email AS companyEmail,
+        com.oicName AS companyOICName,
+        com.oicEmail AS companyOICEmail
+      FROM 
+        collectionofficer co
+      JOIN 
+        collectioncenter cc ON co.centerId = cc.id
+      JOIN 
+        company com ON co.companyId = com.id
+      WHERE 
+        co.id = ?;
+    `;
+    if (
+      jobRole === "Distribution Centre Manager" ||
+      jobRole === "Distribution Officer"
+    ) {
+      sql = `
+       SELECT 
+        co.*, 
+        co.empId,
+         dc.regCode,
+        dc.centerName AS collectionCenterName,
+        dc.contact01 AS centerContact01,
+        dc.contact02 AS centerContact02,
+        dc.district AS centerDistrict,
+        dc.province AS centerProvince,
+        com.companyNameEnglish AS companyNameEnglish,
+        com.companyNameSinhala AS companyNameSinhala,
+        com.companyNameTamil AS companyNameTamil,
+        com.email AS companyEmail,
+        com.oicName AS companyOICName,
+        com.oicEmail AS companyOICEmail
+      FROM 
+        collectionofficer co
+      JOIN 
+        distributedcenter dc ON co.distributedCenterId = dc.id
+      JOIN 
+        company com ON co.companyId = com.id
+      WHERE 
+        co.id = ?;
+      `;
+    }
+
+    db.collectionofficer.query(sql, [officerId], (err, results) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return reject(new Error("Database error"));
+      }
+
+      if (results.length === 0) {
+        return reject(new Error("Officer not found"));
+      }
+
+      resolve(results[0]);
+    });
+  });
+};
+
+exports.getClaimStatusByUserId = (userId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `SELECT claimStatus FROM collectionofficer WHERE id = ?`;
+
+    db.collectionofficer.query(sql, [userId], (err, results) => {
+      if (err) {
+        console.error("Error fetching claim status:", err);
+        reject(new Error("Database query failed"));
+        return;
+      }
+
+      if (results.length > 0) {
+        resolve(results[0].claimStatus);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+exports.updateOnlineStatusWithSocket = async (empId, status) => {
+  return new Promise((resolve, reject) => {
+    const sql = `UPDATE collectionofficer SET onlineStatus = ? WHERE empId = ?`;
+    db.collectionofficer.query(sql, [status, empId], (err, results) => {
+      if (err) {
+        console.error("Error updating online status:", err);
+        reject(new Error("Database query failed"));
+        return;
+      }
+      
+      const isLoggingOut = status === false || status === 0 || status === "false" || status === "0";
+      if (isLoggingOut) {
+        const resetTpSql = `
+          UPDATE targetposition 
+          SET isFinished = 0 
+          WHERE officerId = (SELECT id FROM collectionofficer WHERE empId = ? LIMIT 1)
+            AND DATE(createdAt) = CURDATE()
+        `;
+        db.collectionofficer.query(resetTpSql, [empId], (tpErr) => {
+          if (tpErr) {
+            console.error("Error resetting targetposition on logout:", tpErr);
+          }
+          resolve(null);
+        });
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+exports.getPassword = (id) => {
+  return new Promise((resolve, reject) => {
+    const sql = `       
+      SELECT 
+        id,                
+       passwordUpdated
+      FROM collectionofficer
+      WHERE id = ?     
+    `;
+
+    db.collectionofficer.query(sql, [id], (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return reject(new Error("Database error"));
+      }
+
+      if (results.length === 0) {
+        return reject(new Error("User not found"));
+      }
+
+      resolve(results[0]);
+    });
+  });
+};
