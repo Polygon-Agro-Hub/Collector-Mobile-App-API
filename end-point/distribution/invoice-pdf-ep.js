@@ -256,8 +256,9 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
 
     let deliveryFee = 0;
     const isFreeDelivery = order.isCoupon === 1 && order.couponType === "Free Delivery";
+    const isPickup = (order.delivaryMethod || "").toLowerCase().includes("pickup");
 
-    if (!isFreeDelivery && order.delivaryMethod !== "Pickup") {
+    if (!isFreeDelivery && !isPickup) {
       let cityFromAddress = null;
       if (order.fullAddress && typeof order.fullAddress === "string") {
         const addressParts = order.fullAddress.split(",").map((part) => part.trim());
@@ -287,6 +288,20 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
     const pdfBuffer = await invoicePdfService.generateOrderPDF(order, deliveryFee);
 
     let emailAddress = order.email || order.customerEmail || order.customerInfo?.email || null;
+    if (!emailAddress && order.userId) {
+      try {
+        const [uRows] = await db.marketPlace.promise().query(
+          "SELECT email FROM marketplaceusers WHERE id = ? LIMIT 1",
+          [order.userId]
+        );
+        if (uRows && uRows.length > 0 && uRows[0].email) {
+          emailAddress = uRows[0].email;
+        }
+      } catch (uErr) {
+        console.error("Error looking up email for user:", uErr);
+      }
+    }
+
     if (!emailAddress) {
       console.warn(`No customer email found for order ${orderIdInput}`);
       return { success: false, message: "No customer email found" };
@@ -320,7 +335,7 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
         calculatedTotal += parseFloat(item.price || 0) + parseFloat(item.discount || 0);
       });
     }
-    if (!isFreeDelivery && order.delivaryMethod !== "Pickup") {
+    if (!isFreeDelivery && !isPickup) {
       calculatedTotal += deliveryFee;
     }
     if (order.orderApp === "Dash" && order.isPackage === 0 && !order.couponValue && !order.serviceFee) {
@@ -352,7 +367,7 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
       ]
     );
 
-    console.log(`✅ Post Invoice email automatically sent to ${emailAddress} for order ${invoiceNo}`);
+    console.log(`✅ Post Invoice email automatically sent to ${emailAddress} for order ${invoiceNo} (isPickup: ${isPickup})`);
     return { success: true };
   } catch (err) {
     console.error(`❌ Failed to automatically send post invoice email for order ${orderIdInput}:`, err);

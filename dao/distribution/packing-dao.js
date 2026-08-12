@@ -358,31 +358,41 @@ exports.getQROrdersForOfficer = (officerId) => {
         po.id AS id,
         po.id AS processOrderId,
         po.invNo AS orderNumber,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS type,
         dt.timeSlot,
         CASE 
           WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
-          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+          ELSE COALESCE(
+            NULLIF(TRIM(oh.city), ''), 
+            NULLIF(TRIM(oa.city), ''), 
+            NULLIF(TRIM(u.nearesCity), ''), 
+            NULLIF(TRIM(o.delivaryMethod), ''), 
+            'Bambalapitiya'
+          ) 
         END AS category,
         dti.orderStatus,
         COALESCE(
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
           0
         ) AS minPIndex,
-        (SELECT COUNT(*) FROM market_place.orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id) AS packagesCount,
+        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM market_place.orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
         (SELECT COUNT(DISTINCT oai.productId) FROM market_place.orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
-      LEFT JOIN distributedtarget dt_tp ON tp.targetId = dt_tp.id
-      JOIN distributedtarget dt ON (
-        dt.id = tp.targetId 
-        OR (pp.rowId = dt.rowId AND DATE(dt.createdAt) = COALESCE(DATE(dt_tp.createdAt), CURDATE()))
-      )
+      JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
-      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE()
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      WHERE tp.officerId = ? AND (DATE(tp.createdAt) = CURDATE() OR DATE(dt.createdAt) = CURDATE())
       ORDER BY po.id ASC
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
@@ -398,6 +408,7 @@ exports.getQROrdersForOfficer = (officerId) => {
               SELECT 
                 op.id, 
                 COALESCE(mp.displayName, 'Package') AS name, 
+                COALESCE(op.qty, 1) AS qty,
                 GREATEST(
                   COALESCE((SELECT COUNT(*) FROM market_place.orderpackageitems opi WHERE opi.orderPackageId = op.id), 0),
                   COALESCE((SELECT COUNT(*) FROM market_place.packagedetails pd WHERE pd.packageId = op.packageId), 0)
@@ -416,7 +427,7 @@ exports.getQROrdersForOfficer = (officerId) => {
                   opi.id,
                   pt.typeName AS categoryName,
                   mi.displayName AS itemName,
-                  ROUND(COALESCE(opi.qty, 1), 1) AS qty
+                  COALESCE(opi.qty, 1) AS qty
                 FROM market_place.orderpackageitems opi
                 LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
                 LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
@@ -449,18 +460,36 @@ exports.getQROrdersForOfficer = (officerId) => {
  * Get distribution center targets grouped/listed for Center Target Screen
  * @returns {Promise<Array>}
  */
-exports.getCenterTargetOrders = () => {
+exports.getCenterTargetOrders = (companyCenterId = null) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT DISTINCT
         po.id AS id,
         po.invNo AS orderNumber,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
-        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS type,
+        CONCAT(po.invNo, ' (', CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END, ')') AS formattedOrderNumber,
         dt.timeSlot,
         CASE 
           WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
-          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+          ELSE COALESCE(
+            NULLIF(TRIM(oh.city), ''), 
+            NULLIF(TRIM(oa.city), ''), 
+            NULLIF(TRIM(u.nearesCity), ''), 
+            NULLIF(TRIM(o.delivaryMethod), ''), 
+            'Bambalapitiya'
+          ) 
         END AS category,
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
@@ -477,11 +506,15 @@ exports.getCenterTargetOrders = () => {
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      LEFT JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
       WHERE DATE(dt.createdAt) = CURDATE()
+        AND (? IS NULL OR dcen.id = ?)
       ORDER BY dt.timeSlot ASC, po.id ASC
     `;
-    db.collectionofficer.query(sql, [], (err, results) => {
+    db.collectionofficer.query(sql, [companyCenterId, companyCenterId], (err, results) => {
       if (err) {
         console.error("Error in getCenterTargetOrders:", err);
         return resolve([]);
@@ -523,6 +556,8 @@ exports.getOrderDetails = (orderId) => {
       LEFT JOIN distributedtarget dt ON dti.targetId = dt.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
       WHERE po.id = ? OR po.invNo = ?
       LIMIT 1
     `;
@@ -816,9 +851,11 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             return;
           }
 
-          // 2c. Main Container Priority Check
+          // 2c. Main Container Priority Check (QR print time)
+          // Rule: For orders with multiple physical boxes, the Main Container QR must be printed FIRST.
+          // We only check that the Main Container ROW EXISTS in positiontracking — we do NOT block
+          // based on its current pIndex (it may still be at pIndex=1 while packages are printing).
           if (!isMainContainer) {
-            // Query total packages and alacarte items to check if Main Container is required
             const getCountsSql = `
               SELECT 
                 (SELECT COUNT(*) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
@@ -839,7 +876,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
 
             if (totalPhysicalBoxes > 1) {
               const checkMainSql = `
-                SELECT pIndex FROM positiontracking 
+                SELECT id FROM positiontracking 
                 WHERE orderId = ? AND isMainContainer = 1 
                 LIMIT 1
               `;
@@ -849,15 +886,14 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
                 });
               });
 
-              // If the Main Container is not printed yet (mainRows empty) OR is still at P1 (mainPIndex <= 1)
-              const mainPIndex = mainRows.length > 0 ? mainRows[0].pIndex : 0;
-              if (mainPIndex <= 1) {
+              // Block only if Main Container QR hasn't been printed yet (no row in positiontracking)
+              if (mainRows.length === 0) {
                 connection.rollback(() => {
                   connection.release();
                   resolve({
                     success: false,
                     code: "MAIN_CONTAINER_PENDING",
-                    message: "The Main Container for this order must be printed and passed to Packer 1 first."
+                    message: "Please print the Main Container QR first before printing individual package boxes."
                   });
                 });
                 return;
@@ -866,6 +902,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           }
 
           // 2b. Station Occupied Validation Check for Position 1 (pIndex = 1)
+          // Only blocks if a DIFFERENT order's box is at pIndex=1 (same-order boxes can freely queue up)
           const checkOccupiedSql = `
             SELECT pt.id, po.invNo
             FROM positiontracking pt
@@ -886,19 +923,11 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             )
             AND pt.pIndex = 1 
             AND dti.orderStatus = 'Opened'
-            AND NOT (pt.orderId = ? AND (${
-              isMainContainer 
-                ? 'pt.isMainContainer = 1' 
-                : validPackageId 
-                  ? 'COALESCE(pt.orderpackageId, 0) = ?' 
-                  : 'pt.orderpackageId IS NULL AND pt.isMainContainer = 0'
-            }))
+            AND pt.orderId != ?
             LIMIT 1
           `;
 
-          const occupiedParams = (validPackageId && !isMainContainer)
-            ? [orderId, orderId, orderId, validPackageId]
-            : [orderId, orderId, orderId];
+          const occupiedParams = [orderId, orderId, orderId];
           const occupiedRes = await new Promise((res, rej) => {
             connection.query(checkOccupiedSql, occupiedParams, (err, results) => {
               if (err) return rej(err);
@@ -920,21 +949,18 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             return;
           }
 
-          // If Main Container, set orderStatus = Opened, insert tracking row with isMainContainer = 1, and commit
+
           if (isMainContainer) {
-            const updateTrackingSql = `
-              UPDATE positiontracking 
-              SET pIndex = CASE WHEN pIndex = 0 THEN 1 ELSE pIndex END 
-              WHERE orderId = ? AND isMainContainer = 1
-            `;
-            const updateRes = await new Promise((res, rej) => {
-              connection.query(updateTrackingSql, [orderId], (err, result) => {
+            // Check if Main Container is already registered
+            const checkMainSql = `SELECT id FROM positiontracking WHERE orderId = ? AND isMainContainer = 1 LIMIT 1`;
+            const mainExists = await new Promise((res, rej) => {
+              connection.query(checkMainSql, [orderId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
 
-            if (updateRes.affectedRows === 0) {
+            if (mainExists.length === 0) {
               const insertTrackingSql = `
                 INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
                 VALUES (?, NULL, 1, 1, NOW())
@@ -946,38 +972,30 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
                 });
               });
             }
-
-            connection.commit((commitErr) => {
-              if (commitErr) {
-                connection.rollback(() => {
-                  connection.release();
-                  reject(commitErr);
-                });
-                return;
-              }
-              connection.release();
-              resolve({ success: true, orderStatus: "Opened", isMainContainer: true });
-            });
-            return;
-          }
-
-          if (validPackageId) {
-            const updateTrackingSql = `
-              UPDATE positiontracking 
-              SET pIndex = CASE WHEN pIndex = 0 THEN 1 ELSE pIndex END 
-              WHERE orderId = ? AND orderpackageId = ?
-            `;
-            const updateRes = await new Promise((res, rej) => {
-              connection.query(updateTrackingSql, [orderId, validPackageId], (err, result) => {
+          } else if (validPackageId) {
+            // Check how many package copies are already registered
+            const checkPkgCountSql = `SELECT COUNT(*) AS count FROM positiontracking WHERE orderId = ? AND orderpackageId = ?`;
+            const existingCountRes = await new Promise((res, rej) => {
+              connection.query(checkPkgCountSql, [orderId, validPackageId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
+            const existingCount = existingCountRes.length > 0 ? existingCountRes[0].count : 0;
 
-            if (updateRes.affectedRows === 0) {
+            const getPkgQtySql = `SELECT GREATEST(COALESCE(qty, 1), 1) AS qty FROM market_place.orderpackage WHERE id = ?`;
+            const qtyRes = await new Promise((res, rej) => {
+              connection.query(getPkgQtySql, [validPackageId], (err, results) => {
+                if (err) return rej(err);
+                res(results || []);
+              });
+            });
+            const qty = qtyRes.length > 0 ? qtyRes[0].qty : 1;
+
+            if (existingCount < qty) {
               const insertTrackingSql = `
-                INSERT INTO positiontracking (orderId, orderpackageId, pIndex, createdAt) 
-                VALUES (?, ?, 1, NOW())
+                INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
+                VALUES (?, ?, 1, 0, NOW())
               `;
               await new Promise((res, rej) => {
                 connection.query(insertTrackingSql, [orderId, validPackageId], (err, result) => {
@@ -987,26 +1005,16 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               });
             }
           } else {
-            const updateTrackingSql = `
-              UPDATE positiontracking 
-              SET pIndex = CASE WHEN pIndex = 0 THEN 1 ELSE pIndex END 
-              WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0
-            `;
-            const updateRes = await new Promise((res, rej) => {
-              connection.query(updateTrackingSql, [orderId], (err, result) => {
+            // Check if À la carte is already registered
+            const checkAlacarteSql = `SELECT id FROM positiontracking WHERE orderId = ? AND orderpackageId IS NULL AND isMainContainer = 0 LIMIT 1`;
+            const alacarteExists = await new Promise((res, rej) => {
+              connection.query(checkAlacarteSql, [orderId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
 
-            if (updateRes.affectedRows === 0) {
-              await new Promise((res) => {
-                connection.query(
-                  `DELETE FROM positiontracking WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0`,
-                  [orderId],
-                  () => res(true)
-                );
-              });
+            if (alacarteExists.length === 0) {
               const insertTrackingSql = `
                 INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
                 VALUES (?, NULL, 1, 0, NOW())
@@ -1029,7 +1037,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               return;
             }
             connection.release();
-            resolve({ success: true, orderStatus: "Opened", orderpackageId: validPackageId, pIndex: 1 });
+            resolve({ success: true, orderStatus: "Opened", orderpackageId: validPackageId, isMainContainer: !!isMainContainer, pIndex: 1 });
           });
 
         } catch (error) {
@@ -1049,7 +1057,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
  * @param {number|null} orderpackageId 
  * @returns {Promise<Object>}
  */
-exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = null, officerId = null) => {
+exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = null, officerId = null, trackingId = null) => {
   return new Promise((resolve, reject) => {
     const nextStep = currentPIndex ? Number(currentPIndex) + 1 : null;
     const isMainContainer = (orderpackageId === -1 || orderpackageId === "-1");
@@ -1059,6 +1067,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
       orderpackageId !== "alacarte" &&
       !isMainContainer &&
       !isNaN(Number(orderpackageId));
+    const resolvedTrackingId = trackingId ? Number(trackingId) : null;
 
     // First: dynamically get the QC pIndex for this row so we know if nextStep is a real station
     const getQcPIndexSql = `
@@ -1081,13 +1090,32 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
       const qcPIndex = (qcRows && qcRows.length > 0 ? qcRows[0].qcPIndex : null) || 3;
       const maxPIndex = qcPIndex + 1; // one step beyond QC = completed
 
-      // Main Container Priority Check: A package/alacarte cannot advance to nextStep unless the Main Container is ahead of nextStep
-      if (!isMainContainer && nextStep) {
+      // Determine if current box being advanced is Main Container
+      let isCurrentBoxMainContainer = (orderpackageId === -1 || orderpackageId === "-1");
+      if (!isCurrentBoxMainContainer) {
+        // Use trackingId PK for precise detection if available
+        const checkCurrentBoxSql = resolvedTrackingId
+          ? `SELECT isMainContainer FROM positiontracking WHERE id = ? LIMIT 1`
+          : `SELECT isMainContainer FROM positiontracking WHERE orderId = ? AND pIndex = ? ORDER BY id ASC LIMIT 1`;
+        const checkCurrentBoxParams = resolvedTrackingId
+          ? [resolvedTrackingId]
+          : [orderId, currentPIndex];
+        const currentBoxRows = await new Promise((res) => {
+          db.collectionofficer.query(checkCurrentBoxSql, checkCurrentBoxParams, (err, results) => res(results || []));
+        });
+        if (currentBoxRows.length > 0 && currentBoxRows[0].isMainContainer === 1) {
+          isCurrentBoxMainContainer = true;
+        }
+      }
+
+      // Main Container Priority Check: A package/alacarte cannot advance unless the Main Container
+      // is already AT or PAST the same pIndex (i.e., main container was already handled at this station).
+      // In other words: mainPIndex must be >= nextStep (main container is ahead of or equal to nextStep).
+      if (!isCurrentBoxMainContainer && nextStep) {
         try {
-          // Query total packages and alacarte items to check if Main Container is required
           const getCountsSql = `
             SELECT 
-              (SELECT COUNT(*) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
               (SELECT COUNT(*) FROM market_place.orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
             FROM market_place.processorders po
             WHERE po.id = ?
@@ -1104,6 +1132,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           const totalPhysicalBoxes = pCount + (aCount > 0 ? 1 : 0);
 
           if (totalPhysicalBoxes > 1) {
+            // Check the MAXIMUM pIndex the main container has reached so far
             const checkMainSql = `
               SELECT pIndex FROM positiontracking 
               WHERE orderId = ? AND isMainContainer = 1 
@@ -1115,11 +1144,13 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
               });
             });
 
-            const mainPIndex = mainRows.length > 0 ? mainRows[0].pIndex : 0;
-            if (mainPIndex < maxPIndex && mainPIndex <= nextStep) {
+            const mainPIndex = mainRows.length > 0 ? Number(mainRows[0].pIndex) : 0;
+            // Block only if main container hasn't moved past the CURRENT station yet
+            // (main container must be at nextStep or beyond before packages can advance to nextStep)
+            if (mainPIndex < nextStep) {
               return resolve({
                 success: false,
-                message: "This box cannot advance because the Main Container for this order is not yet ahead of it."
+                message: "This box cannot advance because the Main Container for this order has not been packed at this station yet."
               });
             }
           }
@@ -1163,13 +1194,6 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
               code: "NO_OFFICER_ASSIGNED",
               message: `No packing position user assigned for ${targetStationName}. Please assign an officer to this position first.`
             });
-          }
-
-          // If the next station is QC, skip occupancy checks (multiple boxes can reside at QC simultaneously)
-          console.log("=== QC STATION SKIP OCCUPANCY CHECK ===", { nextStep, qcPIndex, isQC: nextStep === qcPIndex });
-          if (nextStep === qcPIndex) {
-            console.log("=== BYPASSING OCCUPANCY CHECK FOR QC ===");
-            return executeUpdate(qcPIndex, maxPIndex);
           }
 
           const checkOccupiedSql = `
@@ -1231,28 +1255,41 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
     });
 
     function executeUpdate(qcPIndex, maxPIndex) {
-      let sql = `
-        UPDATE positiontracking 
-        SET pIndex = LEAST(pIndex + 1, ?) 
-        WHERE orderId = ? AND pIndex > 0
-      `;
-      const params = [maxPIndex, orderId];
+      let sql;
+      let params;
 
-      if (isMainContainer) {
-        sql += ` AND isMainContainer = 1`;
-      } else if (isPackageIdValid) {
-        sql += ` AND orderpackageId = ? AND isMainContainer = 0`;
-        params.push(Number(orderpackageId));
+      // If we have a precise trackingId PK, target exactly that row
+      if (resolvedTrackingId) {
+        sql = `
+          UPDATE positiontracking 
+          SET pIndex = LEAST(pIndex + 1, ?) 
+          WHERE id = ? AND pIndex > 0
+        `;
+        params = [maxPIndex, resolvedTrackingId];
       } else {
-        sql += ` AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0`;
-      }
+        sql = `
+          UPDATE positiontracking 
+          SET pIndex = LEAST(pIndex + 1, ?) 
+          WHERE orderId = ? AND pIndex > 0
+        `;
+        params = [maxPIndex, orderId];
 
-      if (currentPIndex !== null && currentPIndex > 0) {
-        sql += ` AND pIndex = ?`;
-        params.push(Number(currentPIndex));
-      }
+        if (isCurrentBoxMainContainer) {
+          sql += ` AND isMainContainer = 1`;
+        } else if (isPackageIdValid) {
+          sql += ` AND orderpackageId = ? AND isMainContainer = 0`;
+          params.push(Number(orderpackageId));
+        } else {
+          sql += ` AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0`;
+        }
 
-      sql += ` LIMIT 1`;
+        if (currentPIndex !== null && currentPIndex > 0) {
+          sql += ` AND pIndex = ?`;
+          params.push(Number(currentPIndex));
+        }
+
+        sql += ` LIMIT 1`;
+      }
 
       console.log("=== DAO EXECUTE UPDATE SQL ===", sql, params);
 
@@ -1264,6 +1301,17 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         console.log("=== DAO EXECUTE UPDATE RESULT ===", result);
 
         if (!result || result.affectedRows === 0) {
+          // When targeting a specific box by its positiontracking.id PK, do NOT do a broad
+          // delete-all-insert — that would wipe every row for the same package.
+          // Instead, report the box as already advanced or unavailable.
+          if (resolvedTrackingId) {
+            return resolve({
+              success: false,
+              affectedRows: 0,
+              message: "This box has already been advanced or is unavailable."
+            });
+          }
+
           const deleteStaleSql = isMainContainer
             ? `DELETE FROM positiontracking WHERE orderId = ? AND isMainContainer = 1`
             : isPackageIdValid
@@ -1518,8 +1566,20 @@ exports.getOfficerActiveOrder = (officerId) => {
         po.orderId AS orderId,
         po.invNo AS orderNumber,
         dt.timeSlot,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS orderType,
-        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS orderType,
+        CONCAT(po.invNo, ' (', CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END, ')') AS formattedOrderNumber,
         dti.orderStatus,
         COALESCE(
           pp.pIndex,
@@ -1533,17 +1593,23 @@ exports.getOfficerActiveOrder = (officerId) => {
               pp.pIndex,
               (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
               3
-            ) LIMIT 1),
+            ) ORDER BY pt_sub.id ASC LIMIT 1),
           (SELECT MIN(pt_sub2.pIndex) FROM positiontracking pt_sub2 WHERE pt_sub2.orderId = po.id AND pt_sub2.pIndex > 0),
           (SELECT MAX(pt_sub3.pIndex) FROM positiontracking pt_sub3 WHERE pt_sub3.orderId = po.id),
           0
         ) AS pIndex,
-        (SELECT pt_sub4.orderpackageId FROM positiontracking pt_sub4 WHERE pt_sub4.orderId = po.id
+        (SELECT pt_sub4.id FROM positiontracking pt_sub4 WHERE pt_sub4.orderId = po.id
           AND pt_sub4.pIndex = COALESCE(
             pp.pIndex,
             (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
             3
-          ) AND pt_sub4.isMainContainer = 0 LIMIT 1) AS activeOrderPackageId,
+          ) ORDER BY pt_sub4.id ASC LIMIT 1) AS trackingId,
+        (SELECT pt_sub4b.orderpackageId FROM positiontracking pt_sub4b WHERE pt_sub4b.orderId = po.id
+          AND pt_sub4b.pIndex = COALESCE(
+            pp.pIndex,
+            (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
+            3
+          ) AND pt_sub4b.isMainContainer = 0 ORDER BY pt_sub4b.id ASC LIMIT 1) AS activeOrderPackageId,
         (SELECT EXISTS(SELECT 1 FROM positiontracking pt_sub5 WHERE pt_sub5.orderId = po.id
           AND pt_sub5.pIndex = COALESCE(
             pp.pIndex,
@@ -1566,16 +1632,18 @@ exports.getOfficerActiveOrder = (officerId) => {
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
-      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE()
-        AND dti.orderStatus = 'Opened'
-      ORDER BY 
-        CASE WHEN EXISTS(SELECT 1 FROM positiontracking pt_ex WHERE pt_ex.orderId = po.id
-          AND pt_ex.pIndex = COALESCE(
-            pp.pIndex,
-            (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
-            3
-          )) THEN 0 ELSE 1 END,
-        po.id ASC
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      WHERE tp.id = (
+        SELECT MAX(tp_sub.id) 
+        FROM targetposition tp_sub 
+        WHERE tp_sub.officerId = ? AND DATE(tp_sub.createdAt) = CURDATE()
+      )
+      AND dti.orderStatus = 'Opened'
+      AND EXISTS (
+        SELECT 1 FROM positiontracking pt_ex 
+        WHERE pt_ex.orderId = po.id
+      )
+      ORDER BY po.id ASC
       LIMIT 1
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
@@ -1590,7 +1658,7 @@ exports.getOfficerActiveOrder = (officerId) => {
       // Query packagesList and alacarteCount for steps construction
       try {
         const pkgSql = `
-          SELECT op.id, COALESCE(mp.displayName, 'Package') AS name
+          SELECT op.id, GREATEST(COALESCE(op.qty, 1), 1) AS qty, COALESCE(mp.displayName, 'Package') AS name
           FROM market_place.orderpackage op
           LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
           WHERE op.orderId = ?
@@ -1609,21 +1677,34 @@ exports.getOfficerActiveOrder = (officerId) => {
         });
         const alacarteCount = alacarteRes.length > 0 ? alacarteRes[0].count : 0;
 
+        const trackingSql = `
+          SELECT id, orderpackageId, pIndex, isMainContainer 
+          FROM positiontracking 
+          WHERE orderId = ?
+          ORDER BY id ASC
+        `;
+        const trackingRows = await new Promise((res) => {
+          db.collectionofficer.query(trackingSql, [activeOrder.processOrderId], (e, r) => res(r || []));
+        });
+
         activeOrder.packagesList = packagesList;
         activeOrder.alacarteCount = alacarteCount;
+        activeOrder.trackingRows = trackingRows;
       } catch (stepErr) {
         console.error("Error fetching steps info:", stepErr);
         activeOrder.packagesList = [];
         activeOrder.alacarteCount = 0;
+        activeOrder.trackingRows = [];
       }
 
       try {
         let itemsSql = "";
         let queryParams = [];
 
-        if (activeOrder.isMainContainerActive) {
+        if (Number(activeOrder.isMainContainerActive) === 1) {
           // Main Container is active! We bridge it as -1 to the client and return 0 items.
           activeOrder.activeOrderPackageId = -1;
+          activeOrder.isMainContainerBox = true;
           itemsSql = `SELECT 1 LIMIT 0`;
           queryParams = [];
         } else if (activeOrder.activeOrderPackageId) {
@@ -1632,7 +1713,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               opi.id AS id,
               mi.displayName AS name,
-              CONCAT(ROUND(COALESCE(opi.qty, 1), 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
+              CONCAT(COALESCE(opi.qty, 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
@@ -1652,7 +1733,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               mi.id,
               mi.displayName AS name,
-              CONCAT(ROUND(SUM(COALESCE(oai.qty, 1)), 1), ' ', COALESCE(NULLIF(TRIM(MAX(oai.unit)), ''), 'kg')) AS weight,
+              CONCAT(SUM(COALESCE(oai.qty, 1)), ' ', COALESCE(NULLIF(TRIM(MAX(oai.unit)), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               NULL AS productTypeId,
@@ -1671,7 +1752,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               mi.id,
               mi.displayName AS name,
-              CONCAT(ROUND(SUM(COALESCE(opi.qty, 1)), 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
+              CONCAT(SUM(COALESCE(opi.qty, 1)), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
@@ -1691,7 +1772,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               mi.id,
               mi.displayName AS name,
-              CONCAT(ROUND(SUM(COALESCE(oai.qty, 1)), 1), ' ', COALESCE(NULLIF(TRIM(MAX(oai.unit)), ''), 'kg')) AS weight,
+              CONCAT(SUM(COALESCE(oai.qty, 1)), ' ', COALESCE(NULLIF(TRIM(MAX(oai.unit)), ''), 'kg')) AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               NULL AS productTypeId,
@@ -1745,5 +1826,73 @@ exports.getOfficerActiveOrder = (officerId) => {
       resolve(activeOrder);
     });
   });
+};
+
+/**
+ * Helper to check if officer's row has remaining orders to process today
+ */
+exports.getRowStatusForOfficer = (officerId) => {
+  return new Promise((resolve) => {
+    const sql = `
+      SELECT tp.id, pp.rowId, pp.pIndex AS officerPIndex, pp.pType
+      FROM targetposition tp
+      JOIN packingpositions pp ON tp.positionId = pp.id
+      WHERE tp.id = (
+        SELECT MAX(tp_sub.id)
+        FROM targetposition tp_sub
+        WHERE tp_sub.officerId = ? AND DATE(tp_sub.createdAt) = CURDATE()
+      )
+    `;
+    db.collectionofficer.query(sql, [officerId], (err, rows) => {
+      if (err || !rows || rows.length === 0) {
+        return resolve({ rowStatus: "NO_DAILY_TARGET", activeCount: 0 });
+      }
+      const rowId = rows[0].rowId;
+      const countSql = `
+        SELECT COUNT(*) AS activeCount
+        FROM distributedtarget dt
+        JOIN distributedtargetitems dti ON dt.id = dti.targetId
+        WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE() AND dti.orderStatus IN ('Pending', 'Opened')
+      `;
+      db.collectionofficer.query(countSql, [rowId], (err2, countRows) => {
+        const activeCount = countRows && countRows.length > 0 ? countRows[0].activeCount : 0;
+        if (activeCount > 0) {
+          resolve({ rowStatus: "WAITING_PREVIOUS", activeCount });
+        } else {
+          resolve({ rowStatus: "NO_DAILY_TARGET", activeCount: 0 });
+        }
+      });
+    });
+  });
+};
+
+/**
+ * Dedicated active order fetch for Packer Officers (P1, P2... Pn)
+ */
+exports.getPackerActiveOrder = async (officerId) => {
+  const activeOrder = await exports.getOfficerActiveOrder(officerId);
+  if (activeOrder && activeOrder.pIndex > 0 && Number(activeOrder.pIndex) === Number(activeOrder.officerPosIndex)) {
+    return { ...activeOrder, hasActiveBox: true };
+  }
+  const statusInfo = await exports.getRowStatusForOfficer(officerId);
+  if (activeOrder) {
+    return { ...activeOrder, ...statusInfo, hasActiveBox: false };
+  }
+  return { ...statusInfo, hasActiveBox: false };
+};
+
+/**
+ * Dedicated active order fetch for QC Officers
+ */
+exports.getQCActiveOrder = async (officerId) => {
+  const activeOrder = await exports.getOfficerActiveOrder(officerId);
+  if (activeOrder && activeOrder.pIndex > 0 && Number(activeOrder.pIndex) === Number(activeOrder.officerPosIndex)) {
+    return { ...activeOrder, hasActiveBox: true };
+  }
+  const statusInfo = await exports.getRowStatusForOfficer(officerId);
+  if (activeOrder) {
+    return { ...activeOrder, ...statusInfo, hasActiveBox: false };
+  }
+  return { ...statusInfo, hasActiveBox: false };
 };
 

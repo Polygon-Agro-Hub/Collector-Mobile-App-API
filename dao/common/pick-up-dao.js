@@ -34,6 +34,7 @@ exports.getPickupOrders = (officerId) => {
                 po.creditPaid,
                 po.status,
                 po.outDlvrDate,
+                po.packTime,
                 
                 u.cusId,
                 u.firstName,
@@ -451,6 +452,8 @@ exports.getReceivedOrderOfficer = (officerId) => {
                 pr.paymentMethod,
                 pr.isPaid,
                 pr.amount,
+                pr.creditPaid,
+                pr.moneyPaid,
                 pr.status AS processStatus,
                 
                 -- Orders data
