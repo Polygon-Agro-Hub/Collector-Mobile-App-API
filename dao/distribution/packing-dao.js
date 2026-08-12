@@ -358,11 +358,23 @@ exports.getQROrdersForOfficer = (officerId) => {
         po.id AS id,
         po.id AS processOrderId,
         po.invNo AS orderNumber,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS type,
         dt.timeSlot,
         CASE 
           WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
-          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+          ELSE COALESCE(
+            NULLIF(TRIM(oh.city), ''), 
+            NULLIF(TRIM(oa.city), ''), 
+            NULLIF(TRIM(u.nearesCity), ''), 
+            NULLIF(TRIM(o.delivaryMethod), ''), 
+            'Bambalapitiya'
+          ) 
         END AS category,
         dti.orderStatus,
         COALESCE(
@@ -373,16 +385,14 @@ exports.getQROrdersForOfficer = (officerId) => {
         (SELECT COUNT(DISTINCT oai.productId) FROM market_place.orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
-      LEFT JOIN distributedtarget dt_tp ON tp.targetId = dt_tp.id
-      JOIN distributedtarget dt ON (
-        dt.id = tp.targetId 
-        OR (pp.rowId = dt.rowId AND DATE(dt.createdAt) = COALESCE(DATE(dt_tp.createdAt), CURDATE()))
-      )
+      JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
-      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE()
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      WHERE tp.officerId = ? AND (DATE(tp.createdAt) = CURDATE() OR DATE(dt.createdAt) = CURDATE())
       ORDER BY po.id ASC
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
@@ -449,18 +459,36 @@ exports.getQROrdersForOfficer = (officerId) => {
  * Get distribution center targets grouped/listed for Center Target Screen
  * @returns {Promise<Array>}
  */
-exports.getCenterTargetOrders = () => {
+exports.getCenterTargetOrders = (companyCenterId = null) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT DISTINCT
         po.id AS id,
         po.invNo AS orderNumber,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
-        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS type,
+        CONCAT(po.invNo, ' (', CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END, ')') AS formattedOrderNumber,
         dt.timeSlot,
         CASE 
           WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Pickup Order' 
-          ELSE COALESCE(NULLIF(TRIM(oh.city), ''), NULLIF(TRIM(o.delivaryMethod), ''), 'Bambalapitiya') 
+          ELSE COALESCE(
+            NULLIF(TRIM(oh.city), ''), 
+            NULLIF(TRIM(oa.city), ''), 
+            NULLIF(TRIM(u.nearesCity), ''), 
+            NULLIF(TRIM(o.delivaryMethod), ''), 
+            'Bambalapitiya'
+          ) 
         END AS category,
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
@@ -477,11 +505,15 @@ exports.getCenterTargetOrders = () => {
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
+      LEFT JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
       WHERE DATE(dt.createdAt) = CURDATE()
+        AND (? IS NULL OR dcen.id = ?)
       ORDER BY dt.timeSlot ASC, po.id ASC
     `;
-    db.collectionofficer.query(sql, [], (err, results) => {
+    db.collectionofficer.query(sql, [companyCenterId, companyCenterId], (err, results) => {
       if (err) {
         console.error("Error in getCenterTargetOrders:", err);
         return resolve([]);
@@ -523,6 +555,8 @@ exports.getOrderDetails = (orderId) => {
       LEFT JOIN distributedtarget dt ON dti.targetId = dt.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
       LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
       WHERE po.id = ? OR po.invNo = ?
       LIMIT 1
     `;
@@ -1518,8 +1552,20 @@ exports.getOfficerActiveOrder = (officerId) => {
         po.orderId AS orderId,
         po.invNo AS orderNumber,
         dt.timeSlot,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS orderType,
-        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END AS orderType,
+        CONCAT(po.invNo, ' (', CASE 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          ELSE 'W' 
+        END, ')') AS formattedOrderNumber,
         dti.orderStatus,
         COALESCE(
           pp.pIndex,
@@ -1566,6 +1612,7 @@ exports.getOfficerActiveOrder = (officerId) => {
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN market_place.processorders po ON dti.orderId = po.id
       JOIN market_place.orders o ON po.orderId = o.id
+      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
       WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE()
         AND dti.orderStatus = 'Opened'
       ORDER BY 

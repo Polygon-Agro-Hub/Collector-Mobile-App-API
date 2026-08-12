@@ -185,14 +185,27 @@ exports.getRowLiveMonitor = (rowId) => {
           po.id AS processOrderId,
           po.orderId AS masterOrderId,
           po.invNo AS invoiceNumber,
-          CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS orderType,
-          CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedInvoice,
+          CASE 
+            WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+            WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+            ELSE 'W' 
+          END AS orderType,
+          CONCAT(po.invNo, ' (', CASE 
+            WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+            WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+            ELSE 'W' 
+          END, ')') AS formattedInvoice,
           dti.orderStatus,
           dt.timeSlot
         FROM distributedtarget dt
         JOIN distributedtargetitems dti ON dt.id = dti.targetId
         JOIN market_place.processorders po ON dti.orderId = po.id
         JOIN market_place.orders o ON po.orderId = o.id
+        LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
         WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
         ORDER BY po.id ASC
       `;

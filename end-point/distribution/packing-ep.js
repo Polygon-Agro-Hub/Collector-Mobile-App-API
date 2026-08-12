@@ -296,7 +296,14 @@ exports.getOfficerActiveOrder = asyncHandler(async (req, res) => {
  * Get distribution center target orders
  */
 exports.getCenterTarget = asyncHandler(async (req, res) => {
-  const orders = await packingDao.getCenterTargetOrders();
+  const officerId = req.user.id;
+  let companyCenterId = req.user.companycenterId;
+
+  if (!companyCenterId) {
+    companyCenterId = await packingDao.getCompanyCenterIdForOfficer(officerId);
+  }
+
+  const orders = await packingDao.getCenterTargetOrders(companyCenterId);
 
   res.status(200).json({
     success: true,
