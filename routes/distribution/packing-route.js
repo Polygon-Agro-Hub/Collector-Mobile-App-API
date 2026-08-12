@@ -76,6 +76,20 @@ router.get(
   PackingEp.getOfficerActiveOrder
 );
 
+router.get(
+  "/packer/active-order",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getPackerActiveOrder
+);
+
+router.get(
+  "/qc/active-order",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.getQCActiveOrder
+);
+
 // Assign Groups (DCM) Flow Routes
 router.get(
   "/groups",
