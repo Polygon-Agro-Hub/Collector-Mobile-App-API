@@ -951,38 +951,81 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
 
 
           if (isMainContainer) {
-            const insertTrackingSql = `
-              INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
-              VALUES (?, NULL, 1, 1, NOW())
-            `;
-            await new Promise((res, rej) => {
-              connection.query(insertTrackingSql, [orderId], (err, result) => {
+            // Check if Main Container is already registered
+            const checkMainSql = `SELECT id FROM positiontracking WHERE orderId = ? AND isMainContainer = 1 LIMIT 1`;
+            const mainExists = await new Promise((res, rej) => {
+              connection.query(checkMainSql, [orderId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
+
+            if (mainExists.length === 0) {
+              const insertTrackingSql = `
+                INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
+                VALUES (?, NULL, 1, 1, NOW())
+              `;
+              await new Promise((res, rej) => {
+                connection.query(insertTrackingSql, [orderId], (err, result) => {
+                  if (err) return rej(err);
+                  res(result);
+                });
+              });
+            }
           } else if (validPackageId) {
-            const insertTrackingSql = `
-              INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
-              VALUES (?, ?, 1, 0, NOW())
-            `;
-            await new Promise((res, rej) => {
-              connection.query(insertTrackingSql, [orderId, validPackageId], (err, result) => {
+            // Check how many package copies are already registered
+            const checkPkgCountSql = `SELECT COUNT(*) AS count FROM positiontracking WHERE orderId = ? AND orderpackageId = ?`;
+            const existingCountRes = await new Promise((res, rej) => {
+              connection.query(checkPkgCountSql, [orderId, validPackageId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
+            const existingCount = existingCountRes.length > 0 ? existingCountRes[0].count : 0;
+
+            const getPkgQtySql = `SELECT GREATEST(COALESCE(qty, 1), 1) AS qty FROM market_place.orderpackage WHERE id = ?`;
+            const qtyRes = await new Promise((res, rej) => {
+              connection.query(getPkgQtySql, [validPackageId], (err, results) => {
+                if (err) return rej(err);
+                res(results || []);
+              });
+            });
+            const qty = qtyRes.length > 0 ? qtyRes[0].qty : 1;
+
+            if (existingCount < qty) {
+              const insertTrackingSql = `
+                INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
+                VALUES (?, ?, 1, 0, NOW())
+              `;
+              await new Promise((res, rej) => {
+                connection.query(insertTrackingSql, [orderId, validPackageId], (err, result) => {
+                  if (err) return rej(err);
+                  res(result);
+                });
+              });
+            }
           } else {
-            const insertTrackingSql = `
-              INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
-              VALUES (?, NULL, 1, 0, NOW())
-            `;
-            await new Promise((res, rej) => {
-              connection.query(insertTrackingSql, [orderId], (err, result) => {
+            // Check if À la carte is already registered
+            const checkAlacarteSql = `SELECT id FROM positiontracking WHERE orderId = ? AND orderpackageId IS NULL AND isMainContainer = 0 LIMIT 1`;
+            const alacarteExists = await new Promise((res, rej) => {
+              connection.query(checkAlacarteSql, [orderId], (err, results) => {
                 if (err) return rej(err);
-                res(result);
+                res(results || []);
               });
             });
+
+            if (alacarteExists.length === 0) {
+              const insertTrackingSql = `
+                INSERT INTO positiontracking (orderId, orderpackageId, pIndex, isMainContainer, createdAt) 
+                VALUES (?, NULL, 1, 0, NOW())
+              `;
+              await new Promise((res, rej) => {
+                connection.query(insertTrackingSql, [orderId], (err, result) => {
+                  if (err) return rej(err);
+                  res(result);
+                });
+              });
+            }
           }
 
           connection.commit((commitErr) => {
@@ -1599,11 +1642,6 @@ exports.getOfficerActiveOrder = (officerId) => {
       AND EXISTS (
         SELECT 1 FROM positiontracking pt_ex 
         WHERE pt_ex.orderId = po.id
-          AND pt_ex.pIndex = COALESCE(
-            pp.pIndex,
-            (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
-            3
-          )
       )
       ORDER BY po.id ASC
       LIMIT 1
@@ -1620,7 +1658,7 @@ exports.getOfficerActiveOrder = (officerId) => {
       // Query packagesList and alacarteCount for steps construction
       try {
         const pkgSql = `
-          SELECT op.id, COALESCE(mp.displayName, 'Package') AS name
+          SELECT op.id, GREATEST(COALESCE(op.qty, 1), 1) AS qty, COALESCE(mp.displayName, 'Package') AS name
           FROM market_place.orderpackage op
           LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
           WHERE op.orderId = ?
@@ -1639,12 +1677,24 @@ exports.getOfficerActiveOrder = (officerId) => {
         });
         const alacarteCount = alacarteRes.length > 0 ? alacarteRes[0].count : 0;
 
+        const trackingSql = `
+          SELECT id, orderpackageId, pIndex, isMainContainer 
+          FROM positiontracking 
+          WHERE orderId = ?
+          ORDER BY id ASC
+        `;
+        const trackingRows = await new Promise((res) => {
+          db.collectionofficer.query(trackingSql, [activeOrder.processOrderId], (e, r) => res(r || []));
+        });
+
         activeOrder.packagesList = packagesList;
         activeOrder.alacarteCount = alacarteCount;
+        activeOrder.trackingRows = trackingRows;
       } catch (stepErr) {
         console.error("Error fetching steps info:", stepErr);
         activeOrder.packagesList = [];
         activeOrder.alacarteCount = 0;
+        activeOrder.trackingRows = [];
       }
 
       try {
@@ -1825,6 +1875,9 @@ exports.getPackerActiveOrder = async (officerId) => {
     return { ...activeOrder, hasActiveBox: true };
   }
   const statusInfo = await exports.getRowStatusForOfficer(officerId);
+  if (activeOrder) {
+    return { ...activeOrder, ...statusInfo, hasActiveBox: false };
+  }
   return { ...statusInfo, hasActiveBox: false };
 };
 
@@ -1837,6 +1890,9 @@ exports.getQCActiveOrder = async (officerId) => {
     return { ...activeOrder, hasActiveBox: true };
   }
   const statusInfo = await exports.getRowStatusForOfficer(officerId);
+  if (activeOrder) {
+    return { ...activeOrder, ...statusInfo, hasActiveBox: false };
+  }
   return { ...statusInfo, hasActiveBox: false };
 };
 
