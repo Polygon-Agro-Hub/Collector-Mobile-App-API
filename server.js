@@ -44,6 +44,7 @@ const io = new Server(server, {
   },
 });
 
+// Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("⚡ Client connected to Socket.IO:", socket.id);
 
