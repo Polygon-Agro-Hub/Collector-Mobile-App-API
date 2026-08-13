@@ -355,4 +355,26 @@ exports.getOrderDetails = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Release logged-in officer's active position today
+ */
+exports.releasePosition = asyncHandler(async (req, res) => {
+  const officerId = req.user.id;
+  const result = await packingDao.releaseOfficerPosition(officerId);
+
+  if (result.success && result.positionId) {
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("rows_updated");
+      io.emit("position_freed", { positionId: Number(result.positionId) });
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Position released successfully",
+    data: result
+  });
+});
+
 

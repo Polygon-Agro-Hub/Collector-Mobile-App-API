@@ -34,6 +34,13 @@ router.post(
   PackingEp.assignPosition
 );
 
+router.post(
+  "/positions/release",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.releasePosition
+);
+
 router.get(
   "/positions/:positionId/crops",
   auth,

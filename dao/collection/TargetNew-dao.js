@@ -5,7 +5,6 @@ exports.getOfficerDailyTargets = (officerId) => {
     if (!officerId) {
       return reject(new Error("Officer ID is required"));
     }
-
     const sql = `
           SELECT
               ot.id AS officerTargetId,
@@ -19,8 +18,7 @@ exports.getOfficerDailyTargets = (officerId) => {
               dt.target AS dailyTarget,
               ot.target AS officerTarget,
               ot.complete,
-              (CAST(COALESCE(ot.target, '0') AS DECIMAL(15,2)) - 
-              CAST(COALESCE(ot.complete, '0') AS DECIMAL(15,2))) AS todo,
+              (COALESCE(ot.target, 0) - COALESCE(ot.complete, 0)) AS todo,
               DATE_FORMAT(dt.date, '%Y-%m-%d') AS targetDate,
               dt.assignStatus
           FROM
@@ -36,13 +34,11 @@ exports.getOfficerDailyTargets = (officerId) => {
           ORDER BY
               dt.date DESC, dt.id DESC
       `;
-
     collectionofficer.query(sql, [officerId], (err, results) => {
       if (err) {
         console.error("Database error:", err);
         return reject(err);
       }
-
       const formattedResults = results.map((target) => ({
         officerTargetId: target.officerTargetId,
         dailyTargetId: target.dailyTargetId,
@@ -59,7 +55,6 @@ exports.getOfficerDailyTargets = (officerId) => {
         targetDate: target.targetDate,
         assignStatus: target.assignStatus,
       }));
-
       resolve(formattedResults);
     });
   });
@@ -107,9 +102,9 @@ exports.getCenterTarget = (centerId) => {
         varietyNameSinhala: target.varietyNameSinhala,
         varietyNameTamil: target.varietyNameTamil,
         grade: target.grade,
-        target: parseFloat(target.target).toFixed(2),
-        complete: parseFloat(target.complete || 0).toFixed(2),
-        todo: parseFloat(target.todo || 0).toFixed(2),
+        target: parseFloat(target.target),
+        complete: parseFloat(target.complete || 0),
+        todo: parseFloat(target.todo || 0),
       }));
 
       resolve(formattedResults.length === 0 ? [] : formattedResults);
