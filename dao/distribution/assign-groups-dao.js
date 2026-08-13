@@ -84,11 +84,29 @@ exports.getRowAllocationCounts = (companyCenterId) => {
       SELECT 
         pr.id,
         CONCAT('Row ', pr.rowIndex) AS name,
-        CAST(COALESCE(COUNT(dti.id), 0) AS UNSIGNED) AS allocatedCount
+        CAST(COALESCE(COUNT(dti.id), 0) AS UNSIGNED) AS allocatedCount,
+        (
+          SELECT GROUP_CONCAT(DISTINCT mi.displayName ORDER BY mi.displayName ASC SEPARATOR ', ')
+          FROM packingpositions pp
+          JOIN positionscrops pc ON pp.id = pc.posId
+          JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
+          WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
+        ) AS crops
       FROM packingrows pr
       LEFT JOIN distributedtarget dt ON pr.id = dt.rowId AND DATE(dt.createdAt) = CURDATE()
       LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
       WHERE pr.isEnabled = 1 AND pr.companyCenterId = ?
+        AND (
+          SELECT COUNT(*) 
+          FROM packingpositions pp
+          WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
+        ) > 0
+        AND NOT EXISTS (
+          SELECT 1 
+          FROM packingpositions pp
+          LEFT JOIN positionscrops pc ON pp.id = pc.posId AND pc.mpiId IS NOT NULL
+          WHERE pp.rowId = pr.id AND pp.pType = 'NOR' AND pc.id IS NULL
+        )
       GROUP BY pr.id, pr.rowIndex
       ORDER BY pr.rowIndex ASC
     `;
@@ -109,7 +127,7 @@ exports.getRowAllocationCounts = (companyCenterId) => {
  * @param {Array<number>} orderIds 
  * @returns {Promise<Object>}
  */
-exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds) => {
+exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = null) => {
   return new Promise((resolve, reject) => {
     if (!orderIds || orderIds.length === 0) {
       return resolve({ success: true, count: 0 });
@@ -131,11 +149,12 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds) => {
           // 0. Resolve packingrows.id if rowIndex was passed
           const resolveRowSql = `
             SELECT id FROM packingrows 
-            WHERE id = ? OR rowIndex = ? 
+            WHERE (id = ? OR rowIndex = ?)
+              AND (? IS NULL OR companyCenterId = ?)
             ORDER BY id DESC LIMIT 1
           `;
           const actualRowId = await new Promise((res, rej) => {
-            connection.query(resolveRowSql, [rowId, rowId], (err, results) => {
+            connection.query(resolveRowSql, [rowId, rowId, companyCenterId, companyCenterId], (err, results) => {
               if (err) return rej(err);
               res(results.length > 0 ? results[0].id : rowId);
             });
@@ -246,20 +265,13 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds) => {
               });
             });
 
-            // Calculate number of distributedtargetitems rows to insert (1 per package + 1 for alacarte)
-            let totalItemRows = 1;
-            if (orderPackages && orderPackages.length > 0) {
-              totalItemRows = orderPackages.length + (additionalItems && additionalItems.length > 0 ? 1 : 0);
-            }
-
-            for (let i = 0; i < totalItemRows; i++) {
-              await new Promise((res, rej) => {
-                connection.query(insertItemSql, [targetId, orderId], (err, result) => {
-                  if (err) return rej(err);
-                  res(result);
-                });
+            // Insert exactly one row in distributedtargetitems for the order (invoice)
+            await new Promise((res, rej) => {
+              connection.query(insertItemSql, [targetId, orderId], (err, result) => {
+                if (err) return rej(err);
+                res(result);
               });
-            }
+            });
 
             const insertPosTrackingSql = `
               INSERT INTO positiontracking (orderId, orderpackageId, pIndex, createdAt) 

@@ -123,7 +123,20 @@ exports.getUnassignedOrders = asyncHandler(async (req, res) => {
  * Get allocated counts for enabled packing rows today
  */
 exports.getRowAllocations = asyncHandler(async (req, res) => {
-  const companyCenterId = req.user.companycenterId;
+  const officerId = req.user.id;
+  let companyCenterId = req.user.companycenterId;
+
+  if (!companyCenterId) {
+    companyCenterId = await packingDao.getCompanyCenterIdForOfficer(officerId);
+  }
+
+  if (!companyCenterId) {
+    return res.status(400).json({
+      success: false,
+      message: "Could not determine the distribution centre for this user."
+    });
+  }
+
   const rows = await assignGroupsDao.getRowAllocationCounts(companyCenterId);
   res.status(200).json({
     success: true,
@@ -145,10 +158,25 @@ exports.assignGroupOrders = asyncHandler(async (req, res) => {
     });
   }
 
+  const officerId = req.user.id;
+  let companyCenterId = req.user.companycenterId;
+
+  if (!companyCenterId) {
+    companyCenterId = await packingDao.getCompanyCenterIdForOfficer(officerId);
+  }
+
+  if (!companyCenterId) {
+    return res.status(400).json({
+      success: false,
+      message: "Could not determine the distribution centre for this user."
+    });
+  }
+
   const result = await assignGroupsDao.assignOrdersToRow(
     Number(rowId),
     timeSlotCode,
-    orderIds.map(Number)
+    orderIds.map(Number),
+    companyCenterId
   );
 
   res.status(200).json({

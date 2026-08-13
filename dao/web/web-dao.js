@@ -7,7 +7,6 @@ const jwt = require("jsonwebtoken");
  */
 exports.dcmLogin = (username, password) => {
   return new Promise((resolve, reject) => {
-    // Search user in collectionofficer table
     const sql = `
       SELECT 
         u.id, 
@@ -33,7 +32,6 @@ exports.dcmLogin = (username, password) => {
 
       const user = results[0];
 
-      // Verify password
       let validPassword = false;
       if (user.password && (user.password.startsWith("$2b$") || user.password.startsWith("$2a$"))) {
         validPassword = await bcrypt.compare(password, user.password);
@@ -69,10 +67,11 @@ exports.dcmLogin = (username, password) => {
 };
 
 /**
- * Get all available packing rows today with isEnabled = 1 for companyCenterId
- * @param {number|null} companyCenterId 
+ * Get all packing rows for ALL centers
+ * @param {boolean} includeInactive - If true, includes disabled rows (isEnabled = 0)
+ * @param {number|null} companyCenterId - Optional: filter by specific center
  */
-exports.getAvailableRows = (companyCenterId = null) => {
+exports.getAvailableRows = (companyCenterId = null, includeInactive = false) => {
   return new Promise((resolve, reject) => {
     let sql = `
       SELECT 
@@ -94,16 +93,23 @@ exports.getAvailableRows = (companyCenterId = null) => {
           WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
         ) AS totalOrders
       FROM packingrows pr
-      WHERE pr.isEnabled = 1
+      WHERE 1=1
     `;
     const params = [];
 
+    // Only filter by isEnabled if we don't want to include inactive rows
+    if (!includeInactive) {
+      sql += ` AND pr.isEnabled = 1`;
+    }
+
+    // If companyCenterId is provided, filter by it
     if (companyCenterId) {
       sql += ` AND pr.companyCenterId = ?`;
       params.push(companyCenterId);
     }
 
-    sql += ` ORDER BY pr.rowIndex ASC, pr.id ASC`;
+    // Order by company center first, then by row index
+    sql += ` ORDER BY pr.companyCenterId ASC, pr.rowIndex ASC, pr.id ASC`;
 
     db.collectionofficer.query(sql, params, (err, results) => {
       if (err) {
@@ -116,238 +122,289 @@ exports.getAvailableRows = (companyCenterId = null) => {
 };
 
 /**
+ * Get all centers with their row counts
+ */
+exports.getAllCentersWithRows = () => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        pr.companyCenterId,
+        COUNT(*) AS totalRows,
+        SUM(CASE WHEN pr.isEnabled = 1 THEN 1 ELSE 0 END) AS activeRows,
+        SUM(CASE WHEN pr.isEnabled = 0 THEN 1 ELSE 0 END) AS inactiveRows
+      FROM packingrows pr
+      GROUP BY pr.companyCenterId
+      ORDER BY pr.companyCenterId ASC
+    `;
+    
+    db.collectionofficer.query(sql, (err, results) => {
+      if (err) {
+        console.error("Error fetching centers with rows:", err);
+        return reject(err);
+      }
+      resolve(results);
+    });
+  });
+};
+
+/**
  * Get Live Row Monitor Data (Assigned Officers by Role + Boxes with QR and pIndex status)
- * @param {number} rowId 
+ * FIXED: Now properly handles rows by their actual ID
  */
 exports.getRowLiveMonitor = (rowId) => {
   return new Promise((resolve, reject) => {
-    // 1. Fetch assigned staff for this row today
-    const staffSql = `
-      SELECT DISTINCT
-        tp.officerId,
-        tp.id AS targetPositionId,
-        tp.isFinished,
-        CONCAT(COALESCE(u.firstNameEnglish, ''), ' ', COALESCE(u.lastNameEnglish, '')) AS officerName,
-        u.empId,
-        u.image,
-        pp.pType,
-        pp.pIndex AS officerPosIndex
-      FROM targetposition tp
-      JOIN packingpositions pp ON tp.positionId = pp.id
-      JOIN collectionofficer u ON tp.officerId = u.id
-      WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
-      ORDER BY pp.pIndex ASC
-    `;
-
-    db.collectionofficer.query(staffSql, [rowId], async (err, staffResults) => {
+    // First, verify the row exists and get its details
+    const rowCheckSql = `SELECT id, companyCenterId, isEnabled, rowIndex FROM packingrows WHERE id = ?`;
+    db.collectionofficer.query(rowCheckSql, [rowId], async (err, rowResults) => {
       if (err) {
-        console.error("Error fetching staff for row live monitor:", err);
+        console.error("Error checking row:", err);
         return reject(err);
       }
+      if (rowResults.length === 0) {
+        return resolve({
+          rowId: Number(rowId),
+          assignedStaff: [],
+          stations: [],
+          boxes: [],
+          error: "Row not found"
+        });
+      }
 
-      // Map assigned staff into QR Officer, Packers, and QC Officer with individual colors
-      const staffList = staffResults.map((s) => {
-        let role = "PACKER";
-        let roleLabel = `Packing Position ${s.officerPosIndex}`;
-        let color = "#2563EB"; // Royal Blue default for Packers
-
-        if (s.pType === "QR" || s.officerPosIndex === 0) {
-          role = "QR_OFFICER";
-          roleLabel = "QR Officer";
-          color = "#980775"; // Magenta
-        } else if (s.pType === "QC") {
-          role = "QC_OFFICER";
-          roleLabel = "QC Officer";
-          color = "#059669"; // Emerald
-        } else {
-          role = "PACKER";
-          roleLabel = `Packing Position ${s.officerPosIndex}`;
-          color = "#2563EB"; // Royal Blue
-        }
-
-        return {
-          officerId: s.officerId,
-          targetPositionId: s.targetPositionId,
-          isFinished: s.isFinished,
-          name: s.officerName.trim() || s.empId,
-          empId: s.empId,
-          image: s.image,
-          role: role,
-          roleLabel: roleLabel,
-          positionIndex: s.officerPosIndex,
-          color: color,
-        };
-      });
-
-      // 2. Fetch process orders assigned to this row today
-      const ordersSql = `
+      const rowData = rowResults[0];
+      
+      // 1. Fetch assigned staff for this row today
+      const staffSql = `
         SELECT DISTINCT
-          po.id AS processOrderId,
-          po.orderId AS masterOrderId,
-          po.invNo AS invoiceNumber,
-          CASE 
-            WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
-            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-            WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
-            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-            ELSE 'W' 
-          END AS orderType,
-          CONCAT(po.invNo, ' (', CASE 
-            WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
-            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-            WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
-            WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-            ELSE 'W' 
-          END, ')') AS formattedInvoice,
-          dti.orderStatus,
-          dt.timeSlot
-        FROM distributedtarget dt
-        JOIN distributedtargetitems dti ON dt.id = dti.targetId
-        JOIN market_place.processorders po ON dti.orderId = po.id
-        JOIN market_place.orders o ON po.orderId = o.id
-        LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
-        WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
-        ORDER BY po.id ASC
+          tp.officerId,
+          tp.id AS targetPositionId,
+          tp.isFinished,
+          CONCAT(COALESCE(u.firstNameEnglish, ''), ' ', COALESCE(u.lastNameEnglish, '')) AS officerName,
+          u.empId,
+          u.image,
+          pp.pType,
+          pp.pIndex AS officerPosIndex
+        FROM targetposition tp
+        JOIN packingpositions pp ON tp.positionId = pp.id
+        JOIN collectionofficer u ON tp.officerId = u.id
+        WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+        ORDER BY pp.pIndex ASC
       `;
 
-      db.collectionofficer.query(ordersSql, [rowId], async (err, orderResults) => {
+      db.collectionofficer.query(staffSql, [rowId], async (err, staffResults) => {
         if (err) {
-          console.error("Error fetching orders for row live monitor:", err);
+          console.error("Error fetching staff for row live monitor:", err);
           return reject(err);
         }
 
-        // Fetch QC pIndex and max packer pIndex for this row dynamically
-        // so status labels are correct regardless of how many packers are configured
-        const rowConfigSql = `
-          SELECT 
-            MAX(CASE WHEN pp.pType = 'QC' THEN pp.pIndex ELSE NULL END) AS qcPIndex,
-            MAX(CASE WHEN pp.pType = 'NOR' THEN pp.pIndex ELSE NULL END) AS maxPackerPIndex
-          FROM packingpositions pp
-          WHERE pp.rowId = ?
-        `;
-        const rowConfig = await new Promise((res) => {
-          db.collectionofficer.query(rowConfigSql, [rowId], (e, r) => res(e || !r || !r[0] ? {} : r[0]));
+        const staffList = staffResults.map((s) => {
+          let role = "PACKER";
+          let roleLabel = `Packing Position ${s.officerPosIndex}`;
+          let color = "#2563EB";
+
+          if (s.pType === "QR" || s.officerPosIndex === 0) {
+            role = "QR_OFFICER";
+            roleLabel = "QR Officer";
+            color = "#980775";
+          } else if (s.pType === "QC") {
+            role = "QC_OFFICER";
+            roleLabel = "QC Officer";
+            color = "#059669";
+          } else {
+            role = "PACKER";
+            roleLabel = `Packing Position ${s.officerPosIndex}`;
+            color = "#2563EB";
+          }
+
+          return {
+            officerId: s.officerId,
+            targetPositionId: s.targetPositionId,
+            isFinished: s.isFinished,
+            name: s.officerName.trim() || s.empId,
+            empId: s.empId,
+            image: s.image,
+            role: role,
+            roleLabel: roleLabel,
+            positionIndex: s.officerPosIndex,
+            color: color,
+          };
         });
-        // qcPIndex: the actual pIndex value assigned to the QC station in this row
-        // If QC pIndex is NULL in DB, derive it as maxPackerPIndex + 1
-        const maxPackerPIndex = Number(rowConfig.maxPackerPIndex) || 1;
-        const qcPIndex = rowConfig.qcPIndex != null ? Number(rowConfig.qcPIndex) : maxPackerPIndex + 1;
 
-        // Helper: map a numeric pIndex to a status object based on row's actual config
-        const getBoxStatus = (pIdx, orderStatus) => {
-          if (orderStatus === "Pending" || pIdx === 0) {
-            return { status: "QR_PENDING", statusLabel: "QR Pending", statusColor: "#6B7280" };
+        // 2. Fetch process orders assigned to THIS SPECIFIC ROW ID
+        const ordersSql = `
+          SELECT DISTINCT
+            po.id AS processOrderId,
+            po.orderId AS masterOrderId,
+            po.invNo AS invoiceNumber,
+            CASE 
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+              WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+              WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+              ELSE 'W' 
+            END AS orderType,
+            CONCAT(po.invNo, ' (', CASE 
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+              WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
+              WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+              ELSE 'W' 
+            END, ')') AS formattedInvoice,
+            dti.orderStatus,
+            dt.timeSlot
+          FROM distributedtarget dt
+          JOIN distributedtargetitems dti ON dt.id = dti.targetId
+          JOIN market_place.processorders po ON dti.orderId = po.id
+          JOIN market_place.orders o ON po.orderId = o.id
+          LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+          ORDER BY po.id ASC
+        `;
+
+        db.collectionofficer.query(ordersSql, [rowId], async (err, orderResults) => {
+          if (err) {
+            console.error("Error fetching orders for row live monitor:", err);
+            return reject(err);
           }
-          if (pIdx === qcPIndex) {
-            return { status: "AT_QC", statusLabel: "At QC", statusColor: "#059669" };
-          }
-          if (pIdx > qcPIndex) {
-            return { status: "COMPLETED", statusLabel: "Completed", statusColor: "#10B981" };
-          }
-          // Regular packing positions 1..maxPackerPIndex
-          return { status: `AT_PACKER_${pIdx}`, statusLabel: `At Packer ${pIdx}`, statusColor: pIdx === 1 ? "#2563EB" : "#8B5CF6" };
-        };
 
-        const boxes = [];
+          console.log(`📊 Row ${rowId} (Center ${rowData.companyCenterId}, Index ${rowData.rowIndex}) has ${orderResults.length} orders`);
 
-        for (const order of orderResults) {
-          const pOrderId = order.processOrderId;
-          const mOrderId = order.masterOrderId;
-
-          // Fetch package records with quantity for this order
-          const pkgSql = `
-            SELECT op.id AS orderpackageId, GREATEST(COALESCE(op.qty, 1), 1) AS qty, mp.displayName AS packageName
-            FROM market_place.orderpackage op
-            JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
-            WHERE op.orderId = ? OR op.orderId = ?
+          const rowConfigSql = `
+            SELECT 
+              MAX(CASE WHEN pp.pType = 'QC' THEN pp.pIndex ELSE NULL END) AS qcPIndex,
+              MAX(CASE WHEN pp.pType = 'NOR' THEN pp.pIndex ELSE NULL END) AS maxPackerPIndex
+            FROM packingpositions pp
+            WHERE pp.rowId = ?
           `;
-
-          const packages = await new Promise((res) => {
-            db.collectionofficer.query(pkgSql, [pOrderId, mOrderId], (e, r) => res(e ? [] : r));
+          const rowConfig = await new Promise((res) => {
+            db.collectionofficer.query(rowConfigSql, [rowId], (e, r) => res(e || !r || !r[0] ? {} : r[0]));
           });
+          const maxPackerPIndex = Number(rowConfig.maxPackerPIndex) || 1;
+          const qcPIndex = rowConfig.qcPIndex != null ? Number(rowConfig.qcPIndex) : maxPackerPIndex + 1;
 
-          // Fetch position tracking for this order
-          const trackingSql = `
-            SELECT id, orderpackageId, pIndex, isMainContainer 
-            FROM positiontracking 
-            WHERE orderId = ?
-          `;
-          const trackingRows = await new Promise((res) => {
-            db.collectionofficer.query(trackingSql, [pOrderId], (e, r) => res(e ? [] : r));
-          });
-
-          // Build separate tracking lists per box type:
-          // - Main Container: all rows with isMainContainer=1
-          // - Per package: all rows with that orderpackageId
-          // - Alacarte: all rows with orderpackageId IS NULL and isMainContainer=0
-          const mainTrackingRows = trackingRows.filter((t) => t.isMainContainer === 1);
-          const pkgTrackingMap = new Map(); // orderpackageId -> array of pIndex values
-          const alacarteTrackingRows = trackingRows.filter((t) => !t.isMainContainer && !t.orderpackageId);
-
-          trackingRows.forEach((t) => {
-            if (!t.isMainContainer && t.orderpackageId) {
-              const key = String(t.orderpackageId);
-              if (!pkgTrackingMap.has(key)) pkgTrackingMap.set(key, []);
-              pkgTrackingMap.get(key).push(t.pIndex);
+          const getBoxStatus = (pIdx, orderStatus) => {
+            if (orderStatus === "Pending" || pIdx === 0) {
+              return { status: "QR_PENDING", statusLabel: "QR Pending", statusColor: "#6B7280" };
             }
-          });
+            if (pIdx === qcPIndex) {
+              return { status: "AT_QC", statusLabel: "At QC", statusColor: "#059669" };
+            }
+            if (pIdx > qcPIndex) {
+              return { status: "COMPLETED", statusLabel: "Completed", statusColor: "#10B981" };
+            }
+            return { status: `AT_PACKER_${pIdx}`, statusLabel: `At Packer ${pIdx}`, statusColor: pIdx === 1 ? "#2563EB" : "#8B5CF6" };
+          };
 
-          // Check if à la carte items exist
-          const addSql = `
-            SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
-            WHERE orderId = ?
-          `;
-          const addRes = await new Promise((res) => {
-            db.collectionofficer.query(addSql, [mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
-          });
-          const hasAlacarte = addRes.length > 0 && addRes[0].cnt > 0;
+          const boxes = [];
 
-          // If multiple boxes exist, display Main Container row(s) first
-          const totalPhysicalPackages = packages.reduce((acc, p) => acc + Number(p.qty || 1), 0);
-          const totalPhysicalBoxes = totalPhysicalPackages + (hasAlacarte ? 1 : 0);
-          if (totalPhysicalBoxes > 1) {
-            // There is always exactly 1 Main Container row (or 0 if not yet printed)
-            const mainPIdx = mainTrackingRows.length > 0 ? mainTrackingRows[0].pIndex : 0;
-            const { status, statusLabel, statusColor } = getBoxStatus(mainPIdx, order.orderStatus);
+          for (const order of orderResults) {
+            const pOrderId = order.processOrderId;
+            const mOrderId = order.masterOrderId;
 
-            boxes.push({
-              boxId: `main_${pOrderId}`,
-              orderpackageId: -1,
-              processOrderId: pOrderId,
-              invoiceNumber: order.invoiceNumber,
-              formattedInvoice: order.formattedInvoice,
-              timeSlot: order.timeSlot,
-              boxTitle: "Main Container",
-              boxType: "Package",
-              qrCode: order.invoiceNumber,
-              pIndex: mainPIdx,
-              status: status,
-              statusLabel: statusLabel,
-              statusColor: statusColor,
+            const pkgSql = `
+              SELECT op.id AS orderpackageId, GREATEST(COALESCE(op.qty, 1), 1) AS qty, mp.displayName AS packageName
+              FROM market_place.orderpackage op
+              JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+              WHERE op.orderId = ? OR op.orderId = ?
+            `;
+
+            const packages = await new Promise((res) => {
+              db.collectionofficer.query(pkgSql, [pOrderId, mOrderId], (e, r) => res(e ? [] : r));
             });
-          }
 
-          // Process each package box — one entry per physical printed instance (qty copies)
-          for (const pkg of packages) {
-            const key = String(pkg.orderpackageId);
-            const pIndexList = pkgTrackingMap.get(key) || [];
-            const qty = Number(pkg.qty) || 1;
+            const trackingSql = `
+              SELECT id, orderpackageId, pIndex, isMainContainer 
+              FROM positiontracking 
+              WHERE orderId = ?
+            `;
+            const trackingRows = await new Promise((res) => {
+              db.collectionofficer.query(trackingSql, [pOrderId], (e, r) => res(e ? [] : r));
+            });
 
-            for (let i = 0; i < qty; i++) {
-              // Pick pIndex for this physical instance (i-th element in the sorted list)
-              const pIdx = pIndexList[i] !== undefined ? pIndexList[i] : 0;
-              const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
-              const instanceLabel = qty > 1 ? ` (${i + 1}/${qty})` : "";
+            const mainTrackingRows = trackingRows.filter((t) => t.isMainContainer === 1);
+            const pkgTrackingMap = new Map();
+            const alacarteTrackingRows = trackingRows.filter((t) => !t.isMainContainer && !t.orderpackageId);
+
+            trackingRows.forEach((t) => {
+              if (!t.isMainContainer && t.orderpackageId) {
+                const key = String(t.orderpackageId);
+                if (!pkgTrackingMap.has(key)) pkgTrackingMap.set(key, []);
+                pkgTrackingMap.get(key).push(t.pIndex);
+              }
+            });
+
+            const addSql = `
+              SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
+              WHERE orderId = ?
+            `;
+            const addRes = await new Promise((res) => {
+              db.collectionofficer.query(addSql, [mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
+            });
+            const hasAlacarte = addRes.length > 0 && addRes[0].cnt > 0;
+
+            const totalPhysicalPackages = packages.reduce((acc, p) => acc + Number(p.qty || 1), 0);
+            const totalPhysicalBoxes = totalPhysicalPackages + (hasAlacarte ? 1 : 0);
+            if (totalPhysicalBoxes > 1) {
+              const mainPIdx = mainTrackingRows.length > 0 ? mainTrackingRows[0].pIndex : 0;
+              const { status, statusLabel, statusColor } = getBoxStatus(mainPIdx, order.orderStatus);
 
               boxes.push({
-                boxId: `pkg_${pkg.orderpackageId}_${i}`,
-                orderpackageId: pkg.orderpackageId,
+                boxId: `main_${pOrderId}`,
+                orderpackageId: -1,
                 processOrderId: pOrderId,
                 invoiceNumber: order.invoiceNumber,
                 formattedInvoice: order.formattedInvoice,
                 timeSlot: order.timeSlot,
-                boxTitle: `${pkg.packageName}${instanceLabel}`,
+                boxTitle: "Main Container",
                 boxType: "Package",
+                qrCode: order.invoiceNumber,
+                pIndex: mainPIdx,
+                status: status,
+                statusLabel: statusLabel,
+                statusColor: statusColor,
+              });
+            }
+
+            for (const pkg of packages) {
+              const key = String(pkg.orderpackageId);
+              const pIndexList = pkgTrackingMap.get(key) || [];
+              const qty = Number(pkg.qty) || 1;
+
+              for (let i = 0; i < qty; i++) {
+                const pIdx = pIndexList[i] !== undefined ? pIndexList[i] : 0;
+                const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+                const instanceLabel = qty > 1 ? ` (${i + 1}/${qty})` : "";
+
+                boxes.push({
+                  boxId: `pkg_${pkg.orderpackageId}_${i}`,
+                  orderpackageId: pkg.orderpackageId,
+                  processOrderId: pOrderId,
+                  invoiceNumber: order.invoiceNumber,
+                  formattedInvoice: order.formattedInvoice,
+                  timeSlot: order.timeSlot,
+                  boxTitle: `${pkg.packageName}${instanceLabel}`,
+                  boxType: "Package",
+                  qrCode: order.invoiceNumber,
+                  pIndex: pIdx,
+                  status: status,
+                  statusLabel: statusLabel,
+                  statusColor: statusColor,
+                });
+              }
+            }
+
+            if (hasAlacarte) {
+              const pIdx = alacarteTrackingRows.length > 0 ? alacarteTrackingRows[0].pIndex : 0;
+              const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+
+              boxes.push({
+                boxId: `alacarte_${pOrderId}`,
+                orderpackageId: null,
+                processOrderId: pOrderId,
+                invoiceNumber: order.invoiceNumber,
+                formattedInvoice: order.formattedInvoice,
+                timeSlot: order.timeSlot,
+                boxTitle: "À la carte Items",
+                boxType: "Alacarte",
                 qrCode: order.invoiceNumber,
                 pIndex: pIdx,
                 status: status,
@@ -357,91 +414,66 @@ exports.getRowLiveMonitor = (rowId) => {
             }
           }
 
+          const positionsSql = `
+            SELECT 
+              pp.id AS positionId,
+              pp.pIndex,
+              pp.pType,
+              CASE 
+                WHEN pp.pType = 'QR' THEN 'QR Officer Station'
+                WHEN pp.pType = 'QC' THEN 'QC Officer Station'
+                ELSE CONCAT('Packer ', pp.pIndex, ' (P', pp.pIndex, ')')
+              END AS stationName
+            FROM packingpositions pp
+            WHERE pp.rowId = ?
+            ORDER BY 
+              CASE WHEN pp.pType = 'QR' THEN 0 WHEN pp.pType = 'NOR' THEN 1 ELSE 2 END,
+              pp.pIndex ASC
+          `;
 
-          if (hasAlacarte) {
-            const pIdx = alacarteTrackingRows.length > 0 ? alacarteTrackingRows[0].pIndex : 0;
-            const { status, statusLabel, statusColor } = getBoxStatus(pIdx, order.orderStatus);
+          const positionRows = await new Promise((res) => {
+            db.collectionofficer.query(positionsSql, [rowId], (e, r) => res(e ? [] : r));
+          });
 
-            boxes.push({
-              boxId: `alacarte_${pOrderId}`,
-              orderpackageId: null,
-              processOrderId: pOrderId,
-              invoiceNumber: order.invoiceNumber,
-              formattedInvoice: order.formattedInvoice,
-              timeSlot: order.timeSlot,
-              boxTitle: "À la carte Items",
-              boxType: "Alacarte",
-              qrCode: order.invoiceNumber,
-              pIndex: pIdx,
-              status: status,
-              statusLabel: statusLabel,
-              statusColor: statusColor,
-            });
-          }
-        }
+          const stations = positionRows.map((pos) => {
+            const matchingStaff = staffList.find((s) => {
+              if (s.isFinished !== 1) return false;
+              if (pos.pType === "QR") return s.role === "QR_OFFICER";
+              if (pos.pType === "QC") return s.role === "QC_OFFICER";
+              return s.positionIndex === pos.pIndex;
+            }) || null;
 
-        // 3. Fetch all positions registered for this row to build Station Lanes
-        const positionsSql = `
-          SELECT 
-            pp.id AS positionId,
-            pp.pIndex,
-            pp.pType,
-            CASE 
-              WHEN pp.pType = 'QR' THEN 'QR Officer Station'
-              WHEN pp.pType = 'QC' THEN 'QC Officer Station'
-              ELSE CONCAT('Packer ', pp.pIndex, ' (P', pp.pIndex, ')')
-            END AS stationName
-          FROM packingpositions pp
-          WHERE pp.rowId = ?
-          ORDER BY 
-            CASE WHEN pp.pType = 'QR' THEN 0 WHEN pp.pType = 'NOR' THEN 1 ELSE 2 END,
-            pp.pIndex ASC
-        `;
+            let activeBox = null;
+            if (pos.pType === "QR") {
+              activeBox = boxes.find((b) => b.pIndex === 0) || null;
+            } else if (pos.pType === "QC") {
+              activeBox = boxes.find((b) => b.pIndex === qcPIndex) || null;
+            } else {
+              activeBox = boxes.find((b) => b.pIndex === pos.pIndex) || null;
+            }
 
-        const positionRows = await new Promise((res) => {
-          db.collectionofficer.query(positionsSql, [rowId], (e, r) => res(e ? [] : r));
-        });
+            return {
+              positionId: pos.positionId,
+              pIndex: pos.pIndex,
+              pType: pos.pType,
+              stationName: pos.stationName,
+              assignedOfficer: matchingStaff,
+              activeBox: activeBox,
+              isOccupied: activeBox !== null,
+              targetPositionId: matchingStaff ? matchingStaff.targetPositionId : null,
+              isFinished: matchingStaff ? matchingStaff.isFinished : null,
+            };
+          });
 
-        // Map positions into Station Lanes with active boxes
-        const stations = positionRows.map((pos) => {
-          const matchingStaff = staffList.find((s) => {
-            if (s.isFinished !== 1) return false;
-            if (pos.pType === "QR") return s.role === "QR_OFFICER";
-            if (pos.pType === "QC") return s.role === "QC_OFFICER";
-            return s.positionIndex === pos.pIndex;
-          }) || null;
-
-          // Find active box currently at this station
-          let activeBox = null;
-          if (pos.pType === "QR") {
-            // Box newly printed / at QR station (pIndex === 0)
-            activeBox = boxes.find((b) => b.pIndex === 0) || null;
-          } else if (pos.pType === "QC") {
-            // Box at QC station — use the dynamic qcPIndex
-            activeBox = boxes.find((b) => b.pIndex === qcPIndex) || null;
-          } else {
-            // Box at Packer position pIndex
-            activeBox = boxes.find((b) => b.pIndex === pos.pIndex) || null;
-          }
-
-          return {
-            positionId: pos.positionId,
-            pIndex: pos.pIndex,
-            pType: pos.pType,
-            stationName: pos.stationName,
-            assignedOfficer: matchingStaff,
-            activeBox: activeBox,
-            isOccupied: activeBox !== null,
-            targetPositionId: matchingStaff ? matchingStaff.targetPositionId : null,
-            isFinished: matchingStaff ? matchingStaff.isFinished : null,
-          };
-        });
-
-        resolve({
-          rowId: Number(rowId),
-          assignedStaff: staffList,
-          stations: stations,
-          boxes: boxes,
+          resolve({
+            rowId: Number(rowId),
+            companyCenterId: rowData.companyCenterId,
+            rowIndex: rowData.rowIndex,
+            isEnabled: rowData.isEnabled,
+            assignedStaff: staffList,
+            stations: stations,
+            boxes: boxes,
+          });
         });
       });
     });
@@ -450,11 +482,9 @@ exports.getRowLiveMonitor = (rowId) => {
 
 /**
  * Get full package and item details for a process order (Web view)
- * @param {number} processOrderId 
  */
 exports.getWebOrderDetails = (processOrderId) => {
   return new Promise((resolve, reject) => {
-    // 1. Fetch process order & master order details
     const orderSql = `
       SELECT 
         po.id AS processOrderId,
@@ -479,7 +509,6 @@ exports.getWebOrderDetails = (processOrderId) => {
       const orderData = orderResults[0];
 
       try {
-        // 2. Fetch packages for this order
         const pkgSql = `
           SELECT 
             op.id AS orderPackageId,
@@ -495,7 +524,6 @@ exports.getWebOrderDetails = (processOrderId) => {
           db.collectionofficer.query(pkgSql, [processOrderId, orderData.masterOrderId], (e, r) => res(e ? [] : r));
         });
 
-        // 3. For each package, fetch items grouped separately by category (productType)
         for (const pkg of packages) {
           const itemsSql = `
             SELECT 
@@ -534,7 +562,6 @@ exports.getWebOrderDetails = (processOrderId) => {
             };
           });
 
-          // Group items by category (e.g. Low Country Vegetables, Up Country Vege)
           const itemsByCategory = {};
           pkg.packageItems.forEach((pi) => {
             const cat = pi.productTypeName || "General";
@@ -546,7 +573,6 @@ exports.getWebOrderDetails = (processOrderId) => {
           pkg.itemsByCategory = itemsByCategory;
         }
 
-        // 4. Fetch additional / à la carte items for this order
         const addSql = `
           SELECT 
             oai.id,
@@ -590,7 +616,6 @@ exports.getWebOrderDetails = (processOrderId) => {
  */
 exports.togglePositionOccupancy = (positionId, isFinished = 0) => {
   return new Promise((resolve, reject) => {
-    // Look up targetposition for today
     const findSql = `
       SELECT id, isFinished FROM targetposition 
       WHERE positionId = ? AND DATE(createdAt) = CURDATE()
