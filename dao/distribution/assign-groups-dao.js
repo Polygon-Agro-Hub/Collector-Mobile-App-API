@@ -84,7 +84,14 @@ exports.getRowAllocationCounts = (companyCenterId) => {
       SELECT 
         pr.id,
         CONCAT('Row ', pr.rowIndex) AS name,
-        CAST(COALESCE(COUNT(dti.id), 0) AS UNSIGNED) AS allocatedCount
+        CAST(COALESCE(COUNT(dti.id), 0) AS UNSIGNED) AS allocatedCount,
+        (
+          SELECT GROUP_CONCAT(DISTINCT mi.displayName ORDER BY mi.displayName ASC SEPARATOR ', ')
+          FROM packingpositions pp
+          JOIN positionscrops pc ON pp.id = pc.posId
+          JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
+          WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
+        ) AS crops
       FROM packingrows pr
       LEFT JOIN distributedtarget dt ON pr.id = dt.rowId AND DATE(dt.createdAt) = CURDATE()
       LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
@@ -92,13 +99,11 @@ exports.getRowAllocationCounts = (companyCenterId) => {
         AND (
           SELECT COUNT(*) 
           FROM packingpositions pp
-          INNER JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
           WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
         ) > 0
         AND NOT EXISTS (
           SELECT 1 
           FROM packingpositions pp
-          INNER JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
           LEFT JOIN positionscrops pc ON pp.id = pc.posId AND pc.mpiId IS NOT NULL
           WHERE pp.rowId = pr.id AND pp.pType = 'NOR' AND pc.id IS NULL
         )
