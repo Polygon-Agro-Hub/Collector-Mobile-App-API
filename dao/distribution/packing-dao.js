@@ -467,6 +467,20 @@ exports.getQROrdersForOfficer = (officerId) => {
         } else {
           item.packagesList = [];
         }
+
+        try {
+          const trackingSql = `
+            SELECT id, orderpackageId, pIndex, isMainContainer 
+            FROM positiontracking 
+            WHERE orderId = ?
+          `;
+          item.trackingRows = await new Promise((res) => {
+            db.collectionofficer.query(trackingSql, [item.id], (e, r) => res(r || []));
+          });
+        } catch (e) {
+          console.error("Error fetching trackingRows for order:", e);
+          item.trackingRows = [];
+        }
       }
 
       resolve(results);
@@ -876,7 +890,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!isMainContainer) {
             const getCountsSql = `
               SELECT 
-                (SELECT COUNT(*) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
                 (SELECT COUNT(*) FROM market_place.orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
               FROM market_place.processorders po
               WHERE po.id = ?
@@ -888,8 +902,8 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               });
             });
 
-            const pCount = countsRes.length > 0 ? countsRes[0].packagesCount : 0;
-            const aCount = countsRes.length > 0 ? countsRes[0].alacarteCount : 0;
+            const pCount = countsRes.length > 0 ? Number(countsRes[0].packagesCount || 0) : 0;
+            const aCount = countsRes.length > 0 ? Number(countsRes[0].alacarteCount || 0) : 0;
             const totalPhysicalBoxes = pCount + (aCount > 0 ? 1 : 0);
 
             if (totalPhysicalBoxes > 1) {
@@ -1182,8 +1196,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             });
           });
 
-          const pCount = countsRes.length > 0 ? countsRes[0].packagesCount : 0;
-          const aCount = countsRes.length > 0 ? countsRes[0].alacarteCount : 0;
+          const pCount = countsRes.length > 0 ? Number(countsRes[0].packagesCount || 0) : 0;
+          const aCount = countsRes.length > 0 ? Number(countsRes[0].alacarteCount || 0) : 0;
           const totalPhysicalBoxes = pCount + (aCount > 0 ? 1 : 0);
 
           if (totalPhysicalBoxes > 1) {
@@ -1698,7 +1712,16 @@ exports.getOfficerActiveOrder = (officerId) => {
         SELECT 1 FROM positiontracking pt_ex 
         WHERE pt_ex.orderId = po.id
       )
-      ORDER BY po.id ASC
+      ORDER BY 
+        (SELECT COUNT(*) FROM positiontracking pt_act 
+         WHERE pt_act.orderId = po.id 
+           AND pt_act.pIndex = COALESCE(
+             pp.pIndex,
+             (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
+             3
+           )
+        ) DESC,
+        po.id ASC
       LIMIT 1
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
