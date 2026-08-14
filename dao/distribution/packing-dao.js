@@ -920,7 +920,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           }
 
           // 2b. Station Occupied Validation Check for Position 1 (pIndex = 1)
-          // Only blocks if a DIFFERENT order's box is at pIndex=1 (same-order boxes can freely queue up)
+          // Blocks if ANY box is currently at pIndex=1 (unless re-printing the exact same box)
           const checkOccupiedSql = `
             SELECT pt.id, po.invNo
             FROM positiontracking pt
@@ -941,11 +941,21 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             )
             AND pt.pIndex = 1 
             AND dti.orderStatus = 'Opened'
-            AND pt.orderId != ?
+            AND NOT (
+              pt.orderId = ? AND (${
+                isMainContainer 
+                  ? 'pt.isMainContainer = 1' 
+                  : validPackageId 
+                    ? 'COALESCE(pt.orderpackageId, 0) = ?' 
+                    : '(pt.orderpackageId IS NULL OR pt.orderpackageId = 0) AND pt.isMainContainer = 0'
+              })
+            )
             LIMIT 1
           `;
 
-          const occupiedParams = [orderId, orderId, orderId];
+          const occupiedParams = validPackageId
+            ? [orderId, orderId, orderId, Number(validPackageId)]
+            : [orderId, orderId, orderId];
           const occupiedRes = await new Promise((res, rej) => {
             connection.query(checkOccupiedSql, occupiedParams, (err, results) => {
               if (err) return rej(err);
@@ -1142,18 +1152,13 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
       // Determine if current box being advanced is Main Container
       let isCurrentBoxMainContainer = (orderpackageId === -1 || orderpackageId === "-1");
-      if (!isCurrentBoxMainContainer) {
+      if (!isCurrentBoxMainContainer && resolvedTrackingId) {
         // Use trackingId PK for precise detection if available
-        const checkCurrentBoxSql = resolvedTrackingId
-          ? `SELECT isMainContainer FROM positiontracking WHERE id = ? LIMIT 1`
-          : `SELECT isMainContainer FROM positiontracking WHERE orderId = ? AND pIndex = ? ORDER BY id ASC LIMIT 1`;
-        const checkCurrentBoxParams = resolvedTrackingId
-          ? [resolvedTrackingId]
-          : [orderId, currentPIndex];
+        const checkCurrentBoxSql = `SELECT isMainContainer FROM positiontracking WHERE id = ? LIMIT 1`;
         const currentBoxRows = await new Promise((res) => {
-          db.collectionofficer.query(checkCurrentBoxSql, checkCurrentBoxParams, (err, results) => res(results || []));
+          db.collectionofficer.query(checkCurrentBoxSql, [resolvedTrackingId], (err, results) => res(results || []));
         });
-        if (currentBoxRows.length > 0 && currentBoxRows[0].isMainContainer === 1) {
+        if (currentBoxRows.length > 0 && (Number(currentBoxRows[0].isMainContainer) === 1 || currentBoxRows[0].isMainContainer === true)) {
           isCurrentBoxMainContainer = true;
         }
       }
