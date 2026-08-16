@@ -259,7 +259,7 @@ exports.createClaimOfficer = async (req, res) => {
     return res.status(401).json({ message: "Authorization token is missing" });
   }
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_SECRET || "T1");
   const irmId = decoded.id;
   const centerId = decoded.centerId;
   const mangerJobRole = decoded.role;
