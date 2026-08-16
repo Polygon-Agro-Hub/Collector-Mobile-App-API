@@ -467,6 +467,20 @@ exports.getQROrdersForOfficer = (officerId) => {
         } else {
           item.packagesList = [];
         }
+
+        try {
+          const trackingSql = `
+            SELECT id, orderpackageId, pIndex, isMainContainer 
+            FROM positiontracking 
+            WHERE orderId = ?
+          `;
+          item.trackingRows = await new Promise((res) => {
+            db.collectionofficer.query(trackingSql, [item.id], (e, r) => res(r || []));
+          });
+        } catch (e) {
+          console.error("Error fetching trackingRows for order:", e);
+          item.trackingRows = [];
+        }
       }
 
       resolve(results);
@@ -876,7 +890,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!isMainContainer) {
             const getCountsSql = `
               SELECT 
-                (SELECT COUNT(*) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
                 (SELECT COUNT(*) FROM market_place.orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
               FROM market_place.processorders po
               WHERE po.id = ?
@@ -888,8 +902,8 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               });
             });
 
-            const pCount = countsRes.length > 0 ? countsRes[0].packagesCount : 0;
-            const aCount = countsRes.length > 0 ? countsRes[0].alacarteCount : 0;
+            const pCount = countsRes.length > 0 ? Number(countsRes[0].packagesCount || 0) : 0;
+            const aCount = countsRes.length > 0 ? Number(countsRes[0].alacarteCount || 0) : 0;
             const totalPhysicalBoxes = pCount + (aCount > 0 ? 1 : 0);
 
             if (totalPhysicalBoxes > 1) {
@@ -920,7 +934,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           }
 
           // 2b. Station Occupied Validation Check for Position 1 (pIndex = 1)
-          // Only blocks if a DIFFERENT order's box is at pIndex=1 (same-order boxes can freely queue up)
+          // Blocks if ANY box is currently at pIndex=1 (unless re-printing the exact same box)
           const checkOccupiedSql = `
             SELECT pt.id, po.invNo
             FROM positiontracking pt
@@ -941,11 +955,21 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             )
             AND pt.pIndex = 1 
             AND dti.orderStatus = 'Opened'
-            AND pt.orderId != ?
+            AND NOT (
+              pt.orderId = ? AND (${
+                isMainContainer 
+                  ? 'pt.isMainContainer = 1' 
+                  : validPackageId 
+                    ? 'COALESCE(pt.orderpackageId, 0) = ?' 
+                    : '(pt.orderpackageId IS NULL OR pt.orderpackageId = 0) AND pt.isMainContainer = 0'
+              })
+            )
             LIMIT 1
           `;
 
-          const occupiedParams = [orderId, orderId, orderId];
+          const occupiedParams = validPackageId
+            ? [orderId, orderId, orderId, Number(validPackageId)]
+            : [orderId, orderId, orderId];
           const occupiedRes = await new Promise((res, rej) => {
             connection.query(checkOccupiedSql, occupiedParams, (err, results) => {
               if (err) return rej(err);
@@ -1142,18 +1166,13 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
       // Determine if current box being advanced is Main Container
       let isCurrentBoxMainContainer = (orderpackageId === -1 || orderpackageId === "-1");
-      if (!isCurrentBoxMainContainer) {
+      if (!isCurrentBoxMainContainer && resolvedTrackingId) {
         // Use trackingId PK for precise detection if available
-        const checkCurrentBoxSql = resolvedTrackingId
-          ? `SELECT isMainContainer FROM positiontracking WHERE id = ? LIMIT 1`
-          : `SELECT isMainContainer FROM positiontracking WHERE orderId = ? AND pIndex = ? ORDER BY id ASC LIMIT 1`;
-        const checkCurrentBoxParams = resolvedTrackingId
-          ? [resolvedTrackingId]
-          : [orderId, currentPIndex];
+        const checkCurrentBoxSql = `SELECT isMainContainer FROM positiontracking WHERE id = ? LIMIT 1`;
         const currentBoxRows = await new Promise((res) => {
-          db.collectionofficer.query(checkCurrentBoxSql, checkCurrentBoxParams, (err, results) => res(results || []));
+          db.collectionofficer.query(checkCurrentBoxSql, [resolvedTrackingId], (err, results) => res(results || []));
         });
-        if (currentBoxRows.length > 0 && currentBoxRows[0].isMainContainer === 1) {
+        if (currentBoxRows.length > 0 && (Number(currentBoxRows[0].isMainContainer) === 1 || currentBoxRows[0].isMainContainer === true)) {
           isCurrentBoxMainContainer = true;
         }
       }
@@ -1177,8 +1196,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             });
           });
 
-          const pCount = countsRes.length > 0 ? countsRes[0].packagesCount : 0;
-          const aCount = countsRes.length > 0 ? countsRes[0].alacarteCount : 0;
+          const pCount = countsRes.length > 0 ? Number(countsRes[0].packagesCount || 0) : 0;
+          const aCount = countsRes.length > 0 ? Number(countsRes[0].alacarteCount || 0) : 0;
           const totalPhysicalBoxes = pCount + (aCount > 0 ? 1 : 0);
 
           if (totalPhysicalBoxes > 1) {
@@ -1693,7 +1712,16 @@ exports.getOfficerActiveOrder = (officerId) => {
         SELECT 1 FROM positiontracking pt_ex 
         WHERE pt_ex.orderId = po.id
       )
-      ORDER BY po.id ASC
+      ORDER BY 
+        (SELECT COUNT(*) FROM positiontracking pt_act 
+         WHERE pt_act.orderId = po.id 
+           AND pt_act.pIndex = COALESCE(
+             pp.pIndex,
+             (SELECT MAX(pp2.pIndex) + 1 FROM packingpositions pp2 WHERE pp2.rowId = pp.rowId AND pp2.pType = 'NOR'),
+             3
+           )
+        ) DESC,
+        po.id ASC
       LIMIT 1
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
