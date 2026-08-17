@@ -141,7 +141,7 @@ exports.getOfficerActiveAssignment = asyncHandler(async (req, res) => {
  * Update distributedtargetitems.orderStatus = 'Opened' & set positiontracking.pIndex = 1
  */
 exports.markOrderAsOpened = asyncHandler(async (req, res) => {
-  const { orderId, orderpackageId, isPackage, packageIndex, isMainContainer, rowId } = req.body;
+  const { orderId, orderpackageId, isPackage, packageIndex, packageBoxSubIndex, isMainContainer, rowId } = req.body;
 
   if (!orderId) {
     return res.status(400).json({
@@ -150,11 +150,13 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
     });
   }
 
+  const subIndex = packageBoxSubIndex !== undefined ? Number(packageBoxSubIndex) : (packageIndex !== undefined ? Number(packageIndex) : 0);
+
   const result = await packingDao.markOrderAsOpened(
     Number(orderId),
     orderpackageId ? Number(orderpackageId) : null,
     isPackage !== undefined ? Number(isPackage) : null,
-    packageIndex !== undefined ? Number(packageIndex) : 0,
+    subIndex,
     Boolean(isMainContainer),
     req.user ? Number(req.user.id) : null
   );

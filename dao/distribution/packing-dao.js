@@ -1,4 +1,7 @@
 const db = require("../../startup/database");
+const { TIME_SLOT_MAP, formatTimeSlot } = require("../../utils/packing/time-slots");
+const { validatePosition1Busy, validateNextPositionBusy } = require("../../utils/packing/packing-validator");
+const { PACKING_ERROR_CODES } = require("../../utils/packing/error-codes");
 
 /**
  * Get company center ID for a collection officer
@@ -600,18 +603,8 @@ exports.getOrderDetails = (orderId) => {
       }
 
       const orderInfo = orderResults[0];
-      const timeSlotMap = {
-        "8-12": "08:00 AM - 12:00 PM",
-        "12-16": "12:00 PM - 04:00 PM",
-        "16-20": "04:00 PM - 08:00 PM",
-        "4-9": "04:00 PM - 09:00 PM",
-        "8-4": "08:00 AM - 04:00 PM",
-        "12-4": "12:00 PM - 04:00 PM",
-        "4-8": "04:00 PM - 08:00 PM",
-      };
-
       const statusLabel = `(${orderInfo.rowName}) Out`;
-      const timeSlotLabel = timeSlotMap[orderInfo.timeSlot] || orderInfo.timeSlot;
+      const timeSlotLabel = formatTimeSlot(orderInfo.timeSlot);
 
       try {
         let targetId = orderInfo.targetId;
@@ -876,7 +869,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               connection.release();
               resolve({
                 success: false,
-                code: "NO_OFFICER_ASSIGNED",
+                code: PACKING_ERROR_CODES.NO_OFFICER_ASSIGNED,
                 message: "No packing position user assigned for Packing Position 1. Please assign an officer to this position first."
               });
             });
@@ -924,7 +917,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
                   connection.release();
                   resolve({
                     success: false,
-                    code: "MAIN_CONTAINER_PENDING",
+                    code: PACKING_ERROR_CODES.MAIN_CONTAINER_PENDING,
                     message: "Please print the Main Container QR first before printing individual package boxes."
                   });
                 });
@@ -934,59 +927,19 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           }
 
           // 2b. Station Occupied Validation Check for Position 1 (pIndex = 1)
-          // Blocks if ANY box is currently at pIndex=1 (unless re-printing the exact same box)
-          const checkOccupiedSql = `
-            SELECT pt.id, po.invNo
-            FROM positiontracking pt
-            JOIN market_place.processorders po ON pt.orderId = po.id
-            JOIN distributedtargetitems dti ON dti.orderId = po.id
-            JOIN distributedtarget dt ON dti.targetId = dt.id
-            WHERE dt.rowId = (
-              SELECT dt2.rowId 
-              FROM distributedtargetitems dti2 
-              JOIN distributedtarget dt2 ON dti2.targetId = dt2.id 
-              WHERE dti2.orderId = ? LIMIT 1
-            ) 
-            AND DATE(dt.createdAt) = (
-              SELECT DATE(dt3.createdAt)
-              FROM distributedtargetitems dti3
-              JOIN distributedtarget dt3 ON dti3.targetId = dt3.id
-              WHERE dti3.orderId = ? LIMIT 1
-            )
-            AND pt.pIndex = 1 
-            AND dti.orderStatus = 'Opened'
-            AND NOT (
-              pt.orderId = ? AND (${
-                isMainContainer 
-                  ? 'pt.isMainContainer = 1' 
-                  : validPackageId 
-                    ? 'COALESCE(pt.orderpackageId, 0) = ?' 
-                    : '(pt.orderpackageId IS NULL OR pt.orderpackageId = 0) AND pt.isMainContainer = 0'
-              })
-            )
-            LIMIT 1
-          `;
+          // Uses validatePosition1Busy utility to check if P1 is busy with a previous package box
+          const occupiedErr = await validatePosition1Busy(
+            connection,
+            orderId,
+            validPackageId,
+            isMainContainer,
+            packageIndex
+          );
 
-          const occupiedParams = validPackageId
-            ? [orderId, orderId, orderId, Number(validPackageId)]
-            : [orderId, orderId, orderId];
-          const occupiedRes = await new Promise((res, rej) => {
-            connection.query(checkOccupiedSql, occupiedParams, (err, results) => {
-              if (err) return rej(err);
-              res(results || []);
-            });
-          });
-
-          if (occupiedRes && occupiedRes.length > 0) {
-            const occupiedInv = occupiedRes[0].invNo;
+          if (occupiedErr) {
             connection.rollback(() => {
               connection.release();
-              resolve({
-                success: false,
-                code: "STATION_OCCUPIED",
-                occupiedInvoice: occupiedInv,
-                message: `Packing Position 1 is currently busy with Invoice ${occupiedInv}. Please wait until Position 1 completes its current box before generating the next QR code.`
-              });
+              resolve(occupiedErr);
             });
             return;
           }
@@ -1250,7 +1203,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           LIMIT 1
         `;
 
-        db.collectionofficer.query(checkOfficerNextSql, [orderId], (offErr, offRows) => {
+        db.collectionofficer.query(checkOfficerNextSql, [orderId], async (offErr, offRows) => {
           if (offErr) {
             console.error("Error checking officer assignment for next station:", offErr);
           }
@@ -1265,56 +1218,19 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             });
           }
 
-          const checkOccupiedSql = `
-            SELECT pt.id, pt.orderpackageId, pt.orderId, pt.pIndex
-            FROM positiontracking pt
-            JOIN distributedtargetitems dti ON pt.orderId = dti.orderId
-            JOIN distributedtarget dt ON dti.targetId = dt.id
-            WHERE dt.rowId = (
-              SELECT dt_sub.rowId 
-              FROM distributedtargetitems dti_sub
-              JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
-              WHERE dti_sub.orderId = ? LIMIT 1
-            )
-            AND DATE(dt.createdAt) = (
-              SELECT DATE(dt_sub2.createdAt)
-              FROM distributedtargetitems dti_sub2
-              JOIN distributedtarget dt_sub2 ON dti_sub2.targetId = dt_sub2.id
-              WHERE dti_sub2.orderId = ? LIMIT 1
-            )
-            AND dti.orderStatus = 'Opened'
-            AND pt.pIndex = ?
-            AND NOT (pt.orderId = ? AND (${
-              isMainContainer 
-                ? 'pt.isMainContainer = 1' 
-                : isPackageIdValid 
-                  ? 'COALESCE(pt.orderpackageId, 0) = ?' 
-                  : '(pt.orderpackageId IS NULL OR pt.orderpackageId = 0) AND pt.isMainContainer = 0'
-            }))
-            LIMIT 1
-          `;
+          // 2. Station Occupation Check for nextStep (Blocks advancing if target station is occupied)
+          const occupiedErr = await validateNextPositionBusy(
+            db.collectionofficer,
+            orderId,
+            nextStep,
+            targetStationName
+          );
 
-          const checkParams = isPackageIdValid
-            ? [orderId, orderId, nextStep, orderId, Number(orderpackageId)]
-            : [orderId, orderId, nextStep, orderId];
+          if (occupiedErr) {
+            return resolve(occupiedErr);
+          }
 
-          db.collectionofficer.query(checkOccupiedSql, checkParams, (checkErr, checkRows) => {
-            if (checkErr) {
-              console.error("Error checking next station occupancy:", checkErr);
-            }
-
-            console.log("=== OCCUPATION CHECK ROWS ===", checkRows);
-
-            if (checkRows && checkRows.length > 0) {
-              return resolve({
-                success: false,
-                isOccupied: true,
-                message: `The ${targetStationName} is currently busy with another package box. Please wait until they clear their current box.`
-              });
-            }
-
-            executeUpdate(qcPIndex, maxPIndex);
-          });
+          executeUpdate(qcPIndex, maxPIndex);
         });
       } else {
         console.log("=== ADVANCING PAST QC ===", { nextStep, qcPIndex });
@@ -1434,7 +1350,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             SELECT id AS targetPositionId
             FROM targetposition
             WHERE officerId = ? AND DATE(createdAt) = CURDATE()
-            LIMIT 1
+            ORDER BY id DESC LIMIT 1
           `;
           const officerTpRows = await new Promise((res) => {
             db.collectionofficer.query(officerTpSql, [officerId], (e, r) => res(r || []));
@@ -1446,7 +1362,6 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
         // 2. Fallback: If not found or officerId not supplied, try to resolve by currentPIndex
         if (!targetPositionId && currentPIndex && Number(currentPIndex) > 0) {
-          // Look up the targetposition.id for the officer at currentPIndex for this order's row today
           const tpSql = `
             SELECT tp.id AS targetPositionId
             FROM targetposition tp
@@ -1457,7 +1372,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
               AND pp.pType = 'NOR'
               AND pp.pIndex = ?
               AND DATE(tp.createdAt) = CURDATE()
-            LIMIT 1
+            ORDER BY tp.id DESC LIMIT 1
           `;
           const tpRows = await new Promise((res) => {
             db.collectionofficer.query(tpSql, [orderId, Number(currentPIndex)], (e, r) => res(r || []));
@@ -1469,29 +1384,70 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
         if (!targetPositionId) return;
 
+        // Check if this position has specific crops assigned in positionscrops
+        const posCropSql = `
+          SELECT pc.mpiId 
+          FROM targetposition tp
+          JOIN positionscrops pc ON tp.positionId = pc.posId
+          WHERE tp.id = ? AND pc.mpiId IS NOT NULL
+        `;
+        const posCrops = await new Promise((res) => {
+          db.collectionofficer.query(posCropSql, [targetPositionId], (e, r) => res(r || []));
+        });
+
+        const assignedMpiIds = posCrops.map((c) => Number(c.mpiId));
+
         if (orderpackageId !== null && orderpackageId !== undefined) {
           // Package items
-          await new Promise((res) => {
-            db.collectionofficer.query(
-              `UPDATE market_place.orderpackageitems 
-               SET packId = ?, packingTime = NOW(), isPacked = 1 
-               WHERE orderPackageId = ? AND (packId IS NULL OR packId = 0)`,
-              [targetPositionId, orderpackageId],
-              (e, r) => res(r)
-            );
-          });
+          if (assignedMpiIds.length > 0) {
+            // Update items assigned specifically to this position's crops
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderpackageitems 
+                 SET packId = ?, packingTime = NOW(), isPacked = 1 
+                 WHERE orderPackageId = ? 
+                   AND (productId IN (?) OR productType IN (?))`,
+                [targetPositionId, orderpackageId, assignedMpiIds, assignedMpiIds],
+                (e, r) => res(r)
+              );
+            });
+          } else {
+            // No specific crops assigned — update unassigned/unpacked items
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderpackageitems 
+                 SET packId = ?, packingTime = NOW(), isPacked = 1 
+                 WHERE orderPackageId = ? AND (packId IS NULL OR packId = 0)`,
+                [targetPositionId, orderpackageId],
+                (e, r) => res(r)
+              );
+            });
+          }
         } else {
-          // Alacarte items (orderadditionalitems linked via orders.id through processorders)
-          await new Promise((res) => {
-            db.collectionofficer.query(
-              `UPDATE market_place.orderadditionalitems oai
-               JOIN market_place.processorders po ON oai.orderId = po.orderId
-               SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
-               WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
-              [targetPositionId, orderId],
-              (e, r) => res(r)
-            );
-          });
+          // Alacarte items
+          if (assignedMpiIds.length > 0) {
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderadditionalitems oai
+                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                 SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
+                 WHERE po.id = ? AND oai.productId IN (?)`,
+                [targetPositionId, orderId, assignedMpiIds],
+                (e, r) => res(r)
+              );
+            });
+          } else {
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderadditionalitems oai
+                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                 SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
+                 WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
+                [targetPositionId, orderId],
+                (e, r) => res(r)
+              );
+            });
+          }
         }
       } catch (e) {
         console.error("savePackerOnItems error (non-fatal):", e.message);
