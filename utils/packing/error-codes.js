@@ -1,0 +1,12 @@
+/**
+ * Centralized Packing Error Codes for Backend
+ */
+const PACKING_ERROR_CODES = {
+  STATION_OCCUPIED: "STATION_OCCUPIED",
+  NO_OFFICER_ASSIGNED: "NO_OFFICER_ASSIGNED",
+  MAIN_CONTAINER_PENDING: "MAIN_CONTAINER_PENDING",
+};
+
+module.exports = {
+  PACKING_ERROR_CODES,
+};
