@@ -1350,7 +1350,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             SELECT id AS targetPositionId
             FROM targetposition
             WHERE officerId = ? AND DATE(createdAt) = CURDATE()
-            LIMIT 1
+            ORDER BY id DESC LIMIT 1
           `;
           const officerTpRows = await new Promise((res) => {
             db.collectionofficer.query(officerTpSql, [officerId], (e, r) => res(r || []));
@@ -1362,7 +1362,6 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
         // 2. Fallback: If not found or officerId not supplied, try to resolve by currentPIndex
         if (!targetPositionId && currentPIndex && Number(currentPIndex) > 0) {
-          // Look up the targetposition.id for the officer at currentPIndex for this order's row today
           const tpSql = `
             SELECT tp.id AS targetPositionId
             FROM targetposition tp
@@ -1373,7 +1372,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
               AND pp.pType = 'NOR'
               AND pp.pIndex = ?
               AND DATE(tp.createdAt) = CURDATE()
-            LIMIT 1
+            ORDER BY tp.id DESC LIMIT 1
           `;
           const tpRows = await new Promise((res) => {
             db.collectionofficer.query(tpSql, [orderId, Number(currentPIndex)], (e, r) => res(r || []));
@@ -1385,29 +1384,70 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
         if (!targetPositionId) return;
 
+        // Check if this position has specific crops assigned in positionscrops
+        const posCropSql = `
+          SELECT pc.mpiId 
+          FROM targetposition tp
+          JOIN positionscrops pc ON tp.positionId = pc.posId
+          WHERE tp.id = ? AND pc.mpiId IS NOT NULL
+        `;
+        const posCrops = await new Promise((res) => {
+          db.collectionofficer.query(posCropSql, [targetPositionId], (e, r) => res(r || []));
+        });
+
+        const assignedMpiIds = posCrops.map((c) => Number(c.mpiId));
+
         if (orderpackageId !== null && orderpackageId !== undefined) {
           // Package items
-          await new Promise((res) => {
-            db.collectionofficer.query(
-              `UPDATE market_place.orderpackageitems 
-               SET packId = ?, packingTime = NOW(), isPacked = 1 
-               WHERE orderPackageId = ? AND (packId IS NULL OR packId = 0)`,
-              [targetPositionId, orderpackageId],
-              (e, r) => res(r)
-            );
-          });
+          if (assignedMpiIds.length > 0) {
+            // Update items assigned specifically to this position's crops
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderpackageitems 
+                 SET packId = ?, packingTime = NOW(), isPacked = 1 
+                 WHERE orderPackageId = ? 
+                   AND (productId IN (?) OR productType IN (?))`,
+                [targetPositionId, orderpackageId, assignedMpiIds, assignedMpiIds],
+                (e, r) => res(r)
+              );
+            });
+          } else {
+            // No specific crops assigned — update unassigned/unpacked items
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderpackageitems 
+                 SET packId = ?, packingTime = NOW(), isPacked = 1 
+                 WHERE orderPackageId = ? AND (packId IS NULL OR packId = 0)`,
+                [targetPositionId, orderpackageId],
+                (e, r) => res(r)
+              );
+            });
+          }
         } else {
-          // Alacarte items (orderadditionalitems linked via orders.id through processorders)
-          await new Promise((res) => {
-            db.collectionofficer.query(
-              `UPDATE market_place.orderadditionalitems oai
-               JOIN market_place.processorders po ON oai.orderId = po.orderId
-               SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
-               WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
-              [targetPositionId, orderId],
-              (e, r) => res(r)
-            );
-          });
+          // Alacarte items
+          if (assignedMpiIds.length > 0) {
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderadditionalitems oai
+                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                 SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
+                 WHERE po.id = ? AND oai.productId IN (?)`,
+                [targetPositionId, orderId, assignedMpiIds],
+                (e, r) => res(r)
+              );
+            });
+          } else {
+            await new Promise((res) => {
+              db.collectionofficer.query(
+                `UPDATE market_place.orderadditionalitems oai
+                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                 SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
+                 WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
+                [targetPositionId, orderId],
+                (e, r) => res(r)
+              );
+            });
+          }
         }
       } catch (e) {
         console.error("savePackerOnItems error (non-fatal):", e.message);
