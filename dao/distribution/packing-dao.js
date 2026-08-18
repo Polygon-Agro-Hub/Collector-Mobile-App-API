@@ -582,9 +582,9 @@ exports.getOrderDetails = (orderId) => {
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
         dti.qrPrintedBy,
-        DATE_FORMAT(dti.qrPrintTime, '%h:%i %p') AS qrPrintedTime,
+        DATE_FORMAT(DATE_ADD(dti.qrPrintTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qrPrintedTime,
         po.packBy,
-        DATE_FORMAT(po.packTime, '%h:%i %p') AS qcDoneTime
+        DATE_FORMAT(DATE_ADD(po.packTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qcDoneTime
       FROM market_place.processorders po
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN distributedtargetitems dti ON dti.orderId = po.id
@@ -671,7 +671,7 @@ exports.getOrderDetails = (orderId) => {
               opi.id,
               COALESCE(mi.displayName, 'Item') AS name,
               CONCAT(COALESCE(opi.qty, 0.5), ' kg') AS weight,
-              DATE_FORMAT(opi.packingTime, '%h:%i %p') AS packedTime,
+              DATE_FORMAT(DATE_ADD(opi.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
               co.empId AS packedByEmpId,
               COALESCE(cv.image, '') AS image
             FROM market_place.orderpackageitems opi
@@ -708,7 +708,7 @@ exports.getOrderDetails = (orderId) => {
             oai.id,
             COALESCE(mi.displayName, 'Item') AS name,
             CONCAT(COALESCE(oai.qty, 0.5), ' ', COALESCE(oai.unit, 'kg')) AS weight,
-            DATE_FORMAT(oai.packingTime, '%h:%i %p') AS packedTime,
+            DATE_FORMAT(DATE_ADD(oai.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
             co.empId AS packedByEmpId,
             COALESCE(cv.image, '') AS image
           FROM market_place.orderadditionalitems oai
