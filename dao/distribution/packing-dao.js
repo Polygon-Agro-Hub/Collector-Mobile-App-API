@@ -1747,7 +1747,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               opi.id AS id,
               mi.displayName AS name,
-              CONCAT(COALESCE(opi.qty, 1), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
+              CONCAT(COALESCE(opi.qty, 1), ' kg') AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
@@ -1786,7 +1786,7 @@ exports.getOfficerActiveOrder = (officerId) => {
             SELECT 
               mi.id,
               mi.displayName AS name,
-              CONCAT(SUM(COALESCE(opi.qty, 1)), ' ', COALESCE(NULLIF(TRIM(mi.unitType), ''), 'kg')) AS weight,
+              CONCAT(SUM(COALESCE(opi.qty, 1)), ' kg') AS weight,
               cv.image AS image,
               mi.id AS mpiId,
               opi.productType AS productTypeId,
