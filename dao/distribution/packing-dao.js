@@ -643,7 +643,7 @@ exports.getOrderDetails = (orderId) => {
               (e, r) => res(r || [])
             );
           });
-        if (qcOfficerRes && qcOfficerRes.length > 0 && qcOfficerRes[0].empId) {
+          if (qcOfficerRes && qcOfficerRes.length > 0 && qcOfficerRes[0].empId) {
             qcDoneByEmpId = qcOfficerRes[0].empId;
           }
         }
@@ -1464,7 +1464,6 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 exports.markOrderAsCompleted = (orderId, officerId = null) => {
   return new Promise((resolve, reject) => {
     // Step 1: Dynamically get the QC position's pIndex for this order's row
-    // Completion = pIndex > qcPIndex (i.e. box has moved past QC station)
     const getQcPIndexSql = `
       SELECT 
         COALESCE(
@@ -1531,8 +1530,46 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
             db.collectionofficer.query(updatePoSql, [officerId, orderId], (poErr) => {
               if (poErr) {
                 console.error("Error updating processorders on QC completion:", poErr);
+                return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
               }
-              resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+
+              // Step 3: Check the delivery method to know if it became "Out For Delivery"
+              const checkMethodSql = `
+                SELECT o.delivaryMethod
+                FROM market_place.processorders po
+                JOIN market_place.orders o ON po.orderId = o.id
+                WHERE po.id = ?
+                LIMIT 1
+              `;
+              db.collectionofficer.query(checkMethodSql, [orderId], (mErr, mRows) => {
+                if (mErr || !mRows || mRows.length === 0) {
+                  console.error("Error checking delivery method for notification:", mErr);
+                  return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                }
+
+                const isPickup = String(mRows[0].delivaryMethod || '').toLowerCase() === 'pickup';
+
+                // Only insert the notification for "Out For Delivery" orders (not Pickup)
+                if (!isPickup) {
+                  const insertNotifSql = `
+                    INSERT INTO market_place.dashnotification 
+                      (orderId, title, readStatus, createdAt)
+                    VALUES (?, ?, 0, NOW())
+                  `;
+                  db.collectionofficer.query(
+                    insertNotifSql,
+                    [orderId, 'Order is Out for Delivery'],
+                    (nErr) => {
+                      if (nErr) {
+                        console.error("Error inserting dashnotification row:", nErr);
+                      }
+                      resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                    }
+                  );
+                } else {
+                  resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                }
+              });
             });
           });
         } else {
