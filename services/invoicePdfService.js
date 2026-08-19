@@ -758,4 +758,4 @@ const generateOrderPDF = async (orderData, deliveryFee = 0) => {
   }
 };
 
-module.exports = { generateOrderPDF };
+module.exports = { generateOrderPDF, generateInvoiceHTML };
