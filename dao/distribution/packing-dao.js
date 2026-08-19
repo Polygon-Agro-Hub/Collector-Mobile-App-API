@@ -380,11 +380,10 @@ exports.getQROrdersForOfficer = (officerId) => {
         po.id AS processOrderId,
         po.invNo AS orderNumber,
         CASE 
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-          ELSE 'W' 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
         END AS type,
         dt.timeSlot,
         CASE 
@@ -502,18 +501,16 @@ exports.getCenterTargetOrders = (companyCenterId = null) => {
         po.id AS id,
         po.invNo AS orderNumber,
         CASE 
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-          ELSE 'W' 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
         END AS type,
         CONCAT(po.invNo, ' (', CASE 
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-          ELSE 'W' 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
         END, ')') AS formattedOrderNumber,
         dt.timeSlot,
         CASE 
@@ -571,8 +568,18 @@ exports.getOrderDetails = (orderId) => {
       SELECT DISTINCT
         po.id AS orderId,
         po.invNo AS orderNumber,
-        CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END AS type,
-        CONCAT(po.invNo, ' (', CASE WHEN o.orderApp = 'Marketplace' THEN 'R' ELSE 'W' END, ')') AS formattedOrderNumber,
+        CASE 
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
+        END AS type,
+        CONCAT(po.invNo, ' (', CASE 
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
+          WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
+        END, ')') AS formattedOrderNumber,
         dt.id AS targetId,
         dt.timeSlot,
         CASE 
@@ -582,9 +589,9 @@ exports.getOrderDetails = (orderId) => {
         CONCAT('Row ', COALESCE(pr.rowIndex, 1)) AS rowName,
         dti.orderStatus,
         dti.qrPrintedBy,
-        DATE_FORMAT(dti.qrPrintTime, '%h:%i %p') AS qrPrintedTime,
+        DATE_FORMAT(DATE_ADD(dti.qrPrintTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qrPrintedTime,
         po.packBy,
-        DATE_FORMAT(po.packTime, '%h:%i %p') AS qcDoneTime
+        DATE_FORMAT(DATE_ADD(po.packTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qcDoneTime
       FROM market_place.processorders po
       JOIN market_place.orders o ON po.orderId = o.id
       LEFT JOIN distributedtargetitems dti ON dti.orderId = po.id
@@ -652,11 +659,13 @@ exports.getOrderDetails = (orderId) => {
         const pkgSql = `
           SELECT 
             op.id,
+            COALESCE(op.qty, 1) AS qty,
             COALESCE(mp.displayName, 'Package') AS packageName
           FROM market_place.processorders po
           JOIN market_place.orderpackage op ON po.id = op.orderId
           LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
           WHERE po.id = ?
+          ORDER BY op.id ASC
         `;
         const pkgs = await new Promise((res) => {
           db.collectionofficer.query(pkgSql, [orderInfo.orderId], (e, r) => res(r || []));
@@ -671,7 +680,7 @@ exports.getOrderDetails = (orderId) => {
               opi.id,
               COALESCE(mi.displayName, 'Item') AS name,
               CONCAT(COALESCE(opi.qty, 0.5), ' kg') AS weight,
-              DATE_FORMAT(opi.packingTime, '%h:%i %p') AS packedTime,
+              DATE_FORMAT(DATE_ADD(opi.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
               co.empId AS packedByEmpId,
               COALESCE(cv.image, '') AS image
             FROM market_place.orderpackageitems opi
@@ -680,26 +689,52 @@ exports.getOrderDetails = (orderId) => {
             LEFT JOIN targetposition tp ON opi.packId = tp.id
             LEFT JOIN collectionofficer co ON tp.officerId = co.id
             WHERE opi.orderPackageId = ?
-            ORDER BY opi.id ASC
+            ORDER BY mi.displayName ASC, opi.id ASC
           `;
-          const items = await new Promise((res) => {
+          const rawItems = await new Promise((res) => {
             db.collectionofficer.query(itemsSql, [pkg.id], (e, r) => res(r || []));
           });
 
-          packageGroups.push({
-            id: pkg.id,
-            title: `${pkg.packageName} (${String(items.length).padStart(2, "0")})`,
-            count: items.length,
-            type: "package",
-            items: items.map((i, idx) => ({
-              id: i.id || idx + 1,
-              name: i.name,
-              weight: i.weight,
-              packedByEmpId: i.packedByEmpId || "-",
-              packedTime: i.packedTime || "-",
-              image: i.image || "",
-            })),
-          });
+          // Sort items in A-Z ascending order by item name
+          const items = (rawItems || []).sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "")
+          );
+
+          const pkgQty = Number(pkg.qty) || 1;
+
+          if (pkgQty > 1) {
+            for (let b = 1; b <= pkgQty; b++) {
+              packageGroups.push({
+                id: `${pkg.id}_${b}`,
+                title: `${pkg.packageName} (${b}/${pkgQty}) (${String(items.length).padStart(2, "0")})`,
+                count: items.length,
+                type: "package",
+                items: items.map((i, idx) => ({
+                  id: i.id || idx + 1,
+                  name: i.name,
+                  weight: i.weight,
+                  packedByEmpId: i.packedByEmpId || "-",
+                  packedTime: i.packedTime || "-",
+                  image: i.image || "",
+                })),
+              });
+            }
+          } else {
+            packageGroups.push({
+              id: pkg.id,
+              title: `${pkg.packageName} (${String(items.length).padStart(2, "0")})`,
+              count: items.length,
+              type: "package",
+              items: items.map((i, idx) => ({
+                id: i.id || idx + 1,
+                name: i.name,
+                weight: i.weight,
+                packedByEmpId: i.packedByEmpId || "-",
+                packedTime: i.packedTime || "-",
+                image: i.image || "",
+              })),
+            });
+          }
         }
 
         // --- Alacarte items (from orderadditionalitems via master orderId) ---
@@ -708,7 +743,7 @@ exports.getOrderDetails = (orderId) => {
             oai.id,
             COALESCE(mi.displayName, 'Item') AS name,
             CONCAT(COALESCE(oai.qty, 0.5), ' ', COALESCE(oai.unit, 'kg')) AS weight,
-            DATE_FORMAT(oai.packingTime, '%h:%i %p') AS packedTime,
+            DATE_FORMAT(DATE_ADD(oai.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
             co.empId AS packedByEmpId,
             COALESCE(cv.image, '') AS image
           FROM market_place.orderadditionalitems oai
@@ -718,11 +753,15 @@ exports.getOrderDetails = (orderId) => {
           LEFT JOIN targetposition tp ON oai.packId = tp.id
           LEFT JOIN collectionofficer co ON tp.officerId = co.id
           WHERE po.id = ?
-          ORDER BY oai.id ASC
+          ORDER BY mi.displayName ASC, oai.id ASC
         `;
-        const alacarteItems = await new Promise((res) => {
+        const rawAlacarteItems = await new Promise((res) => {
           db.collectionofficer.query(alacarteSql, [orderInfo.orderId], (e, r) => res(r || []));
         });
+
+        const alacarteItems = (rawAlacarteItems || []).sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "")
+        );
 
         if (alacarteItems.length > 0) {
           packageGroups.push({
@@ -1629,18 +1668,16 @@ exports.getOfficerActiveOrder = (officerId) => {
         po.invNo AS orderNumber,
         dt.timeSlot,
         CASE 
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-          ELSE 'W' 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
         END AS orderType,
         CONCAT(po.invNo, ' (', CASE 
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-          WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
           WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-          ELSE 'W' 
+          WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+          ELSE 'R' 
         END, ')') AS formattedOrderNumber,
         dti.orderStatus,
         COALESCE(

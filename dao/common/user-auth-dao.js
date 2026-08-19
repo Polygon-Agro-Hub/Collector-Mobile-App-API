@@ -298,23 +298,7 @@ exports.updateOnlineStatusWithSocket = async (empId, status) => {
         return;
       }
       
-      const isLoggingOut = status === false || status === 0 || status === "false" || status === "0";
-      if (isLoggingOut) {
-        const resetTpSql = `
-          UPDATE targetposition 
-          SET isFinished = 0 
-          WHERE officerId = (SELECT id FROM collectionofficer WHERE empId = ? LIMIT 1)
-            AND DATE(createdAt) = CURDATE()
-        `;
-        db.collectionofficer.query(resetTpSql, [empId], (tpErr) => {
-          if (tpErr) {
-            console.error("Error resetting targetposition on logout:", tpErr);
-          }
-          resolve(null);
-        });
-      } else {
-        resolve(null);
-      }
+      resolve(null);
     });
   });
 };

@@ -236,18 +236,16 @@ exports.getRowLiveMonitor = (rowId) => {
             po.orderId AS masterOrderId,
             po.invNo AS invoiceNumber,
             CASE 
-              WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
               WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-              WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
               WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-              ELSE 'W' 
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+              ELSE 'R' 
             END AS orderType,
             CONCAT(po.invNo, ' (', CASE 
-              WHEN LOWER(COALESCE(o.orderApp, '')) = 'dash' OR LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
               WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'wholesale' THEN 'W'
-              WHEN LOWER(COALESCE(o.orderApp, '')) = 'marketplace' OR LOWER(COALESCE(o.orderApp, '')) = 'retail' THEN 'R'
               WHEN TRIM(LOWER(COALESCE(u.buyerType, ''))) = 'retail' THEN 'R'
-              ELSE 'W' 
+              WHEN LOWER(COALESCE(o.orderApp, '')) = 'wholesale' THEN 'W'
+              ELSE 'R' 
             END, ')') AS formattedInvoice,
             dti.orderStatus,
             dt.timeSlot
