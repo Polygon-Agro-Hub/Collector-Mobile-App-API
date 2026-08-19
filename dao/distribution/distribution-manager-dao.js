@@ -758,6 +758,8 @@ exports.getOrderById = async (orderId) => {
     let orderStatus = null;
     let reportStatus = null;
     let paymentMethod = null;
+    let isPaid = null;
+    let creditPaid = null;
 
     if (order.orderApp === "Marketplace") {
       finalIsPackage = order.orderIsPackage || 0;
@@ -768,7 +770,9 @@ exports.getOrderById = async (orderId) => {
             invNo AS invoiceNumber,
             status,
             paymentMethod,
-            reportStatus
+            reportStatus,
+            isPaid,
+            creditPaid
         FROM processorders 
         WHERE orderId = ?
       `;
@@ -784,6 +788,8 @@ exports.getOrderById = async (orderId) => {
         orderStatus = processOrder.status;
         paymentMethod = processOrder.paymentMethod;
         reportStatus = processOrder.reportStatus;
+        isPaid = processOrder.isPaid;
+        creditPaid = processOrder.creditPaid;
       }
     } else if (order.orderApp === "Dash") {
       const processOrderSql = `
@@ -792,7 +798,9 @@ exports.getOrderById = async (orderId) => {
             invNo AS invoiceNumber,
             status,
             paymentMethod,
-            reportStatus
+            reportStatus,
+            isPaid,
+            creditPaid
         FROM processorders 
         WHERE orderId = ?
       `;
@@ -808,6 +816,8 @@ exports.getOrderById = async (orderId) => {
         orderStatus = processOrder.status;
         paymentMethod = processOrder.paymentMethod;
         reportStatus = processOrder.reportStatus;
+        isPaid = processOrder.isPaid;
+        creditPaid = processOrder.creditPaid;
 
         const packageCheckSql = `
           SELECT COUNT(*) as packageCount
@@ -1158,6 +1168,8 @@ exports.getOrderById = async (orderId) => {
         status: orderStatus,
         paymentMethod: paymentMethod,
         reportStatus: reportStatus,
+        isPaid: isPaid,
+        creditPaid: creditPaid,
       },
       additionalItems: enhancedAdditionalItems,
       packages: allPackages,

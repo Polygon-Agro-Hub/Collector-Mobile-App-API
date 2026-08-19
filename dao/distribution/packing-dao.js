@@ -1525,96 +1525,135 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
       }
       const qcPIndex = (qcRows && qcRows.length > 0 ? qcRows[0].qcPIndex : null) || 3;
 
-      // Step 2: Count total boxes vs boxes that have passed QC (pIndex > qcPIndex)
-      const checkSql = `
-        SELECT COUNT(*) AS totalBoxes,
-               SUM(CASE WHEN pIndex > ? THEN 1 ELSE 0 END) AS completedBoxes
-        FROM positiontracking
-        WHERE orderId = ?
+      // Step 2: Calculate expected total physical boxes for this order
+      const getMasterOrderSql = `
+        SELECT orderId AS masterOrderId FROM market_place.processorders WHERE id = ?
       `;
-      db.collectionofficer.query(checkSql, [qcPIndex, orderId], (err, rows) => {
-        if (err) {
-          console.error("Error checking box completion status:", err);
-          return reject(err);
+      db.collectionofficer.query(getMasterOrderSql, [orderId], (mErr, mRows) => {
+        if (mErr || !mRows || mRows.length === 0) {
+          console.error("Error fetching master order ID:", mErr);
+          return reject(mErr || new Error("Process order not found"));
         }
+        const masterOrderId = mRows[0].masterOrderId;
 
-        const total = rows[0]?.totalBoxes || 0;
-        const completed = rows[0]?.completedBoxes || 0;
+        const pkgSql = `
+          SELECT SUM(GREATEST(COALESCE(qty, 1), 1)) AS totalPkgQty
+          FROM market_place.orderpackage
+          WHERE orderId = ? OR orderId = ?
+        `;
+        db.collectionofficer.query(pkgSql, [orderId, masterOrderId], (pErr, pRows) => {
+          if (pErr) {
+            console.error("Error fetching package qty:", pErr);
+            return reject(pErr);
+          }
+          const pkgQty = Number(pRows[0]?.totalPkgQty || 0);
 
-        console.log(`=== QC COMPLETION CHECK: orderId=${orderId} qcPIndex=${qcPIndex} total=${total} completed=${completed}`);
-
-        if (total > 0 && completed >= total) {
-          // All boxes have passed QC — mark order as Completed
-          const updateDtiSql = `
-            UPDATE distributedtargetitems 
-            SET orderStatus = 'Completed', isComplete = 1, completeTime = NOW()
+          const addSql = `
+            SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
             WHERE orderId = ?
           `;
-          db.collectionofficer.query(updateDtiSql, [orderId], (uErr) => {
-            if (uErr) return reject(uErr);
+          db.collectionofficer.query(addSql, [masterOrderId], (aErr, aRows) => {
+            if (aErr) {
+              console.error("Error fetching additional items count:", aErr);
+              return reject(aErr);
+            }
+            const hasAlacarte = (aRows[0]?.cnt || 0) > 0;
+            const totalPkgAndAla = pkgQty + (hasAlacarte ? 1 : 0);
+            
+            // If totalPkgAndAla > 1, a Main Container is required, so expected total = totalPkgAndAla + 1
+            const expectedTotalBoxes = totalPkgAndAla > 1 ? totalPkgAndAla + 1 : Math.max(totalPkgAndAla, 1);
 
-            // Update processorders: packBy, packTime, and status based on Delivery Method
-            const updatePoSql = `
-              UPDATE market_place.processorders po
-              JOIN market_place.orders o ON po.orderId = o.id
-              SET 
-                po.packBy = COALESCE(?, po.packBy),
-                po.packTime = NOW(),
-                po.status = CASE 
-                  WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Ready to Pickup'
-                  ELSE 'Out For Delivery'
-                END
-              WHERE po.id = ?
+            // Step 3: Count boxes that have passed QC (pIndex > qcPIndex) in positiontracking
+            const checkSql = `
+              SELECT SUM(CASE WHEN pIndex > ? THEN 1 ELSE 0 END) AS completedBoxes
+              FROM positiontracking
+              WHERE orderId = ?
             `;
-            db.collectionofficer.query(updatePoSql, [officerId, orderId], (poErr) => {
-              if (poErr) {
-                console.error("Error updating processorders on QC completion:", poErr);
-                return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+            db.collectionofficer.query(checkSql, [qcPIndex, orderId], (err, rows) => {
+              if (err) {
+                console.error("Error checking box completion status:", err);
+                return reject(err);
               }
 
-              // Step 3: Check the delivery method to know if it became "Out For Delivery"
-              const checkMethodSql = `
-                SELECT o.delivaryMethod
-                FROM market_place.processorders po
-                JOIN market_place.orders o ON po.orderId = o.id
-                WHERE po.id = ?
-                LIMIT 1
-              `;
-              db.collectionofficer.query(checkMethodSql, [orderId], (mErr, mRows) => {
-                if (mErr || !mRows || mRows.length === 0) {
-                  console.error("Error checking delivery method for notification:", mErr);
-                  return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
-                }
+              const completed = Number(rows[0]?.completedBoxes || 0);
 
-                const isPickup = String(mRows[0].delivaryMethod || '').toLowerCase() === 'pickup';
+              console.log(`=== QC COMPLETION CHECK: orderId=${orderId} qcPIndex=${qcPIndex} expectedTotal=${expectedTotalBoxes} completed=${completed}`);
 
-                // Only insert the notification for "Out For Delivery" orders (not Pickup)
-                if (!isPickup) {
-                  const insertNotifSql = `
-                    INSERT INTO market_place.dashnotification 
-                      (orderId, title, readStatus, createdAt)
-                    VALUES (?, ?, 0, NOW())
+              if (expectedTotalBoxes > 0 && completed >= expectedTotalBoxes) {
+                // All boxes have passed QC — mark order as Completed
+                const updateDtiSql = `
+                  UPDATE distributedtargetitems 
+                  SET orderStatus = 'Completed', isComplete = 1, completeTime = NOW()
+                  WHERE orderId = ?
+                `;
+                db.collectionofficer.query(updateDtiSql, [orderId], (uErr) => {
+                  if (uErr) return reject(uErr);
+
+                  // Update processorders: packBy, packTime, and status based on Delivery Method
+                  const updatePoSql = `
+                    UPDATE market_place.processorders po
+                    JOIN market_place.orders o ON po.orderId = o.id
+                    SET 
+                      po.packBy = COALESCE(?, po.packBy),
+                      po.packTime = NOW(),
+                      po.status = CASE 
+                        WHEN LOWER(COALESCE(o.delivaryMethod, '')) = 'pickup' THEN 'Ready to Pickup'
+                        ELSE 'Out For Delivery'
+                      END
+                    WHERE po.id = ?
                   `;
-                  db.collectionofficer.query(
-                    insertNotifSql,
-                    [orderId, 'Order is Out for Delivery'],
-                    (nErr) => {
-                      if (nErr) {
-                        console.error("Error inserting dashnotification row:", nErr);
-                      }
-                      resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                  db.collectionofficer.query(updatePoSql, [officerId, orderId], (poErr) => {
+                    if (poErr) {
+                      console.error("Error updating processorders on QC completion:", poErr);
+                      return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                     }
-                  );
-                } else {
-                  resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
-                }
-              });
+
+                    // Step 4: Check the delivery method to know if it became "Out For Delivery"
+                    const checkMethodSql = `
+                      SELECT o.delivaryMethod
+                      FROM market_place.processorders po
+                      JOIN market_place.orders o ON po.orderId = o.id
+                      WHERE po.id = ?
+                      LIMIT 1
+                    `;
+                    db.collectionofficer.query(checkMethodSql, [orderId], (mErr, mRows) => {
+                      if (mErr || !mRows || mRows.length === 0) {
+                        console.error("Error checking delivery method for notification:", mErr);
+                        return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                      }
+
+                      const isPickup = String(mRows[0].delivaryMethod || '').toLowerCase() === 'pickup';
+
+                      // Only insert the notification for "Out For Delivery" orders (not Pickup)
+                      if (!isPickup) {
+                        const insertNotifSql = `
+                          INSERT INTO market_place.dashnotification 
+                            (orderId, title, readStatus, createdAt)
+                          VALUES (?, ?, 0, NOW())
+                        `;
+                        db.collectionofficer.query(
+                          insertNotifSql,
+                          [orderId, 'Order is Out for Delivery'],
+                          (nErr) => {
+                            if (nErr) {
+                              console.error("Error inserting dashnotification row:", nErr);
+                            }
+                            resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                          }
+                        );
+                      } else {
+                        resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                      }
+                    });
+                  });
+                });
+              } else {
+                // More boxes still pending QC
+                resolve({ success: true, isFullyCompleted: false, orderStatus: "Opened" });
+              }
             });
           });
-        } else {
-          // More boxes still pending QC
-          resolve({ success: true, isFullyCompleted: false, orderStatus: "Opened" });
-        }
+        });
       });
     });
   });
