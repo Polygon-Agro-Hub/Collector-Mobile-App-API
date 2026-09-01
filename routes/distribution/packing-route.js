@@ -56,6 +56,13 @@ router.post(
 );
 
 router.post(
+  "/qr-rollback",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  PackingEp.rollbackOrderOpened
+);
+
+router.post(
   "/advance-position",
   auth,
   checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
