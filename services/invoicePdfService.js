@@ -703,6 +703,47 @@ const generateInvoiceHTML = (
 
 
 
+const fs = require("fs");
+
+const getLocalChromePath = () => {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.env.CHROME_BIN) {
+    return process.env.CHROME_BIN;
+  }
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
+
+  const possiblePaths = [
+    // Windows
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    // Linux
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    // macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+};
+
 const generateOrderPDF = async (orderData, deliveryFee = 0) => {
   let browser;
   try {
@@ -713,24 +754,25 @@ const generateOrderPDF = async (orderData, deliveryFee = 0) => {
       logoBase64,
     );
 
-    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+    let launchArgs = {
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      defaultViewport: null,
+      headless: "new",
+    };
 
-    let launchArgs = {};
-    if (isLocal) {
-      launchArgs = {
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        defaultViewport: null,
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        headless: "new",
-      };
+    const localChrome = getLocalChromePath();
+    if (localChrome) {
+      launchArgs.executablePath = localChrome;
     } else {
-      const chromium = (await import("@sparticuz/chromium")).default;
-      launchArgs = {
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      };
+      try {
+        const chromium = (await import("@sparticuz/chromium")).default;
+        launchArgs.args = [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"];
+        launchArgs.defaultViewport = chromium.defaultViewport;
+        launchArgs.executablePath = await chromium.executablePath();
+        launchArgs.headless = chromium.headless;
+      } catch (e) {
+        console.warn("Could not load @sparticuz/chromium fallback:", e.message);
+      }
     }
 
     browser = await puppeteer.launch(launchArgs);

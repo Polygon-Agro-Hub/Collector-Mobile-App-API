@@ -740,7 +740,7 @@ exports.getOrderById = async (orderId) => {
           o.buildingType AS userBuildingType,
           c.email
       FROM orders o
-      JOIN marketplaceusers c ON o.userId = c.id
+      LEFT JOIN marketplaceusers c ON o.userId = c.id
       WHERE o.id = ?
     `;
 
