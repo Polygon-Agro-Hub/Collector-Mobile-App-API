@@ -231,10 +231,10 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
 
     // Resolve master order ID if processOrderId was passed
     const resolveMasterOrderSql = `
-      SELECT orderId FROM market_place.processorders 
+      SELECT orderId FROM processorders 
       WHERE id = ? LIMIT 1
     `;
-    const [poRows] = await db.marketPlace.promise().query(resolveMasterOrderSql, [orderIdInput]);
+    const [poRows] = await db.collectionofficer.promise().query(resolveMasterOrderSql, [orderIdInput]);
     if (poRows && poRows.length > 0 && poRows[0].orderId) {
       masterOrderId = poRows[0].orderId;
     }
@@ -290,7 +290,7 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
     let emailAddress = order.email || order.customerEmail || order.customerInfo?.email || null;
     if (!emailAddress && order.userId) {
       try {
-        const [uRows] = await db.marketPlace.promise().query(
+        const [uRows] = await db.collectionofficer.promise().query(
           "SELECT email FROM marketplaceusers WHERE id = ? LIMIT 1",
           [order.userId]
         );

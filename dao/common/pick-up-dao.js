@@ -1,4 +1,4 @@
-const { collectionofficer, marketPlace } = require("../../startup/database");
+const { collectionofficer } = require("../../startup/database");
 const db = require("../../startup/database");
 
 exports.getPickupOrders = (officerId) => {
@@ -66,14 +66,14 @@ exports.getPickupOrders = (officerId) => {
             INNER JOIN collection_officer.distributedcenter dc 
                 ON co.distributedCenterId = dc.id
             
-            INNER JOIN market_place.orders o 
+            INNER JOIN orders o 
                 ON o.centerId = dc.id
             
-            INNER JOIN market_place.processorders po 
+            INNER JOIN processorders po 
                 ON po.orderId = o.id
                 AND po.status = 'Ready to Pickup'
             
-            INNER JOIN market_place.marketplaceusers u 
+            INNER JOIN marketplaceusers u 
                 ON o.userId = u.id
             
             WHERE co.id = ?
@@ -97,7 +97,7 @@ exports.checkCustome = async () => {
                 FROM marketplaceusers 
               
       `;
-        marketPlace.query(query, (error, results) => {
+        collectionofficer.query(query, (error, results) => {
             if (error) {
                 console.error("Error fetching customers:", error);
                 reject(error);
@@ -114,14 +114,14 @@ exports.updatePickupDetails = async (
     signatureUrl,
     role,
 ) => {
-    const connection = await db.marketPlace.promise().getConnection();
+    const connection = await db.collectionofficer.promise().getConnection();
 
     try {
         await connection.beginTransaction();
 
         const getProcessOrderQuery = `
             SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid
-            FROM market_place.processorders 
+            FROM processorders 
             WHERE invNo = ?
         `;
 
@@ -144,7 +144,7 @@ exports.updatePickupDetails = async (
         if (paymentMethod === "Cash") {
             const getOrderAmountQuery = `
                 SELECT fullTotal 
-                FROM market_place.orders 
+                FROM orders 
                 WHERE id = ?
             `;
 
@@ -162,7 +162,7 @@ exports.updatePickupDetails = async (
                 creditPaid > 0 ? fullTotalAmount - creditPaid : fullTotalAmount;
 
             const updateProcessOrderQuery = `
-                UPDATE market_place.processorders 
+                UPDATE processorders 
                 SET status = ?,
                     amount = ?,
                     moneyPaid = ?,
@@ -180,7 +180,7 @@ exports.updatePickupDetails = async (
             ]);
         } else {
             const updateStatusQuery = `
-                UPDATE market_place.processorders 
+                UPDATE processorders 
                 SET status = 'Picked up',
                     deliveredTime = NOW()
                 WHERE id = ?
@@ -288,9 +288,9 @@ exports.getReceivedOrders = (officerId) => {
                 o.createdAt AS orderCreatedAt
                 
             FROM collection_officer.pickuporders po
-            INNER JOIN market_place.processorders pr 
+            INNER JOIN processorders pr 
                 ON po.orderId = pr.id
-            INNER JOIN market_place.orders o 
+            INNER JOIN orders o 
                 ON pr.orderId = o.id
             WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
                 AND pr.paymentMethod = 'Cash'
@@ -337,9 +337,9 @@ exports.getReceivedOrders = (officerId) => {
                 o.createdAt AS orderCreatedAt
                 
             FROM collection_officer.driverorders do
-            INNER JOIN market_place.processorders pr 
+            INNER JOIN processorders pr 
                 ON do.orderId = pr.id
-            INNER JOIN market_place.orders o 
+            INNER JOIN orders o 
                 ON pr.orderId = o.id
             WHERE do.handOverOfficer = ?
                 AND pr.paymentMethod = 'Cash'
@@ -397,9 +397,9 @@ exports.getReceivedOrders = (officerId) => {
                             o.createdAt AS orderCreatedAt
                             
                         FROM collection_officer.pickuporders po
-                        INNER JOIN market_place.processorders pr 
+                        INNER JOIN processorders pr 
                             ON po.orderId = pr.id
-                        INNER JOIN market_place.orders o 
+                        INNER JOIN orders o 
                             ON pr.orderId = o.id
                         WHERE (po.orderIssuedOfficer = ? OR po.handOverOfficer = ?)
                             AND pr.paymentMethod = 'Cash'
@@ -467,11 +467,11 @@ exports.getReceivedOrderOfficer = (officerId) => {
             FROM collection_officer.pickuporders po
             
             -- Join with processorders using orderId from pickuporders
-            INNER JOIN market_place.processorders pr 
+            INNER JOIN processorders pr 
                 ON po.orderId = pr.id
             
             -- Join with orders using orderId from processorders
-            INNER JOIN market_place.orders o 
+            INNER JOIN orders o 
                 ON pr.orderId = o.id
             
             WHERE po.orderIssuedOfficer = ?

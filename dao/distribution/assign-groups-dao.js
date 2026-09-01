@@ -13,10 +13,10 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
         COALESCE(mu.buyerType, 'Retail') AS buyerType,
         COUNT(po.id) AS totalCount,
         SUM(CASE WHEN dti.id IS NULL AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0) THEN 1 ELSE 0 END) AS leftCount
-      FROM market_place.processorders po
-      JOIN market_place.orders o ON po.orderId = o.id
+      FROM processorders po
+      JOIN orders o ON po.orderId = o.id
       JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
-      LEFT JOIN market_place.marketplaceusers mu ON o.userId = mu.id
+      LEFT JOIN marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(o.sheduleDate) = CURDATE()
         AND dcen.id = ?
@@ -50,12 +50,12 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
           WHEN o.delivaryMethod = 'Pickup' THEN 'Pickup Order' 
           ELSE COALESCE(oh.city, oa.city, 'Unknown')
         END AS subtitle
-      FROM market_place.processorders po
-      JOIN market_place.orders o ON po.orderId = o.id
+      FROM processorders po
+      JOIN orders o ON po.orderId = o.id
       JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
-      LEFT JOIN market_place.marketplaceusers mu ON o.userId = mu.id
-      LEFT JOIN market_place.orderhouse oh ON o.id = oh.orderId
-      LEFT JOIN market_place.orderapartment oa ON o.id = oa.orderId
+      LEFT JOIN marketplaceusers mu ON o.userId = mu.id
+      LEFT JOIN orderhouse oh ON o.id = oh.orderId
+      LEFT JOIN orderapartment oa ON o.id = oa.orderId
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(o.sheduleDate) = CURDATE()
         AND dti.id IS NULL
@@ -89,7 +89,7 @@ exports.getRowAllocationCounts = (companyCenterId) => {
           SELECT GROUP_CONCAT(DISTINCT mi.displayName ORDER BY mi.displayName ASC SEPARATOR ', ')
           FROM packingpositions pp
           JOIN positionscrops pc ON pp.id = pc.posId
-          JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
+          JOIN marketplaceitems mi ON pc.mpiId = mi.id
           WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
         ) AS crops
       FROM packingrows pr
@@ -213,7 +213,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
             VALUES (?, ?, 'Pending', NOW())
           `;
           const updateProcessOrderSql = `
-            UPDATE market_place.processorders 
+            UPDATE processorders 
             SET isTargetAssigned = 1 
             WHERE id = ?
           `;
@@ -228,7 +228,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
 
             // Query master order ID
             const getMasterOrderSql = `
-              SELECT orderId FROM market_place.processorders 
+              SELECT orderId FROM processorders 
               WHERE id = ? LIMIT 1
             `;
             const masterOrderId = await new Promise((res, rej) => {
@@ -243,7 +243,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
 
             // Query packages linked to processorders.id OR master orders.id
             const getPackagesSql = `
-              SELECT id FROM market_place.orderpackage 
+              SELECT id FROM orderpackage 
               WHERE orderId = ? OR orderId = ?
             `;
             orderPackages = await new Promise((res, rej) => {
@@ -255,7 +255,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
 
             // Query additional items linked only to master orders.id (processOrderId collisions avoided)
             const getAdditionalSql = `
-              SELECT id FROM market_place.orderadditionalitems 
+              SELECT id FROM orderadditionalitems 
               WHERE orderId = ?
             `;
             additionalItems = await new Promise((res, rej) => {

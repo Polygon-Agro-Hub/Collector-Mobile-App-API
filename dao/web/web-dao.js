@@ -251,9 +251,9 @@ exports.getRowLiveMonitor = (rowId) => {
             dt.timeSlot
           FROM distributedtarget dt
           JOIN distributedtargetitems dti ON dt.id = dti.targetId
-          JOIN market_place.processorders po ON dti.orderId = po.id
-          JOIN market_place.orders o ON po.orderId = o.id
-          LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+          JOIN processorders po ON dti.orderId = po.id
+          JOIN orders o ON po.orderId = o.id
+          LEFT JOIN marketplaceusers u ON o.userId = u.id
           WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
           ORDER BY po.id ASC
         `;
@@ -300,8 +300,8 @@ exports.getRowLiveMonitor = (rowId) => {
 
             const pkgSql = `
               SELECT op.id AS orderpackageId, GREATEST(COALESCE(op.qty, 1), 1) AS qty, mp.displayName AS packageName
-              FROM market_place.orderpackage op
-              JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+              FROM orderpackage op
+              JOIN marketplacepackages mp ON op.packageId = mp.id
               WHERE op.orderId = ? OR op.orderId = ?
             `;
 
@@ -331,7 +331,7 @@ exports.getRowLiveMonitor = (rowId) => {
             });
 
             const addSql = `
-              SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
+              SELECT COUNT(*) AS cnt FROM orderadditionalitems 
               WHERE orderId = ?
             `;
             const addRes = await new Promise((res) => {
@@ -490,8 +490,8 @@ exports.getWebOrderDetails = (processOrderId) => {
         po.invNo AS invoiceNumber,
         o.fullTotal,
         o.total
-      FROM market_place.processorders po
-      JOIN market_place.orders o ON po.orderId = o.id
+      FROM processorders po
+      JOIN orders o ON po.orderId = o.id
       WHERE po.id = ?
     `;
 
@@ -513,8 +513,8 @@ exports.getWebOrderDetails = (processOrderId) => {
             op.packageId,
             mp.displayName,
             mp.productPrice
-          FROM market_place.orderpackage op
-          JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+          FROM orderpackage op
+          JOIN marketplacepackages mp ON op.packageId = mp.id
           WHERE op.orderId = ? OR op.orderId = ?
         `;
 
@@ -533,9 +533,9 @@ exports.getWebOrderDetails = (processOrderId) => {
               opi.price,
               pt.typeName AS productTypeName,
               mi.displayName AS productDisplayName
-            FROM market_place.orderpackageitems opi
-            LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
-            LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            FROM orderpackageitems opi
+            LEFT JOIN producttypes pt ON opi.productType = pt.id
+            LEFT JOIN marketplaceitems mi ON opi.productId = mi.id
             WHERE opi.orderPackageId = ?
             ORDER BY pt.typeName ASC, opi.id ASC
           `;
@@ -578,8 +578,8 @@ exports.getWebOrderDetails = (processOrderId) => {
             oai.qty,
             oai.price,
             mi.displayName
-          FROM market_place.orderadditionalitems oai
-          JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+          FROM orderadditionalitems oai
+          JOIN marketplaceitems mi ON oai.productId = mi.id
           WHERE oai.orderId = ?
         `;
 
