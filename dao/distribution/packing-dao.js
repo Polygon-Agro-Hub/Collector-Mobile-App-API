@@ -1,4 +1,4 @@
-﻿const db = require("../../startup/database");
+const db = require("../../startup/database");
 const { TIME_SLOT_MAP, formatTimeSlot } = require("../../utils/packing/time-slots");
 const { validatePosition1Busy, validateNextPositionBusy } = require("../../utils/packing/packing-validator");
 const { PACKING_ERROR_CODES } = require("../../utils/packing/error-codes");
@@ -44,6 +44,7 @@ exports.getOfficerActiveAssignment = (officerId) => {
         pp.pType AS type,
         pp.pIndex,
         pr.id AS rowId,
+        pr.rowIndex,
         CONCAT('Row ', pr.rowIndex) AS rowName,
         CASE 
           WHEN pp.pType = 'QR' THEN 'QR Handling Position'
@@ -402,7 +403,9 @@ exports.getQROrdersForOfficer = (officerId) => {
           0
         ) AS minPIndex,
         COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
-        (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
+        (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount,
+        COALESCE(DATE_FORMAT(CONVERT_TZ(o.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(o.sheduleDate, '%Y/%m/%d')) AS date,
+        o.sheduleDate
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
@@ -1113,6 +1116,74 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           });
         }
       });
+    });
+  });
+};
+
+/**
+ * Rollback positiontracking and order status if physical printing fails
+ * @param {number} orderId 
+ * @param {number|null} orderpackageId 
+ * @param {boolean} isMainContainer 
+ * @returns {Promise<Object>}
+ */
+exports.rollbackOrderOpened = (orderId, orderpackageId = null, isMainContainer = false) => {
+  return new Promise((resolve, reject) => {
+    db.collectionofficer.getConnection(async (err, connection) => {
+      if (err) return reject(err);
+
+      try {
+        if (isMainContainer) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND isMainContainer = 1 AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        } else if (orderpackageId) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId = ? AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId, orderpackageId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        } else {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId IS NULL AND isMainContainer = 0 AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        }
+
+        // Check if any positiontracking rows remain for this order
+        const [remaining] = await new Promise((res, rej) => {
+          connection.query(
+            "SELECT COUNT(*) AS cnt FROM positiontracking WHERE orderId = ?",
+            [orderId],
+            (e, r) => e ? rej(e) : res([r])
+          );
+        });
+
+        if (remaining && Number(remaining[0]?.cnt || 0) === 0) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "UPDATE distributedtargetitems SET orderStatus = 'Pending', qrPrintTime = NULL, qrPrintedBy = NULL WHERE orderId = ?",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        }
+
+        connection.release();
+        resolve({ success: true, rolledBack: true });
+      } catch (error) {
+        connection.release();
+        reject(error);
+      }
     });
   });
 };
