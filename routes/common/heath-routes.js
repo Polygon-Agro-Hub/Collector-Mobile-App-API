@@ -5,7 +5,6 @@ const router = express.Router();
 const {
   plantcare,
   collectionofficer,
-  marketPlace,
   admin,
 } = require("../../startup/database");
 
@@ -36,15 +35,13 @@ router.get("/health/details", async (req, res) => {
     const dbChecks = await Promise.allSettled([
       testConnection(plantcare, "PlantCare"),
       testConnection(collectionofficer, "CollectionOfficer"),
-      testConnection(marketPlace, "MarketPlace"),
       testConnection(admin, "Admin")
     ]);
 
     const databases = {
       plantcare: dbChecks[0].status === 'fulfilled' ? 'connected' : 'disconnected',
       collectionofficer: dbChecks[1].status === 'fulfilled' ? 'connected' : 'disconnected',
-      marketplace: dbChecks[2].status === 'fulfilled' ? 'connected' : 'disconnected',
-      admin: dbChecks[3].status === 'fulfilled' ? 'connected' : 'disconnected'
+      admin: dbChecks[2].status === 'fulfilled' ? 'connected' : 'disconnected'
     };
 
     const allConnected = Object.values(databases).every(status => status === 'connected');

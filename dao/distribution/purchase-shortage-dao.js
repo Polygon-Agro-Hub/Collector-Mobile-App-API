@@ -18,7 +18,7 @@ exports.getShortagesForOfficer = async (officerId) => {
       sp.reqStatus
     FROM collection_officer.shortageassigned sa
     INNER JOIN collection_officer.shortage s ON sa.shortageassigned = s.id
-    INNER JOIN market_place.marketplaceitems mi ON s.mpItemId = mi.id
+    INNER JOIN marketplaceitems mi ON s.mpItemId = mi.id
     LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
     LEFT JOIN collection_officer.marketprice mp ON mp.id = (
       SELECT MAX(id) FROM collection_officer.marketprice 

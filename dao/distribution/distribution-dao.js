@@ -124,32 +124,32 @@ exports.getOrderDataDao = (orderId) => {
                 pt.typeName AS productTypeName
 
             FROM 
-                market_place.orders o
+                orders o
 
             LEFT JOIN
-                market_place.marketplaceusers mu ON o.userId = mu.id
+                marketplaceusers mu ON o.userId = mu.id
             
             LEFT JOIN 
-                market_place.processorders po ON o.id = po.orderId
+                processorders po ON o.id = po.orderId
             
             LEFT JOIN 
-                market_place.orderadditionalitems oai ON o.id = oai.orderId
+                orderadditionalitems oai ON o.id = oai.orderId
             LEFT JOIN 
-                market_place.marketplaceitems mi_additional ON oai.productId = mi_additional.id
+                marketplaceitems mi_additional ON oai.productId = mi_additional.id
 
             LEFT JOIN 
-                market_place.orderpackage op ON po.id = op.orderId
+                orderpackage op ON po.id = op.orderId
             
             LEFT JOIN 
-                market_place.marketplacepackages mp ON op.packageId = mp.id
+                marketplacepackages mp ON op.packageId = mp.id
             
             LEFT JOIN 
-                market_place.orderpackageitems opi ON op.id = opi.orderPackageId
+                orderpackageitems opi ON op.id = opi.orderPackageId
             LEFT JOIN 
-                market_place.marketplaceitems mi_package ON opi.productId = mi_package.id
+                marketplaceitems mi_package ON opi.productId = mi_package.id
 
             LEFT JOIN 
-                market_place.producttypes pt ON opi.productType = pt.id
+                producttypes pt ON opi.productType = pt.id
 
             WHERE 
                 o.id = ?
@@ -359,8 +359,8 @@ exports.validateOrderStructure = async (orderId) => {
                 o.id,
                 o.isPackage,
                 po.id as processOrderId
-            FROM market_place.orders o
-            LEFT JOIN market_place.processorders po ON o.id = po.orderId
+            FROM orders o
+            LEFT JOIN processorders po ON o.id = po.orderId
             WHERE o.id = ?
         `;
 
@@ -380,7 +380,7 @@ exports.validateOrderStructure = async (orderId) => {
 
     if (order.isPackage === 1 && !order.processOrderId) {
       const createProcessOrderSql = `
-                INSERT INTO market_place.processorders (orderId, createdAt)
+                INSERT INTO processorders (orderId, createdAt)
                 VALUES (?, NOW())
             `;
 
@@ -416,21 +416,21 @@ exports.debugOrderRelationships = async (orderId) => {
   const queries = [
     {
       name: "orders",
-      sql: "SELECT * FROM market_place.orders WHERE id = ?",
+      sql: "SELECT * FROM orders WHERE id = ?",
     },
     {
       name: "processorders",
-      sql: "SELECT * FROM market_place.processorders WHERE orderId = ?",
+      sql: "SELECT * FROM processorders WHERE orderId = ?",
     },
     {
       name: "orderpackage",
-      sql: `SELECT op.* FROM market_place.orderpackage op 
-                  JOIN market_place.processorders po ON op.orderId = po.id 
+      sql: `SELECT op.* FROM orderpackage op 
+                  JOIN processorders po ON op.orderId = po.id 
                   WHERE po.orderId = ?`,
     },
     {
       name: "orderadditionalitems",
-      sql: "SELECT * FROM market_place.orderadditionalitems WHERE orderId = ?",
+      sql: "SELECT * FROM orderadditionalitems WHERE orderId = ?",
     },
   ];
 
@@ -459,7 +459,7 @@ exports.updatePackageItems = (items) => {
     }
 
     const sql = `
-            UPDATE market_place.orderpackageitems 
+            UPDATE orderpackageitems 
             SET isPacked = ? 
             WHERE id = ?
         `;
@@ -499,7 +499,7 @@ exports.updateAdditionalItems = (items) => {
     }
 
     const sql = `
-            UPDATE market_place.orderadditionalitems 
+            UPDATE orderadditionalitems 
             SET isPacked = ? 
             WHERE id = ?
         `;
@@ -537,7 +537,7 @@ exports.updateAdditionalItems = (items) => {
 exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
   return new Promise((resolve, reject) => {
     const getProcessOrderIdSql = `
-            SELECT id FROM market_place.processorders 
+            SELECT id FROM processorders 
             WHERE orderId = ?
         `;
 
@@ -561,7 +561,7 @@ exports.updateDistributedTargetComplete = (frontendOrderId, officerId) => {
         const processOrderId = processOrderResult[0].id;
 
         const updateProcessOrderSql = `
-                UPDATE market_place.processorders 
+                UPDATE processorders 
                 SET packBy = ?
                 WHERE id = ?
             `;
@@ -720,7 +720,7 @@ exports.createReplaceRequestDao = (replaceData) => {
         }
 
         const checkSql =
-          "SELECT id, isLock FROM market_place.orderpackage WHERE id = ?";
+          "SELECT id, isLock FROM orderpackage WHERE id = ?";
 
         connection.query(
           checkSql,
@@ -750,7 +750,7 @@ exports.createReplaceRequestDao = (replaceData) => {
             }
 
             const checkItemSql =
-              "SELECT id FROM market_place.orderpackageitems WHERE id = ? AND orderPackageId = ?";
+              "SELECT id FROM orderpackageitems WHERE id = ? AND orderPackageId = ?";
 
             connection.query(
               checkItemSql,
@@ -805,7 +805,7 @@ exports.createReplaceRequestDao = (replaceData) => {
 function handleDCMUpdates(connection, replaceData, resolve, reject) {
   const getCurrentDataSql = `
         SELECT productType, productId, qty, price
-        FROM market_place.orderpackageitems 
+        FROM orderpackageitems 
         WHERE id = ? AND orderPackageId = ?
     `;
 
@@ -835,7 +835,7 @@ function handleDCMUpdates(connection, replaceData, resolve, reject) {
       const previousData = currentData[0];
 
       const insertPrevDataSql = `
-            INSERT INTO market_place.prevdefineproduct 
+            INSERT INTO prevdefineproduct 
             (orderPackageId, replceId, productType, productId, qty, price, createdAt) 
             VALUES (?, ?, ?, ?, ?, ?, NOW())
         `;
@@ -862,7 +862,7 @@ function handleDCMUpdates(connection, replaceData, resolve, reject) {
           }
 
           const updateItemsSql = `
-                UPDATE market_place.orderpackageitems 
+                UPDATE orderpackageitems 
                 SET productType = ?, productId = ?, qty = ?, price = ?
                 WHERE id = ? AND orderPackageId = ?
             `;
@@ -934,7 +934,7 @@ function handleDCMUpdates(connection, replaceData, resolve, reject) {
 
 function handleDIOUpdates(connection, replaceData, resolve, reject) {
   const updateOrderPackageSql = `
-        UPDATE market_place.orderpackage 
+        UPDATE orderpackage 
         SET isLock = 1 
         WHERE id = ? 
     `;
@@ -960,7 +960,7 @@ function handleDIOUpdates(connection, replaceData, resolve, reject) {
       }
 
       const insertReplaceSql = `
-            INSERT INTO market_place.replacerequest 
+            INSERT INTO replacerequest 
             (orderPackageId, replceId, productType, productId, qty, price, status, userId, createdAt) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `;
@@ -987,7 +987,7 @@ function handleDIOUpdates(connection, replaceData, resolve, reject) {
 
         if (replaceData.updateItems) {
           const updateItemsSql = `
-                    UPDATE market_place.orderpackageitems 
+                    UPDATE orderpackageitems 
                     SET productType = ?, productId = ?, qty = ?, price = ?, isPacked = ?
                     WHERE id = ? AND orderPackageId = ?
                 `;
@@ -1096,9 +1096,9 @@ exports.getDistributionTargets = async (officerId) => {
         FROM distributedtarget dt
         INNER JOIN distributedtargetitems dti
             ON dti.targetId = dt.id
-        INNER JOIN market_place.processorders po
+        INNER JOIN processorders po
             ON po.id = dti.orderId
-        INNER JOIN market_place.orders o
+        INNER JOIN orders o
             ON o.id = po.orderId
         INNER JOIN packingpositions pp
             ON pp.rowId = dt.rowId
