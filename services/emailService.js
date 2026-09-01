@@ -9,29 +9,22 @@ const RETRYABLE_SMTP_CODES = new Set([421, 450, 451, 452]);
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-// ─── Pooled SMTP transporter ──────────────────────────────────────────────────
-// pool:true keeps connections alive and re-uses them across sends.
-// maxConnections / maxMessages prevent Gmail rate-limit bans.
-// Timeouts ensure a stale TCP socket fails fast instead of hanging forever.
+// ─── SMTP transporter (matches Polygon project config) ────────────────────────
 let transporter = null;
 
 function createTransporter() {
   const t = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    pool: true,           // reuse connections (prevents "connection closed" mid-send)
-    maxConnections: 3,    // never more than 3 concurrent SMTP connections
-    maxMessages: 50,      // recycle a connection after 50 messages
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.EMAIL_PORT) || 587,
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
-    connectionTimeout: 15000, // 15s to open TCP connection
-    greetingTimeout: 15000,   // 15s to receive SMTP 220 greeting (was missing!)
-    socketTimeout: 30000,     // 30s max for any single socket operation
-    logger: false,
-    debug: false,
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
   });
 
   t.verify((error) => {
@@ -55,6 +48,7 @@ function getTransporter() {
   }
   return transporter;
 }
+
 
 // ─── Handlebars helpers ───────────────────────────────────────────────────────
 handlebars.registerHelper("safe", function (obj, key) {
