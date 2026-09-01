@@ -54,7 +54,7 @@ router.post("/send-pdf-email", async (req, res) => {
 
       await emailService.sendEmail(
         email,
-        `Your GoViMart Invoice - ${invoiceNo || ""}`,
+        `Your Polygon Invoice - ${invoiceNo || ""}`,
         "welcom",
         {
           firstName: resolvedFirstName,

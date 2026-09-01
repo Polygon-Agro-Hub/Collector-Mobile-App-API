@@ -154,7 +154,7 @@ exports.processDeliveryInvoices = async (req, res) => {
 
         emailsData.push({
           email: emailAddress,
-          subject: `Your GoViMart Invoice - ${invoiceNo}`,
+          subject: `Your Polygon Invoice - ${invoiceNo}`,
           fileName: `Post_Invoice_${invoiceNo}.pdf`,
           pdfBuffer,
           customerName,
@@ -348,7 +348,7 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
 
     await emailService.sendEmail(
       emailAddress,
-      `Your GoViMart Invoice - ${invoiceNo}`,
+      `Your Polygon Invoice - ${invoiceNo}`,
       "welcom",
       {
         firstName,
