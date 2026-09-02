@@ -703,57 +703,174 @@ const generateInvoiceHTML = (
 
 
 
-const generateOrderPDF = async (orderData, deliveryFee = 0) => {
-  let browser;
-  try {
-    const htmlContent = generateInvoiceHTML(
-      orderData,
-      null,
-      deliveryFee,
-      logoBase64,
-    );
+const fs = require("fs");
 
-    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+const getLocalChromePath = () => {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.env.CHROME_BIN) {
+    return process.env.CHROME_BIN;
+  }
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
 
-    let launchArgs = {};
-    if (isLocal) {
-      launchArgs = {
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        defaultViewport: null,
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        headless: "new",
-      };
-    } else {
-      const chromium = (await import("@sparticuz/chromium")).default;
-      launchArgs = {
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      };
+  const possiblePaths = [
+    // Windows
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    // Linux
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    // macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
     }
+  }
+  return null;
+};
 
-    browser = await puppeteer.launch(launchArgs);
+// ─── Persistent Browser Singleton ─────────────────────────────────────────────
+// Instead of launching & killing Chrome per-request (3-10s each),
+// we keep one browser alive for the server's lifetime and reuse it.
+// Auto-reconnects if the browser process crashes.
 
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+let _browser = null;
+let _launchArgs = null;
+let _browserInitializing = false;
+let _browserReadyWaiters = [];
+
+async function buildLaunchArgs() {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--no-first-run",
+    "--mute-audio",
+  ];
+
+  const localChrome = getLocalChromePath();
+  if (localChrome) {
+    return { args, executablePath: localChrome, headless: "new", defaultViewport: null };
+  }
+
+  try {
+    const chromium = (await import("@sparticuz/chromium")).default;
+    return {
+      args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      defaultViewport: chromium.defaultViewport,
+    };
+  } catch (e) {
+    console.warn("[PDF] Could not load @sparticuz/chromium:", e.message);
+    return { args, headless: "new", defaultViewport: null };
+  }
+}
+
+async function getBrowser() {
+  // Return healthy browser if available
+  if (_browser) {
+    try {
+      const pages = await _browser.pages();
+      if (pages !== undefined) return _browser; // still alive
+    } catch (_) {
+      console.warn("[PDF] Browser appears crashed — relaunching...");
+      _browser = null;
+    }
+  }
+
+  // If another call is already launching, wait for it
+  if (_browserInitializing) {
+    return new Promise((resolve, reject) => {
+      _browserReadyWaiters.push({ resolve, reject });
+    });
+  }
+
+  _browserInitializing = true;
+  try {
+    if (!_launchArgs) {
+      _launchArgs = await buildLaunchArgs();
+    }
+    console.log("[PDF] Launching persistent Chromium browser...");
+    _browser = await puppeteer.launch(_launchArgs);
+
+    // Auto-cleanup on crash so next call re-launches
+    _browser.on("disconnected", () => {
+      console.warn("[PDF] Browser disconnected — will relaunch on next PDF request");
+      _browser = null;
+    });
+
+    console.log("[PDF] Persistent Chromium browser ready ✅");
+
+    // Notify any callers that were waiting
+    const waiters = _browserReadyWaiters.splice(0);
+    waiters.forEach((w) => w.resolve(_browser));
+
+    return _browser;
+  } catch (err) {
+    _browser = null;
+    const waiters = _browserReadyWaiters.splice(0);
+    waiters.forEach((w) => w.reject(err));
+    throw err;
+  } finally {
+    _browserInitializing = false;
+  }
+}
+
+// Warm up the browser at module load time so first email is instant
+getBrowser().catch((err) =>
+  console.error("[PDF] Failed to pre-warm browser:", err.message)
+);
+
+const generateOrderPDF = async (orderData, deliveryFee = 0) => {
+  let page;
+  try {
+    const htmlContent = generateInvoiceHTML(orderData, null, deliveryFee, logoBase64);
+
+    const browser = await getBrowser();
+    page = await browser.newPage();
+
+    // domcontentloaded is much faster than networkidle0 (no external requests anyway)
+    await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
 
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: {
-        top: "20px",
-        right: "20px",
-        bottom: "20px",
-        left: "20px",
-      },
+      margin: { top: "20px", right: "20px", bottom: "20px", left: "20px" },
     });
 
-    await browser.close();
+    await page.close();
     return pdfBuffer;
   } catch (error) {
-    if (browser) await browser.close();
-    console.error("PDF generation error:", error);
+    if (page) {
+      try { await page.close(); } catch (_) {}
+    }
+    // If browser died mid-generation, clear it so next call relaunches
+    if (error.message?.includes("Target closed") || error.message?.includes("Session closed")) {
+      console.warn("[PDF] Browser session closed mid-generation — clearing for relaunch");
+      _browser = null;
+    }
+    console.error("[PDF] PDF generation error:", error.message);
     throw error;
   }
 };

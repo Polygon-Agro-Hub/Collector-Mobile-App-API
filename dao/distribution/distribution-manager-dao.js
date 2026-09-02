@@ -129,16 +129,16 @@ exports.getDCenterTarget = (irmId = null) => {
       INNER JOIN 
           distributedtargetitems dti ON dt.id = dti.targetId
       LEFT JOIN 
-          market_place.processorders po ON dti.orderId = po.id
+          processorders po ON dti.orderId = po.id
       LEFT JOIN 
-          market_place.orders o ON po.orderId = o.id
+          orders o ON po.orderId = o.id
       LEFT JOIN (
           SELECT 
               orderId,
               COUNT(*) as total_items,
               SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
               SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-          FROM market_place.orderadditionalitems
+          FROM orderadditionalitems
           GROUP BY orderId
       ) additional_item_counts ON o.id = additional_item_counts.orderId
       LEFT JOIN (
@@ -166,14 +166,14 @@ exports.getDCenterTarget = (irmId = null) => {
                        COALESCE(package_items.packed_items, 0) < COALESCE(package_items.total_items, 0) THEN 1 
                   ELSE 0 
               END) as opened_packages
-          FROM market_place.orderpackage op
+          FROM orderpackage op
           LEFT JOIN (
               SELECT 
                   orderPackageId,
                   COUNT(id) as total_items,
                   SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
                   SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
-              FROM market_place.orderpackageitems
+              FROM orderpackageitems
               GROUP BY orderPackageId
           ) package_items ON op.id = package_items.orderPackageId
           GROUP BY op.orderId
@@ -638,9 +638,9 @@ exports.getDistributionPaymentsSummary = async ({
     JOIN 
         collection_officer.distributedtargetitems dti ON dt.id = dti.targetId
     JOIN 
-        market_place.processorders po ON po.id = dti.orderId
+        processorders po ON po.id = dti.orderId
     JOIN 
-        market_place.orders o ON o.id = po.orderId
+        orders o ON o.id = po.orderId
     WHERE 
         dt.userId = ?
         AND dti.isComplete = 1
@@ -672,9 +672,9 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
         ON tp.targetId = dt.id
       INNER JOIN collection_officer.distributedtargetitems dti
         ON dti.targetId = dt.id
-      INNER JOIN market_place.processorders po
+      INNER JOIN processorders po
         ON po.id = dti.orderId
-      INNER JOIN market_place.orders o
+      INNER JOIN orders o
         ON o.id = po.orderId
       WHERE
         tp.officerId = ?
@@ -710,7 +710,7 @@ exports.getOrderById = async (orderId) => {
   let connection;
 
   try {
-    connection = await db.marketPlace.promise().getConnection();
+    connection = await db.collectionofficer.promise().getConnection();
 
     const orderSql = `
       SELECT
@@ -740,7 +740,7 @@ exports.getOrderById = async (orderId) => {
           o.buildingType AS userBuildingType,
           c.email
       FROM orders o
-      JOIN marketplaceusers c ON o.userId = c.id
+      LEFT JOIN marketplaceusers c ON o.userId = c.id
       WHERE o.id = ?
     `;
 

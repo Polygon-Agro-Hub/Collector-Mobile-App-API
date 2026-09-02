@@ -179,6 +179,39 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Rollback order opened state and position tracking if physical printing fails
+ */
+exports.rollbackOrderOpened = asyncHandler(async (req, res) => {
+  const { orderId, orderpackageId, isMainContainer, rowId } = req.body;
+
+  if (!orderId) {
+    return res.status(400).json({
+      success: false,
+      message: "orderId is required"
+    });
+  }
+
+  const result = await packingDao.rollbackOrderOpened(
+    Number(orderId),
+    orderpackageId ? Number(orderpackageId) : null,
+    Boolean(isMainContainer)
+  );
+
+  const io = req.app.get("io");
+  if (io) {
+    io.emit("position_freed", { orderId: Number(orderId), pIndex: 1 });
+    io.emit("position_index_updated", { orderId: Number(orderId) });
+    if (rowId) io.to(`row_${rowId}`).emit("position_freed", { orderId: Number(orderId), pIndex: 1 });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Order opened state rolled back successfully.",
+    data: result
+  });
+});
+
+/**
  * Increment positiontracking.pIndex when packer completes or skips item
  */
 exports.advancePositionIndex = asyncHandler(async (req, res) => {
@@ -244,11 +277,25 @@ exports.markOrderAsCompleted = asyncHandler(async (req, res) => {
     if (rowId) io.to(`row_${rowId}`).emit("order_completed", { orderId: Number(orderId), orderStatus: "Completed" });
   }
 
-  // If the last box just completed QC → automatically send Post Invoice to customer's email
+  // If the last box just completed QC → automatically send Post Invoice to customer's email.
+  // Run in background (setImmediate) so response is not delayed.
+  // Errors are logged with full detail; never silently dropped.
   if (result?.isFullyCompleted) {
-    // Fire-and-forget: do NOT await so API response is not delayed
-    invoicePdfEp.sendSinglePostInvoiceEmail(Number(orderId)).catch((err) => {
-      console.error(`❌ Background invoice email failed for orderId=${orderId}:`, err);
+    setImmediate(async () => {
+      try {
+        const emailResult = await invoicePdfEp.sendSinglePostInvoiceEmail(Number(orderId));
+        if (emailResult?.success) {
+          console.log(`✅ [packing-ep] Invoice email sent successfully for processOrderId=${orderId}`);
+        } else {
+          console.warn(`⚠️ [packing-ep] Invoice email not sent for processOrderId=${orderId}:`, emailResult);
+        }
+      } catch (err) {
+        console.error(`❌ [packing-ep] Background invoice email threw for processOrderId=${orderId}:`, {
+          message: err.message,
+          code: err.code,
+          stack: err.stack,
+        });
+      }
     });
   }
 

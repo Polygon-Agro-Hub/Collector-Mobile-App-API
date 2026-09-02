@@ -44,6 +44,7 @@ exports.getOfficerActiveAssignment = (officerId) => {
         pp.pType AS type,
         pp.pIndex,
         pr.id AS rowId,
+        pr.rowIndex,
         CONCAT('Row ', pr.rowIndex) AS rowName,
         CASE 
           WHEN pp.pType = 'QR' THEN 'QR Handling Position'
@@ -92,7 +93,7 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
           SELECT GROUP_CONCAT(DISTINCT mi.displayName ORDER BY mi.displayName ASC SEPARATOR ', ')
           FROM packingpositions pp2
           JOIN positionscrops pc ON pp2.id = pc.posId
-          JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
+          JOIN marketplaceitems mi ON pc.mpiId = mi.id
           WHERE pp2.rowId = pr.id AND pp2.pType = 'NOR'
         ) AS crops
       FROM packingrows pr
@@ -352,7 +353,7 @@ exports.getCropsForPosition = (positionId) => {
         mi.displayName AS name,
         cv.image AS image
       FROM positionscrops pc
-      JOIN market_place.marketplaceitems mi ON pc.mpiId = mi.id
+      JOIN marketplaceitems mi ON pc.mpiId = mi.id
       LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
       WHERE pc.posId = ?
       ORDER BY mi.displayName ASC
@@ -401,17 +402,19 @@ exports.getQROrdersForOfficer = (officerId) => {
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
           0
         ) AS minPIndex,
-        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM market_place.orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
-        (SELECT COUNT(DISTINCT oai.productId) FROM market_place.orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount
+        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
+        (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount,
+        COALESCE(DATE_FORMAT(CONVERT_TZ(o.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(o.sheduleDate, '%Y/%m/%d')) AS date,
+        o.sheduleDate
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
-      JOIN market_place.processorders po ON dti.orderId = po.id
-      JOIN market_place.orders o ON po.orderId = o.id
-      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
-      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
-      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      JOIN processorders po ON dti.orderId = po.id
+      JOIN orders o ON po.orderId = o.id
+      LEFT JOIN orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN marketplaceusers u ON o.userId = u.id
       WHERE tp.officerId = ? AND (DATE(tp.createdAt) = CURDATE() OR DATE(dt.createdAt) = CURDATE())
       ORDER BY po.id ASC
     `;
@@ -430,12 +433,12 @@ exports.getQROrdersForOfficer = (officerId) => {
                 COALESCE(mp.displayName, 'Package') AS name, 
                 COALESCE(op.qty, 1) AS qty,
                 GREATEST(
-                  COALESCE((SELECT COUNT(*) FROM market_place.orderpackageitems opi WHERE opi.orderPackageId = op.id), 0),
-                  COALESCE((SELECT COUNT(*) FROM market_place.packagedetails pd WHERE pd.packageId = op.packageId), 0)
+                  COALESCE((SELECT COUNT(*) FROM orderpackageitems opi WHERE opi.orderPackageId = op.id), 0),
+                  COALESCE((SELECT COUNT(*) FROM packagedetails pd WHERE pd.packageId = op.packageId), 0)
                 ) AS count
-              FROM market_place.processorders po
-              JOIN market_place.orderpackage op ON (op.orderId = po.orderId OR op.orderId = po.id)
-              JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+              FROM processorders po
+              JOIN orderpackage op ON (op.orderId = po.orderId OR op.orderId = po.id)
+              JOIN marketplacepackages mp ON op.packageId = mp.id
               WHERE po.id = ?
             `;
             const pkgs = await new Promise((res, rej) => {
@@ -448,9 +451,9 @@ exports.getQROrdersForOfficer = (officerId) => {
                   pt.typeName AS categoryName,
                   mi.displayName AS itemName,
                   COALESCE(opi.qty, 1) AS qty
-                FROM market_place.orderpackageitems opi
-                LEFT JOIN market_place.producttypes pt ON opi.productType = pt.id
-                LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+                FROM orderpackageitems opi
+                LEFT JOIN producttypes pt ON opi.productType = pt.id
+                LEFT JOIN marketplaceitems mi ON opi.productId = mi.id
                 WHERE opi.orderPackageId = ?
               `;
               const items = await new Promise((res) => {
@@ -535,13 +538,13 @@ exports.getCenterTargetOrders = (companyCenterId = null) => {
         ) AS maxPIndex
       FROM distributedtarget dt
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
-      JOIN market_place.processorders po ON dti.orderId = po.id
-      JOIN market_place.orders o ON po.orderId = o.id
+      JOIN processorders po ON dti.orderId = po.id
+      JOIN orders o ON po.orderId = o.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
       LEFT JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
-      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
-      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
-      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      LEFT JOIN orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN marketplaceusers u ON o.userId = u.id
       WHERE DATE(dt.createdAt) = CURDATE()
         AND (? IS NULL OR dcen.id = ?)
       ORDER BY dt.timeSlot ASC, po.id ASC
@@ -592,14 +595,14 @@ exports.getOrderDetails = (orderId) => {
         DATE_FORMAT(DATE_ADD(dti.qrPrintTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qrPrintedTime,
         po.packBy,
         DATE_FORMAT(DATE_ADD(po.packTime, INTERVAL 330 MINUTE), '%h:%i %p') AS qcDoneTime
-      FROM market_place.processorders po
-      JOIN market_place.orders o ON po.orderId = o.id
+      FROM processorders po
+      JOIN orders o ON po.orderId = o.id
       LEFT JOIN distributedtargetitems dti ON dti.orderId = po.id
       LEFT JOIN distributedtarget dt ON dti.targetId = dt.id
       LEFT JOIN packingrows pr ON dt.rowId = pr.id
-      LEFT JOIN market_place.orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
-      LEFT JOIN market_place.orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
-      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      LEFT JOIN orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
+      LEFT JOIN orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
+      LEFT JOIN marketplaceusers u ON o.userId = u.id
       WHERE po.id = ? OR po.invNo = ?
       LIMIT 1
     `;
@@ -661,9 +664,9 @@ exports.getOrderDetails = (orderId) => {
             op.id,
             COALESCE(op.qty, 1) AS qty,
             COALESCE(mp.displayName, 'Package') AS packageName
-          FROM market_place.processorders po
-          JOIN market_place.orderpackage op ON po.id = op.orderId
-          LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+          FROM processorders po
+          JOIN orderpackage op ON po.id = op.orderId
+          LEFT JOIN marketplacepackages mp ON op.packageId = mp.id
           WHERE po.id = ?
           ORDER BY op.id ASC
         `;
@@ -683,8 +686,8 @@ exports.getOrderDetails = (orderId) => {
               DATE_FORMAT(DATE_ADD(opi.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
               co.empId AS packedByEmpId,
               COALESCE(cv.image, '') AS image
-            FROM market_place.orderpackageitems opi
-            LEFT JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            FROM orderpackageitems opi
+            LEFT JOIN marketplaceitems mi ON opi.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             LEFT JOIN targetposition tp ON opi.packId = tp.id
             LEFT JOIN collectionofficer co ON tp.officerId = co.id
@@ -746,9 +749,9 @@ exports.getOrderDetails = (orderId) => {
             DATE_FORMAT(DATE_ADD(oai.packingTime, INTERVAL 330 MINUTE), '%h:%i %p') AS packedTime,
             co.empId AS packedByEmpId,
             COALESCE(cv.image, '') AS image
-          FROM market_place.orderadditionalitems oai
-          JOIN market_place.processorders po ON oai.orderId = po.orderId
-          LEFT JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+          FROM orderadditionalitems oai
+          JOIN processorders po ON oai.orderId = po.orderId
+          LEFT JOIN marketplaceitems mi ON oai.productId = mi.id
           LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
           LEFT JOIN targetposition tp ON oai.packId = tp.id
           LEFT JOIN collectionofficer co ON tp.officerId = co.id
@@ -853,7 +856,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
 
           if (orderpackageId) {
             const checkPkgSql = `
-              SELECT id FROM market_place.orderpackage 
+              SELECT id FROM orderpackage 
               WHERE id = ? LIMIT 1
             `;
             const pkgExists = await new Promise((res, rej) => {
@@ -868,8 +871,8 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!validPackageId && isPackage === 1) {
             const getOrderPkgsSql = `
               SELECT op.id 
-              FROM market_place.processorders po
-              JOIN market_place.orderpackage op ON po.id = op.orderId
+              FROM processorders po
+              JOIN orderpackage op ON po.id = op.orderId
               WHERE po.id = ?
               ORDER BY op.id ASC
             `;
@@ -922,9 +925,9 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!isMainContainer) {
             const getCountsSql = `
               SELECT 
-                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
-                (SELECT COUNT(*) FROM market_place.orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
-              FROM market_place.processorders po
+                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+                (SELECT COUNT(*) FROM orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
+              FROM processorders po
               WHERE po.id = ?
               LIMIT 1
             `;
@@ -1032,7 +1035,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
               });
               const existingCount = existingCountRes.length > 0 ? existingCountRes[0].count : 0;
 
-              const getPkgQtySql = `SELECT GREATEST(COALESCE(qty, 1), 1) AS qty FROM market_place.orderpackage WHERE id = ?`;
+              const getPkgQtySql = `SELECT GREATEST(COALESCE(qty, 1), 1) AS qty FROM orderpackage WHERE id = ?`;
               const qtyRes = await new Promise((res, rej) => {
                 connection.query(getPkgQtySql, [validPackageId], (err, results) => {
                   if (err) return rej(err);
@@ -1118,6 +1121,74 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
 };
 
 /**
+ * Rollback positiontracking and order status if physical printing fails
+ * @param {number} orderId 
+ * @param {number|null} orderpackageId 
+ * @param {boolean} isMainContainer 
+ * @returns {Promise<Object>}
+ */
+exports.rollbackOrderOpened = (orderId, orderpackageId = null, isMainContainer = false) => {
+  return new Promise((resolve, reject) => {
+    db.collectionofficer.getConnection(async (err, connection) => {
+      if (err) return reject(err);
+
+      try {
+        if (isMainContainer) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND isMainContainer = 1 AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        } else if (orderpackageId) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId = ? AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId, orderpackageId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        } else {
+          await new Promise((res, rej) => {
+            connection.query(
+              "DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId IS NULL AND isMainContainer = 0 AND pIndex = 1 ORDER BY id DESC LIMIT 1",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        }
+
+        // Check if any positiontracking rows remain for this order
+        const [remaining] = await new Promise((res, rej) => {
+          connection.query(
+            "SELECT COUNT(*) AS cnt FROM positiontracking WHERE orderId = ?",
+            [orderId],
+            (e, r) => e ? rej(e) : res([r])
+          );
+        });
+
+        if (remaining && Number(remaining[0]?.cnt || 0) === 0) {
+          await new Promise((res, rej) => {
+            connection.query(
+              "UPDATE distributedtargetitems SET orderStatus = 'Pending', qrPrintTime = NULL, qrPrintedBy = NULL WHERE orderId = ?",
+              [orderId],
+              (e, r) => e ? rej(e) : res(r)
+            );
+          });
+        }
+
+        connection.release();
+        resolve({ success: true, rolledBack: true });
+      } catch (error) {
+        connection.release();
+        reject(error);
+      }
+    });
+  });
+};
+
+/**
  * Increment positiontracking.pIndex = pIndex + 1 when packer clicks skip or completed
  * @param {number} orderId 
  * @param {number|null} orderpackageId 
@@ -1176,9 +1247,9 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         try {
           const getCountsSql = `
             SELECT 
-              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM market_place.orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
-              (SELECT COUNT(*) FROM market_place.orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
-            FROM market_place.processorders po
+              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+              (SELECT COUNT(*) FROM orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
+            FROM processorders po
             WHERE po.id = ?
             LIMIT 1
           `;
@@ -1442,7 +1513,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             // Update items assigned specifically to this position's crops
             await new Promise((res) => {
               db.collectionofficer.query(
-                `UPDATE market_place.orderpackageitems 
+                `UPDATE orderpackageitems 
                  SET packId = ?, packingTime = NOW(), isPacked = 1 
                  WHERE orderPackageId = ? 
                    AND (productId IN (?) OR productType IN (?))`,
@@ -1454,7 +1525,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             // No specific crops assigned — update unassigned/unpacked items
             await new Promise((res) => {
               db.collectionofficer.query(
-                `UPDATE market_place.orderpackageitems 
+                `UPDATE orderpackageitems 
                  SET packId = ?, packingTime = NOW(), isPacked = 1 
                  WHERE orderPackageId = ? AND (packId IS NULL OR packId = 0)`,
                 [targetPositionId, orderpackageId],
@@ -1467,8 +1538,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           if (assignedMpiIds.length > 0) {
             await new Promise((res) => {
               db.collectionofficer.query(
-                `UPDATE market_place.orderadditionalitems oai
-                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                `UPDATE orderadditionalitems oai
+                 JOIN processorders po ON oai.orderId = po.orderId
                  SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
                  WHERE po.id = ? AND oai.productId IN (?)`,
                 [targetPositionId, orderId, assignedMpiIds],
@@ -1478,8 +1549,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           } else {
             await new Promise((res) => {
               db.collectionofficer.query(
-                `UPDATE market_place.orderadditionalitems oai
-                 JOIN market_place.processorders po ON oai.orderId = po.orderId
+                `UPDATE orderadditionalitems oai
+                 JOIN processorders po ON oai.orderId = po.orderId
                  SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
                  WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
                 [targetPositionId, orderId],
@@ -1527,7 +1598,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
 
       // Step 2: Calculate expected total physical boxes for this order
       const getMasterOrderSql = `
-        SELECT orderId AS masterOrderId FROM market_place.processorders WHERE id = ?
+        SELECT orderId AS masterOrderId FROM processorders WHERE id = ?
       `;
       db.collectionofficer.query(getMasterOrderSql, [orderId], (mErr, mRows) => {
         if (mErr || !mRows || mRows.length === 0) {
@@ -1538,7 +1609,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
 
         const pkgSql = `
           SELECT SUM(GREATEST(COALESCE(qty, 1), 1)) AS totalPkgQty
-          FROM market_place.orderpackage
+          FROM orderpackage
           WHERE orderId = ? OR orderId = ?
         `;
         db.collectionofficer.query(pkgSql, [orderId, masterOrderId], (pErr, pRows) => {
@@ -1549,7 +1620,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
           const pkgQty = Number(pRows[0]?.totalPkgQty || 0);
 
           const addSql = `
-            SELECT COUNT(*) AS cnt FROM market_place.orderadditionalitems 
+            SELECT COUNT(*) AS cnt FROM orderadditionalitems 
             WHERE orderId = ?
           `;
           db.collectionofficer.query(addSql, [masterOrderId], (aErr, aRows) => {
@@ -1591,8 +1662,8 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
 
                   // Update processorders: packBy, packTime, and status based on Delivery Method
                   const updatePoSql = `
-                    UPDATE market_place.processorders po
-                    JOIN market_place.orders o ON po.orderId = o.id
+                    UPDATE processorders po
+                    JOIN orders o ON po.orderId = o.id
                     SET 
                       po.packBy = COALESCE(?, po.packBy),
                       po.packTime = NOW(),
@@ -1611,8 +1682,8 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                     // Step 4: Check the delivery method to know if it became "Out For Delivery"
                     const checkMethodSql = `
                       SELECT o.delivaryMethod
-                      FROM market_place.processorders po
-                      JOIN market_place.orders o ON po.orderId = o.id
+                      FROM processorders po
+                      JOIN orders o ON po.orderId = o.id
                       WHERE po.id = ?
                       LIMIT 1
                     `;
@@ -1627,7 +1698,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                       // Only insert the notification for "Out For Delivery" orders (not Pickup)
                       if (!isPickup) {
                         const insertNotifSql = `
-                          INSERT INTO market_place.dashnotification 
+                          INSERT INTO dashnotification 
                             (orderId, title, readStatus, createdAt)
                           VALUES (?, ?, 0, NOW())
                         `;
@@ -1768,9 +1839,9 @@ exports.getOfficerActiveOrder = (officerId) => {
         OR (pp.rowId = dt.rowId AND DATE(dt.createdAt) = COALESCE(DATE(dt_tp.createdAt), CURDATE()))
       )
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
-      JOIN market_place.processorders po ON dti.orderId = po.id
-      JOIN market_place.orders o ON po.orderId = o.id
-      LEFT JOIN market_place.marketplaceusers u ON o.userId = u.id
+      JOIN processorders po ON dti.orderId = po.id
+      JOIN orders o ON po.orderId = o.id
+      LEFT JOIN marketplaceusers u ON o.userId = u.id
       WHERE tp.id = (
         SELECT MAX(tp_sub.id) 
         FROM targetposition tp_sub 
@@ -1806,8 +1877,8 @@ exports.getOfficerActiveOrder = (officerId) => {
       try {
         const pkgSql = `
           SELECT op.id, GREATEST(COALESCE(op.qty, 1), 1) AS qty, COALESCE(mp.displayName, 'Package') AS name
-          FROM market_place.orderpackage op
-          LEFT JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
+          FROM orderpackage op
+          LEFT JOIN marketplacepackages mp ON op.packageId = mp.id
           WHERE op.orderId = ?
         `;
         const packagesList = await new Promise((res) => {
@@ -1816,7 +1887,7 @@ exports.getOfficerActiveOrder = (officerId) => {
 
         const alacarteSql = `
           SELECT COUNT(*) AS count
-          FROM market_place.orderadditionalitems
+          FROM orderadditionalitems
           WHERE orderId = ?
         `;
         const alacarteRes = await new Promise((res) => {
@@ -1866,10 +1937,10 @@ exports.getOfficerActiveOrder = (officerId) => {
               opi.productType AS productTypeId,
               mp.displayName AS packName,
               'package' AS categoryType
-            FROM market_place.orderpackage op
-            JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
-            JOIN market_place.orderpackageitems opi ON op.id = opi.orderPackageId
-            JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            FROM orderpackage op
+            JOIN marketplacepackages mp ON op.packageId = mp.id
+            JOIN orderpackageitems opi ON op.id = opi.orderPackageId
+            JOIN marketplaceitems mi ON opi.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE op.id = ? AND mi.id IS NOT NULL
           `;
@@ -1886,9 +1957,9 @@ exports.getOfficerActiveOrder = (officerId) => {
               NULL AS productTypeId,
               'À la carte' AS packName,
               'alacarte' AS categoryType
-            FROM market_place.processorders po
-            JOIN market_place.orderadditionalitems oai ON po.orderId = oai.orderId
-            JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+            FROM processorders po
+            JOIN orderadditionalitems oai ON po.orderId = oai.orderId
+            JOIN marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ? AND mi.id IS NOT NULL
             GROUP BY mi.id
@@ -1905,11 +1976,11 @@ exports.getOfficerActiveOrder = (officerId) => {
               opi.productType AS productTypeId,
               mp.displayName AS packName,
               'package' AS categoryType
-            FROM market_place.processorders po
-            JOIN market_place.orderpackage op ON (op.orderId = po.id OR op.orderId = po.orderId)
-            JOIN market_place.marketplacepackages mp ON op.packageId = mp.id
-            JOIN market_place.orderpackageitems opi ON op.id = opi.orderPackageId
-            JOIN market_place.marketplaceitems mi ON opi.productId = mi.id
+            FROM processorders po
+            JOIN orderpackage op ON (op.orderId = po.id OR op.orderId = po.orderId)
+            JOIN marketplacepackages mp ON op.packageId = mp.id
+            JOIN orderpackageitems opi ON op.id = opi.orderPackageId
+            JOIN marketplaceitems mi ON opi.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ?
             GROUP BY op.id, mi.id, opi.productType, mp.displayName
@@ -1925,9 +1996,9 @@ exports.getOfficerActiveOrder = (officerId) => {
               NULL AS productTypeId,
               'À la carte' AS packName,
               'alacarte' AS categoryType
-            FROM market_place.processorders po
-            JOIN market_place.orderadditionalitems oai ON po.orderId = oai.orderId
-            JOIN market_place.marketplaceitems mi ON oai.productId = mi.id
+            FROM processorders po
+            JOIN orderadditionalitems oai ON po.orderId = oai.orderId
+            JOIN marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ?
             GROUP BY mi.id

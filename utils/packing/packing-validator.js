@@ -29,7 +29,7 @@ const validatePosition1Busy = async (
       pt.pIndex, 
       po.invNo
     FROM positiontracking pt
-    JOIN market_place.processorders po ON pt.orderId = po.id
+    JOIN processorders po ON pt.orderId = po.id
     JOIN distributedtargetitems dti ON dti.orderId = po.id
     JOIN distributedtarget dt ON dti.targetId = dt.id
     WHERE dt.rowId = (
@@ -60,63 +60,29 @@ const validatePosition1Busy = async (
     return null;
   }
 
-  // 2. Position 1 has at least 1 active box at pIndex = 1.
-  // Check if the current request is re-printing the EXACT SAME physical box currently at pIndex = 1.
-  
-  // For Main Container:
-  if (isMainContainer) {
-    const isSameMain = activeP1Boxes.some(
-      (box) => box.orderId === orderId && Number(box.isMainContainer) === 1
-    );
-    if (isSameMain) return null; // Allow re-print of Main Container
+  // 2. Position 1 has an active box. Is it the SAME box the user is trying to pass?
+  const currentP1 = activeP1Boxes[0];
+  const occupiedInv = currentP1.invNo || "Unknown";
+
+  const isSameOrder = Number(currentP1.orderId) === Number(orderId);
+  const isSamePackage =
+    validPackageId !== null
+      ? Number(currentP1.orderpackageId) === Number(validPackageId)
+      : currentP1.orderpackageId === null;
+  const isSameMainContainer = Boolean(currentP1.isMainContainer) === Boolean(isMainContainer);
+
+  if (isSameOrder && isSamePackage && isSameMainContainer) {
+    // Exact same box re-attempt / reprint allowed
+    return null;
   }
 
-  // For Package Box:
-  if (validPackageId) {
-    // Query all existing positiontracking rows for this orderpackageId ordered by id ASC
-    const pkgTrackingRowsSql = `
-      SELECT id, pIndex 
-      FROM positiontracking 
-      WHERE orderId = ? AND orderpackageId = ? AND isMainContainer = 0 
-      ORDER BY id ASC
-    `;
-    const pkgTrackingRows = await new Promise((res, rej) => {
-      connection.query(
-        pkgTrackingRowsSql,
-        [orderId, validPackageId],
-        (err, results) => {
-          if (err) return rej(err);
-          res(results || []);
-        }
-      );
-    });
-
-    // Check if a tracking row already exists for packageBoxSubIndex and if IT is the row at pIndex = 1
-    const targetRow = pkgTrackingRows[packageBoxSubIndex];
-    if (targetRow && Number(targetRow.pIndex) === 1) {
-      // Re-printing the exact package box that is currently at P1 -> Allow
-      return null;
-    }
-  }
-
-  // For À la carte Box:
-  if (!isMainContainer && !validPackageId) {
-    const isSameAlacarte = activeP1Boxes.some(
-      (box) =>
-        box.orderId === orderId &&
-        box.orderpackageId === null &&
-        Number(box.isMainContainer) === 0
-    );
-    if (isSameAlacarte) return null; // Allow re-print of À la carte box
-  }
-
-  // Otherwise, Position 1 is currently busy with a different or previous box -> BLOCK!
-  const occupiedInv = activeP1Boxes[0].invNo;
+  // Position 1 is occupied by a different box/order
   return {
     success: false,
-    code: PACKING_ERROR_CODES.STATION_OCCUPIED,
+    isOccupied: true,
+    code: PACKING_ERROR_CODES.POSITION_1_BUSY,
     occupiedInvoice: occupiedInv,
-    message: `Packing Position 1 is currently busy with Invoice ${occupiedInv}. Please wait until Position 1 completes its current box before generating the next QR code.`,
+    message: `Position 1 is currently busy with Invoice ${occupiedInv}. Please wait until Position 1 clears before passing the next box.`
   };
 };
 
@@ -134,7 +100,7 @@ const validateNextPositionBusy = async (dbInstance, orderId, nextStep, targetSta
   const checkOccupiedSql = `
     SELECT pt.id, pt.orderpackageId, pt.orderId, pt.pIndex, po.invNo
     FROM positiontracking pt
-    JOIN market_place.processorders po ON pt.orderId = po.id
+    JOIN processorders po ON pt.orderId = po.id
     JOIN distributedtargetitems dti ON pt.orderId = dti.orderId
     JOIN distributedtarget dt ON dti.targetId = dt.id
     WHERE dt.rowId = (

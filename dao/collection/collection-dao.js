@@ -135,9 +135,9 @@ exports.getTargetForOfficerDao = (officerId) => {
             INNER JOIN 
                 distributedtargetitems dti ON dt.id = dti.targetId
             INNER JOIN 
-                market_place.processorders po ON dti.orderId = po.id
+                processorders po ON dti.orderId = po.id
             INNER JOIN 
-                market_place.orders o ON po.orderId = o.id
+                orders o ON po.orderId = o.id
             LEFT JOIN (
                 -- Additional items subquery
                 SELECT 
@@ -146,7 +146,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                     SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
                     SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
                 FROM 
-                    market_place.orderadditionalitems
+                    orderadditionalitems
                 GROUP BY 
                     orderId
             ) additional_item_counts ON o.id = additional_item_counts.orderId
@@ -160,7 +160,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                     SUM(COALESCE(package_items.packed_items, 0)) as packed_items,
                     SUM(COALESCE(package_items.pending_items, 0)) as pending_items
                 FROM 
-                    market_place.orderpackage op
+                    orderpackage op
                 LEFT JOIN (
                     -- Get item counts for each package
                     SELECT 
@@ -169,7 +169,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                         SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
                         SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
                     FROM 
-                        market_place.orderpackageitems
+                        orderpackageitems
                     GROUP BY 
                         orderPackageId
                 ) package_items ON op.id = package_items.orderPackageId
