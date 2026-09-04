@@ -18,7 +18,7 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
       JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
       LEFT JOIN marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(o.sheduleDate) = CURDATE()
+      WHERE DATE(po.sheduleDate) = CURDATE()
         AND dcen.id = ?
       GROUP BY o.sheduleTime, COALESCE(mu.buyerType, 'Retail')
     `;
@@ -57,7 +57,7 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
       LEFT JOIN orderhouse oh ON o.id = oh.orderId
       LEFT JOIN orderapartment oa ON o.id = oa.orderId
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(o.sheduleDate) = CURDATE()
+      WHERE DATE(po.sheduleDate) = CURDATE()
         AND dti.id IS NULL
         AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0)
         AND COALESCE(mu.buyerType, 'Retail') = ?

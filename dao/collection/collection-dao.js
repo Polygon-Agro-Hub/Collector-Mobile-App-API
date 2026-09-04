@@ -1,12 +1,12 @@
 const db = require("../../startup/database");
 
 exports.getTargetForOfficerDao = (officerId) => {
-  return new Promise((resolve, reject) => {
-    if (!officerId) {
-      return reject(new Error("Officer ID is missing or invalid"));
-    }
+    return new Promise((resolve, reject) => {
+        if (!officerId) {
+            return reject(new Error("Officer ID is missing or invalid"));
+        }
 
-    const sql = `
+        const sql = `
             SELECT 
                 dt.id AS distributedTargetId,
                 pr.companyCenterId AS companycenterId,
@@ -30,14 +30,14 @@ exports.getTargetForOfficerDao = (officerId) => {
                 po.status,
                 po.createdAt AS orderCreatedAt,
                 po.reportStatus,
+                po.sheduleDate,
 
                 o.id AS orderId,
                 o.isPackage,
                 o.userId AS orderUserId,
                 o.orderApp,
                 o.buildingType,
-                o.sheduleType,
-                o.sheduleDate,
+                o.sheduleType,             
                 o.sheduleTime,
 
                 -- Additional item counts (ensure numeric types)
@@ -193,15 +193,15 @@ exports.getTargetForOfficerDao = (officerId) => {
                 o.id ASC
         `;
 
-    db.collectionofficer.query(sql, [officerId], (err, results) => {
-      if (err) {
-        console.error("Error in getTargetForOfficerDao:", err);
-        return reject(err);
-      }
+        db.collectionofficer.query(sql, [officerId], (err, results) => {
+            if (err) {
+                console.error("Error in getTargetForOfficerDao:", err);
+                return reject(err);
+            }
 
-      resolve(results);
+            resolve(results);
+        });
     });
-  });
 };
 
 

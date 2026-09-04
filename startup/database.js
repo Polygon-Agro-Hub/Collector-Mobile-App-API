@@ -26,6 +26,5 @@ const admin = createPool(process.env.DB_NAME_AD);
 module.exports = {
   plantcare,
   collectionofficer,
-  marketPlace: collectionofficer,
   admin,
 };

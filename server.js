@@ -10,7 +10,6 @@ require("dotenv").config();
 const {
   plantcare,
   collectionofficer,
-  marketPlace,
   admin,
 } = require("./startup/database");
 
@@ -99,7 +98,6 @@ const checkConnections = async () => {
   try {
     await testConnection(plantcare, "PlantCare");
     await testConnection(collectionofficer, "CollectionOfficer");
-    await testConnection(marketPlace, "MarketPlace");
     await testConnection(admin, "Admin");
     console.log("\n🎉 All databases connected successfully!\n");
   } catch (error) {

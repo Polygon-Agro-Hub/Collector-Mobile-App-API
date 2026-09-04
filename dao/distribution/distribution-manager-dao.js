@@ -30,6 +30,7 @@ exports.getDCenterTarget = (irmId = null) => {
           po.outDlvrDate,
           po.createdAt AS orderCreatedAt,
           po.reportStatus,
+          po.sheduleDate,
 
           o.id AS orderId,
           o.isPackage,
@@ -37,7 +38,7 @@ exports.getDCenterTarget = (irmId = null) => {
           o.orderApp,
           o.buildingType,
           o.sheduleType,
-          o.sheduleDate,
+         
           o.sheduleTime,
 
           -- Additional item counts
@@ -631,7 +632,7 @@ exports.getDistributionPaymentsSummary = async ({
         SUM(COALESCE(po.amount, 0)) AS totalAmount,
         MIN(po.invNo) AS invNo,
         po.orderId AS orderId,
-        o.sheduleDate AS sheduleDate,
+        po.sheduleDate AS sheduleDate,
         o.sheduleTime AS sheduleTime
     FROM 
         collection_officer.distributedtarget dt
@@ -649,7 +650,7 @@ exports.getDistributionPaymentsSummary = async ({
     GROUP BY 
         DATE(CONVERT_TZ(dti.completeTime, '+00:00', '+05:30')),
         po.orderId,
-        o.sheduleDate,
+        po.sheduleDate,
         o.sheduleTime
     ORDER BY 
         DATE(CONVERT_TZ(dti.completeTime, '+00:00', '+05:30'));
@@ -712,13 +713,13 @@ exports.getOrderById = async (orderId) => {
   try {
     connection = await db.collectionofficer.promise().getConnection();
 
+    // NOTE: sheduleDate removed from here — it lives on `processorders`, not `orders`.
     const orderSql = `
       SELECT
           o.id AS orderId,
           o.userId,
           o.orderApp,
           o.sheduleType,
-          o.sheduleDate,
           o.sheduleTime,
           o.createdAt,
           o.total,
@@ -760,6 +761,7 @@ exports.getOrderById = async (orderId) => {
     let paymentMethod = null;
     let isPaid = null;
     let creditPaid = null;
+    let scheduleDate = null; // now sourced from processorders
 
     if (order.orderApp === "Marketplace") {
       finalIsPackage = order.orderIsPackage || 0;
@@ -772,7 +774,8 @@ exports.getOrderById = async (orderId) => {
             paymentMethod,
             reportStatus,
             isPaid,
-            creditPaid
+            creditPaid,
+            sheduleDate
         FROM processorders 
         WHERE orderId = ?
       `;
@@ -790,6 +793,7 @@ exports.getOrderById = async (orderId) => {
         reportStatus = processOrder.reportStatus;
         isPaid = processOrder.isPaid;
         creditPaid = processOrder.creditPaid;
+        scheduleDate = processOrder.sheduleDate;
       }
     } else if (order.orderApp === "Dash") {
       const processOrderSql = `
@@ -800,7 +804,8 @@ exports.getOrderById = async (orderId) => {
             paymentMethod,
             reportStatus,
             isPaid,
-            creditPaid
+            creditPaid,
+            sheduleDate
         FROM processorders 
         WHERE orderId = ?
       `;
@@ -818,6 +823,7 @@ exports.getOrderById = async (orderId) => {
         reportStatus = processOrder.reportStatus;
         isPaid = processOrder.isPaid;
         creditPaid = processOrder.creditPaid;
+        scheduleDate = processOrder.sheduleDate;
 
         const packageCheckSql = `
           SELECT COUNT(*) as packageCount
@@ -1037,7 +1043,8 @@ exports.getOrderById = async (orderId) => {
             productTypeName: catName,
             productId: item.productId,
             productDisplayName: specName,
-            itemDescription: specName !== "N/A" ? `${specName} (${catName})` : catName,
+            itemDescription:
+              specName !== "N/A" ? `${specName} (${catName})` : catName,
             varietyId: item.varietyId,
             category: item.category,
             normalPrice: item.normalPrice,
@@ -1131,7 +1138,7 @@ exports.getOrderById = async (orderId) => {
       userId: order.userId,
       orderApp: order.orderApp,
       scheduleType: order.sheduleType,
-      scheduleDate: order.sheduleDate,
+      scheduleDate: scheduleDate, // now from processorders
       scheduleTime: order.sheduleTime,
       createdAt: order.createdAt,
       total: parseFloat(order.total) || 0,
@@ -1186,8 +1193,6 @@ exports.getOrderById = async (orderId) => {
   }
 };
 
-
-
 exports.getAllCity = async () => {
   return new Promise((resolve, reject) => {
     const query = `
@@ -1207,8 +1212,6 @@ exports.getAllCity = async () => {
     });
   });
 };
-
-
 
 exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
   return new Promise((resolve, reject) => {
@@ -1245,7 +1248,3 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
     );
   });
 };
-
-
-
-

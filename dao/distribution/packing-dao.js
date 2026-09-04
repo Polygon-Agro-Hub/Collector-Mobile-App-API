@@ -404,8 +404,8 @@ exports.getQROrdersForOfficer = (officerId) => {
         ) AS minPIndex,
         COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
         (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount,
-        COALESCE(DATE_FORMAT(CONVERT_TZ(o.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(o.sheduleDate, '%Y/%m/%d')) AS date,
-        o.sheduleDate
+        COALESCE(DATE_FORMAT(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(po.sheduleDate, '%Y/%m/%d')) AS date,
+        po.sheduleDate
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
@@ -1630,7 +1630,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
             }
             const hasAlacarte = (aRows[0]?.cnt || 0) > 0;
             const totalPkgAndAla = pkgQty + (hasAlacarte ? 1 : 0);
-            
+
             // If totalPkgAndAla > 1, a Main Container is required, so expected total = totalPkgAndAla + 1
             const expectedTotalBoxes = totalPkgAndAla > 1 ? totalPkgAndAla + 1 : Math.max(totalPkgAndAla, 1);
 
