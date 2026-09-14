@@ -1690,9 +1690,16 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                       return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                     }
 
-                    // Step 4: Check the delivery method to know if it became "Out For Delivery"
+                    // Step 4: Check delivery method and invoice info to insert notifications
                     const checkMethodSql = `
-                      SELECT o.delivaryMethod
+                      SELECT 
+                        po.id,
+                        po.invNo,
+                        o.delivaryMethod,
+                        COALESCE(
+                          DATE_FORMAT(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30'), '%M %e'),
+                          DATE_FORMAT(CONVERT_TZ(NOW(), '+00:00', '+05:30'), '%M %e')
+                        ) AS scheduledDateFormatted
                       FROM processorders po
                       JOIN orders o ON po.orderId = o.id
                       WHERE po.id = ?
@@ -1704,9 +1711,23 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                         return resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                       }
 
-                      const isPickup = String(mRows[0].delivaryMethod || '').toLowerCase() === 'pickup';
+                      const row = mRows[0];
+                      const isPickup = String(row.delivaryMethod || '').toLowerCase() === 'pickup';
+                      const invNo = row.invNo || orderId;
+                      let scheduledDate = row.scheduledDateFormatted;
+                      if (!scheduledDate) {
+                        try {
+                          scheduledDate = new Intl.DateTimeFormat('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            timeZone: 'Asia/Colombo',
+                          }).format(new Date());
+                        } catch (e) {
+                          scheduledDate = 'today';
+                        }
+                      }
 
-                      // Only insert the notification for "Out For Delivery" orders (not Pickup)
+                      // Only insert the dashnotification for "Out For Delivery" orders (not Pickup)
                       if (!isPickup) {
                         const insertNotifSql = `
                           INSERT INTO dashnotification 
@@ -1720,12 +1741,31 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                             if (nErr) {
                               console.error("Error inserting dashnotification row:", nErr);
                             }
-                            resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                           }
                         );
-                      } else {
-                        resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                       }
+
+                      // Insert into ordernotfication for customer app notification
+                      const notifTitle = isPickup ? 'Order is Ready to Pickup' : 'Order is Out for Delivery';
+                      const notifMessage = isPickup
+                        ? `Your order #${invNo}, scheduled for ${scheduledDate}, is now ready to pickup. Please visit our centre before 9:00 PM today to collect your order.`
+                        : `Your order #${invNo}, scheduled for ${scheduledDate}, is now out for delivery. One of our drivers will be assigned to deliver your order shortly.`;
+
+                      const insertOrderNotifSql = `
+                        INSERT INTO collection_officer.ordernotfication 
+                          (orderId, Title, message, isRead, createdAt)
+                        VALUES (?, ?, ?, 0, NOW())
+                      `;
+                      db.collectionofficer.query(
+                        insertOrderNotifSql,
+                        [orderId, notifTitle, notifMessage],
+                        (onErr) => {
+                          if (onErr) {
+                            console.error("Error inserting ordernotfication row:", onErr);
+                          }
+                          resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
+                        }
+                      );
                     });
                   });
                 });

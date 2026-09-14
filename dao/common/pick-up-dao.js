@@ -121,7 +121,7 @@ exports.updatePickupDetails = async (
         await connection.beginTransaction();
 
         const getProcessOrderQuery = `
-            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid
+            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid, invNo
             FROM processorders 
             WHERE invNo = ?
         `;
@@ -223,6 +223,20 @@ exports.updatePickupDetails = async (
         }
 
         const [result] = await connection.query(insertQuery, insertParams);
+
+        // Insert into collection_officer.ordernotfication for customer pickup notification
+        const invoiceNumber = processOrder.invNo || orderId;
+        const pickupNotifQuery = `
+            INSERT INTO collection_officer.ordernotfication 
+            (orderId, Title, message, isRead, createdAt) 
+            VALUES (?, ?, ?, 0, NOW())
+        `;
+        const pickupNotifMessage = `Your order #${invoiceNumber}, has been successfully picked up. We hope you had a great experience with our service.`;
+        await connection.query(pickupNotifQuery, [
+            processOrderId,
+            'Order Picked up',
+            pickupNotifMessage,
+        ]);
 
         await connection.commit();
 
