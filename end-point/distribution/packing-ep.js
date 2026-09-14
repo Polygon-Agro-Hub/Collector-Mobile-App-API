@@ -158,7 +158,8 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
     isPackage !== undefined ? Number(isPackage) : null,
     subIndex,
     Boolean(isMainContainer),
-    req.user ? Number(req.user.id) : null
+    req.user ? Number(req.user.id) : null,
+    rowId ? Number(rowId) : null
   );
 
   if (result && result.success === false) {

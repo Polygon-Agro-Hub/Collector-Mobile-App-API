@@ -18,7 +18,7 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
       JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
       LEFT JOIN marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(o.sheduleDate) = CURDATE()
+      WHERE DATE(po.sheduleDate) = CURDATE()
         AND dcen.id = ?
       GROUP BY o.sheduleTime, COALESCE(mu.buyerType, 'Retail')
     `;
@@ -57,7 +57,7 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
       LEFT JOIN orderhouse oh ON o.id = oh.orderId
       LEFT JOIN orderapartment oa ON o.id = oa.orderId
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(o.sheduleDate) = CURDATE()
+      WHERE DATE(po.sheduleDate) = CURDATE()
         AND dti.id IS NULL
         AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0)
         AND COALESCE(mu.buyerType, 'Retail') = ?
@@ -146,19 +146,32 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
         }
 
         try {
-          // 0. Resolve packingrows.id if rowIndex was passed
+          // 0. Resolve packingrows.id: If rowId already matches a valid packingrows.id, use it directly
           const resolveRowSql = `
             SELECT id FROM packingrows 
-            WHERE (id = ? OR rowIndex = ?)
-              AND (? IS NULL OR companyCenterId = ?)
-            ORDER BY id DESC LIMIT 1
+            WHERE id = ? AND (? IS NULL OR companyCenterId = ?)
+            LIMIT 1
           `;
-          const actualRowId = await new Promise((res, rej) => {
-            connection.query(resolveRowSql, [rowId, rowId, companyCenterId, companyCenterId], (err, results) => {
+          let actualRowId = await new Promise((res, rej) => {
+            connection.query(resolveRowSql, [rowId, companyCenterId, companyCenterId], (err, results) => {
               if (err) return rej(err);
-              res(results.length > 0 ? results[0].id : rowId);
+              res(results.length > 0 ? results[0].id : null);
             });
           });
+
+          if (!actualRowId) {
+            const resolveRowIndexSql = `
+              SELECT id FROM packingrows 
+              WHERE rowIndex = ? AND (? IS NULL OR companyCenterId = ?)
+              ORDER BY id ASC LIMIT 1
+            `;
+            actualRowId = await new Promise((res, rej) => {
+              connection.query(resolveRowIndexSql, [rowId, companyCenterId, companyCenterId], (err, results) => {
+                if (err) return rej(err);
+                res(results.length > 0 ? results[0].id : rowId);
+              });
+            });
+          }
 
           // Normalize timeSlot ENUM
           let slotEnum = timeSlotCode;

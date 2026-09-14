@@ -20,6 +20,9 @@ const formatNumber = (amount) => {
 
 const formatItemCount = (count) => String(count).padStart(2, "0");
 
+// Returns "Item" for a count of exactly 1, otherwise "Items".
+const pluralizeItemWord = (count) => (Number(count) === 1 ? "Item" : "Items");
+
 function detectPaymentType(payType, deliveryMethod, creditPaid, grandTotal) {
   const isPickup = (deliveryMethod || "").toLowerCase().includes("pickup");
   const hasCredit = creditPaid > 0;
@@ -79,6 +82,13 @@ const generateInvoiceHTML = (
   let additionalItemsTotal = 0;
   let totaldiscount = parseFloat(order.discount || 0);
   let couponDiscount = parseFloat(order.couponValue || 0);
+
+  // Whether this order has an actual package section.
+  // When it doesn't, the "additional items" are really the only items on
+  // the order, so they get relabeled as "Selected Items" instead of
+  // "Additional Items" / "Custom Items".
+  const isPackageOrder = order.isPackage === 1;
+  const additionalItemsLabel = isPackageOrder ? "Additional Items" : "Selected Items";
 
   if (
     order.isPackage === 1 &&
@@ -194,12 +204,12 @@ const generateInvoiceHTML = (
         }
 
         const baseTitle = pkg.displayName || `Package ${packageIndex + 1}`;
-        const titleWithSubIndex = totalPkgCount > 1 ? `${baseTitle} (${packageIndex + 1}/${totalPkgCount})` : baseTitle;
+        const titleWithSubIndex = baseTitle;
 
         return `
         <div class="section4">
           <div style="display:flex;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
-            <div class="bold">${titleWithSubIndex} (${formatItemCount(packageItemsCount)} Items)</div>
+            <div class="bold">${titleWithSubIndex} (${formatItemCount(packageItemsCount)} ${pluralizeItemWord(packageItemsCount)})</div>
             <div style="font-weight:550;font-size:16px">${formatCurrency(packageTotal)}</div>
           </div>
           <div style="border:1px solid #ddd;border-radius:10px">
@@ -374,7 +384,7 @@ const generateInvoiceHTML = (
           <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
             <p>${cashLabel}</p><p>${formatCurrency(remainingAfterCredit)}</p>
           </div>`;
-        if (!isPickup) showDeliveryNote = true;
+        if (!isPickup && !isFreeDelivery) showDeliveryNote = true;
       }
     }
   } else {
@@ -395,7 +405,7 @@ const generateInvoiceHTML = (
         <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
           <p>${cashLabel}</p><p>${formatCurrency(totalAmount)}</p>
         </div>`;
-      if (!isPickup) showDeliveryNote = true;
+      if (!isPickup && !isFreeDelivery) showDeliveryNote = true;
     }
   }
 
@@ -504,45 +514,52 @@ const generateInvoiceHTML = (
 
       ${isPickup
       ? `
-         <!-- Pickup Layout -->
-  <div style="position:relative; margin-top:30px; min-height:80px;">
-    <div style="display:inline-block; max-width:55%;">
+              <!-- Pickup Layout -->
+  <div style="display:flex;justify-content:space-between;margin-top:30px;">
+    <div style="flex: 1; max-width:55%;">
       <p class="bold">Bill To :</p>
       <p class="headerp">${formatCustomerName(customerInfo)}</p>
       <p class="headerp">${customerEmail}</p>
       <p class="headerp">${customerInfo.phoneCode1 || "+94"} ${customerInfo.phone1 || ""}${customerInfo.phone2 ? ` / ${customerInfo.phoneCode2 || "+94"} ${customerInfo.phone2}` : ""}</p>
     </div>
-    <div style="position:absolute; top:0; right:0; text-align:right; min-width:200px;">
+    <div style="text-align:right; min-width:200px;">
       <p class="bold">Grand Total :</p>
       <p style="font-weight:550;font-size:18px;margin:2px 0 0 0;">${formatCurrency(totalAmount)}</p>
       <div style="margin-top:12px;">
         <p class="bold">Payment Method :</p>
-        <p class="headerp" style="margin-bottom:8px;">${paymentTypeLabel}</p>
-      </div>
-      <div style="margin-top:8px;">
-        <p class="bold">Ordered Date :</p>
-        <p class="headerp" style="margin-bottom:8px;">${formatDate(order.createdAt)}</p>
-      </div>
-      <div style="margin-top:8px;">
-        <p class="bold">Scheduled Date :</p>
-        <p class="headerp">${formatDate(order.scheduleDate)}</p>
+        <p class="headerp">${paymentTypeLabel}</p>
       </div>
     </div>
   </div>
 
-  <!-- Invoice No, Delivery Method, Centre -->
-  <div style="margin-top:20px;">
-    <p class="bold">Invoice No :</p>
-    <p class="headerp">${invoiceNumber}</p>
+  <!-- Invoice No / Ordered Date row -->
+  <div style="display:flex;justify-content:space-between;margin-top:20px;">
+    <div style="flex: 1;">
+      <p class="bold">Invoice No :</p>
+      <p class="headerp">${invoiceNumber}</p>
+    </div>
+    <div style="text-align:right; min-width:200px;">
+      <p class="bold">Ordered Date :</p>
+      <p class="headerp">${formatDate(order.createdAt)}</p>
+    </div>
   </div>
-          <div style="margin-top:16px;">
-            <p class="bold">Delivery Method :</p>
-            <p class="headerp">${deliveryMethodLabel}</p>
-          </div>
-          ${buildCentreBlock()}
+
+  <!-- Delivery Method / Scheduled Date row -->
+  <div style="display:flex;justify-content:space-between;margin-top:16px;">
+    <div style="flex: 1;">
+      <p class="bold">Delivery Method :</p>
+      <p class="headerp">${deliveryMethodLabel}</p>
+    </div>
+    <div style="text-align:right; min-width:200px;">
+      <p class="bold">Scheduled Date :</p>
+      <p class="headerp">${formatDate(order.scheduleDate)}</p>
+    </div>
+  </div>
+
+  ${buildCentreBlock()}
         `
       : `
-          <!-- Delivery Layout -->
+                   <!-- Delivery Layout -->
           <div style="display:flex;justify-content:space-between;margin-top:30px;">
             <div style="flex: 1;">
               <p class="bold">Bill To :</p>
@@ -558,39 +575,45 @@ const generateInvoiceHTML = (
               <p style="font-weight:550;font-size:18px;margin:2px 0 0 0;">${formatCurrency(totalAmount)}</p>
               <div style="margin-top:12px;">
                 <p class="bold">Payment Method :</p>
-                <p class="headerp" style="margin-bottom:8px;">${paymentTypeLabel}</p>
-              </div>
-              <div style="margin-top:8px;">
-                <p class="bold">Ordered Date :</p>
-                <p class="headerp" style="margin-bottom:8px;">${formatDate(order.createdAt)}</p>
-              </div>
-              <div style="margin-top:8px;">
-                <p class="bold">Scheduled Date :</p>
-                <p class="headerp">${formatDate(order.scheduleDate)}</p>
+                <p class="headerp">${paymentTypeLabel}</p>
               </div>
             </div>
           </div>
 
-          <!-- Invoice No & Delivery Method -->
-          <div style="margin-top:24px;">
-            <p class="bold">Invoice No :</p>
-            <p class="headerp">${invoiceNumber}</p>
+          <!-- Invoice No / Ordered Date row -->
+          <div style="display:flex;justify-content:space-between;margin-top:24px;">
+            <div style="flex: 1;">
+              <p class="bold">Invoice No :</p>
+              <p class="headerp">${invoiceNumber}</p>
+            </div>
+            <div style="text-align: right; min-width: 200px;">
+              <p class="bold">Ordered Date :</p>
+              <p class="headerp">${formatDate(order.createdAt)}</p>
+            </div>
           </div>
-          <div style="margin-top:16px;">
-            <p class="bold">Delivery Method :</p>
-            <p class="headerp">${deliveryMethodLabel}</p>
+
+          <!-- Delivery Method / Scheduled Date row -->
+          <div style="display:flex;justify-content:space-between;margin-top:16px;">
+            <div style="flex: 1;">
+              <p class="bold">Delivery Method :</p>
+              <p class="headerp">${deliveryMethodLabel}</p>
+            </div>
+            <div style="text-align: right; min-width: 200px;">
+              <p class="bold">Scheduled Date :</p>
+              <p class="headerp">${formatDate(order.scheduleDate)}</p>
+            </div>
           </div>
         `
     }
 
       ${generatePackageSections()}
 
-      ${order.additionalItems &&
+           ${order.additionalItems &&
       Array.isArray(order.additionalItems) &&
       order.additionalItems.length > 0
       ? `<div class="section4">
             <div style="display:flex;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
-              <div class="bold">Additional Items (${order.additionalItems.length} Items)</div>
+              <div class="bold">${additionalItemsLabel} (${order.additionalItems.length} ${pluralizeItemWord(order.additionalItems.length)})</div>
               <div style="font-weight:550;font-size:16px">${formatCurrency(additionalItemsTotal)}</div>
             </div>
             <div style="border:1px solid #ddd;border-radius:10px;overflow-x:auto;">
@@ -625,11 +648,11 @@ const generateInvoiceHTML = (
             </div>`
       : ""
     }
-        ${order.additionalItems &&
+              ${order.additionalItems &&
       Array.isArray(order.additionalItems) &&
       order.additionalItems.length > 0
       ? `<div style="display:flex;justify-content:space-between;margin-right:20px;" class="ptext">
-              <p>${order?.isPackage === 1 ? "Additional Items" : "Custom Items"}</p>
+              <p>${additionalItemsLabel}</p>
               <p>Rs. ${additionalItemsTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
             </div>`
       : ""
@@ -863,7 +886,7 @@ const generateOrderPDF = async (orderData, deliveryFee = 0) => {
     return pdfBuffer;
   } catch (error) {
     if (page) {
-      try { await page.close(); } catch (_) {}
+      try { await page.close(); } catch (_) { }
     }
     // If browser died mid-generation, clear it so next call relaunches
     if (error.message?.includes("Target closed") || error.message?.includes("Session closed")) {

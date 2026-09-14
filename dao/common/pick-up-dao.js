@@ -16,7 +16,7 @@ exports.getPickupOrders = (officerId) => {
                 o.fullTotal,
                 o.total,
                 o.buildingType,
-                o.sheduleDate,
+              
                 o.sheduleTime,
                 o.title,
                 o.fullName,
@@ -26,6 +26,7 @@ exports.getPickupOrders = (officerId) => {
                 o.phone2 As phoneNumber2,
                 
                 po.id AS processOrderId,
+                po.sheduleDate,
                 po.invNo,
                 po.transactionId,
                 po.paymentMethod,

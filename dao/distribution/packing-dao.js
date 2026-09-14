@@ -404,8 +404,8 @@ exports.getQROrdersForOfficer = (officerId) => {
         ) AS minPIndex,
         COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
         (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount,
-        COALESCE(DATE_FORMAT(CONVERT_TZ(o.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(o.sheduleDate, '%Y/%m/%d')) AS date,
-        o.sheduleDate
+        COALESCE(DATE_FORMAT(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(po.sheduleDate, '%Y/%m/%d')) AS date,
+        po.sheduleDate
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
@@ -415,7 +415,10 @@ exports.getQROrdersForOfficer = (officerId) => {
       LEFT JOIN orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
       LEFT JOIN orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
       LEFT JOIN marketplaceusers u ON o.userId = u.id
-      WHERE tp.officerId = ? AND (DATE(tp.createdAt) = CURDATE() OR DATE(dt.createdAt) = CURDATE())
+      WHERE tp.id = (
+        SELECT MAX(id) FROM targetposition 
+        WHERE officerId = ? AND isFinished = 1
+      )
       ORDER BY po.id ASC
     `;
     db.collectionofficer.query(sql, [officerId], async (err, results) => {
@@ -821,7 +824,7 @@ exports.getOrderDetails = (orderId) => {
  * @param {number|null} orderpackageId 
  * @returns {Promise<Object>}
  */
-exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, packageIndex = 0, isMainContainer = false, officerId = null) => {
+exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, packageIndex = 0, isMainContainer = false, officerId = null, rowId = null) => {
   return new Promise((resolve, reject) => {
     db.collectionofficer.getConnection((err, connection) => {
       if (err) return reject(err);
@@ -890,18 +893,26 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           }
 
           // 2a. Officer Assignment Check for Position 1 (pIndex = 1)
+          // Get the LAST DATA from targetposition for Position 1 (or any packer position) on this row
           const checkOfficerP1Sql = `
-            SELECT tp.id, tp.officerId
+            SELECT tp.id, tp.officerId, pp.pIndex
             FROM targetposition tp
             JOIN packingpositions pp ON tp.positionId = pp.id
-            JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
-            JOIN distributedtargetitems dti ON dt.id = dti.targetId
-            WHERE dti.orderId = ? AND pp.pIndex = 1 AND DATE(tp.createdAt) = CURDATE()
+            LEFT JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
+            LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
+            WHERE (
+              (? IS NOT NULL AND pp.rowId = ?)
+              OR (? IS NOT NULL AND dti.orderId = ?)
+            )
+            AND (pp.pIndex = 1 OR pp.pType = 'NOR')
+            AND tp.officerId IS NOT NULL
+            AND tp.isFinished = 1
+            ORDER BY tp.id DESC
             LIMIT 1
           `;
 
           const officerP1Res = await new Promise((res) => {
-            connection.query(checkOfficerP1Sql, [orderId], (err, results) => {
+            connection.query(checkOfficerP1Sql, [rowId, rowId, orderId, orderId], (err, results) => {
               res(err ? [] : results || []);
             });
           });
@@ -1630,7 +1641,7 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
             }
             const hasAlacarte = (aRows[0]?.cnt || 0) > 0;
             const totalPkgAndAla = pkgQty + (hasAlacarte ? 1 : 0);
-            
+
             // If totalPkgAndAla > 1, a Main Container is required, so expected total = totalPkgAndAla + 1
             const expectedTotalBoxes = totalPkgAndAla > 1 ? totalPkgAndAla + 1 : Math.max(totalPkgAndAla, 1);
 

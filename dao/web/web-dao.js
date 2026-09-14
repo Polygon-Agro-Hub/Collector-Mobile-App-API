@@ -186,7 +186,9 @@ exports.getRowLiveMonitor = (rowId) => {
         FROM targetposition tp
         JOIN packingpositions pp ON tp.positionId = pp.id
         JOIN collectionofficer u ON tp.officerId = u.id
-        WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+        WHERE pp.rowId = ? 
+          AND (DATE(tp.createdAt) = CURDATE() OR DATE(tp.createdAt) = (SELECT DATE(MAX(createdAt)) FROM targetposition WHERE positionId = pp.id))
+          AND tp.isFinished = 1
         ORDER BY pp.pIndex ASC
       `;
 
@@ -254,11 +256,12 @@ exports.getRowLiveMonitor = (rowId) => {
           JOIN processorders po ON dti.orderId = po.id
           JOIN orders o ON po.orderId = o.id
           LEFT JOIN marketplaceusers u ON o.userId = u.id
-          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = ? 
+            AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = (SELECT DATE(MAX(createdAt)) FROM distributedtarget WHERE rowId = ?))
           ORDER BY po.id ASC
         `;
 
-        db.collectionofficer.query(ordersSql, [rowId], async (err, orderResults) => {
+        db.collectionofficer.query(ordersSql, [rowId, rowId], async (err, orderResults) => {
           if (err) {
             console.error("Error fetching orders for row live monitor:", err);
             return reject(err);

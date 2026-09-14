@@ -70,7 +70,7 @@ exports.getOrderDataDao = (orderId) => {
                 o.orderApp,
                 o.buildingType,
                 o.sheduleType,
-                o.sheduleDate,
+           
                 o.sheduleTime,
                 o.createdAt AS orderCreatedAt,
 
@@ -80,6 +80,7 @@ exports.getOrderDataDao = (orderId) => {
 
                 -- Process Order Information
                 po.id AS processOrderId,
+                po.sheduleDate,
 
                 -- Additional Items (for all orders)
                 oai.id AS additionalItemId,
@@ -1110,7 +1111,7 @@ exports.getDistributionTargets = async (officerId) => {
             -- Step 1: only targets created in last 3 days
             AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
             -- Step 2: only orders scheduled for TODAY
-            AND DATE(o.sheduleDate) = CURDATE()
+            AND DATE(po.sheduleDate) = CURDATE()
 
         GROUP BY tp.officerId`,
         [officerId],

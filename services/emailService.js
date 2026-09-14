@@ -14,6 +14,11 @@ let transporter = null;
 
 function createTransporter() {
   const t = nodemailer.createTransport({
+    pool: true, // Reuse open SMTP connections across requests
+    maxConnections: 5, // Concurrent socket connections
+    maxMessages: 100, // Max messages per connection before recycling
+    rateDelta: 1000, // Rate limiting: 1 second
+    rateLimit: 5, // Max 5 messages/sec to prevent provider throttling
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: parseInt(process.env.EMAIL_PORT) || 587,
     secure: false,
@@ -84,6 +89,14 @@ const sendEmail = async (
   templateData,
   attachments = [],
 ) => {
+  const startTime = Date.now();
+  console.log(`\n================== 📤 [EMAIL DISPATCH START] ==================`);
+  console.log(`🕒 Timestamp: ${new Date().toISOString()}`);
+  console.log(`🎯 Recipient: ${to}`);
+  console.log(`📝 Subject: "${subject}"`);
+  console.log(`📄 Template: ${templateName}`);
+  console.log(`📎 Attachments: ${attachments.length} file(s) ${attachments.map(a => `[${a.filename || 'attachment'}]`).join(', ')}`);
+
   // 1. Resolve template
   const templatePath = path.join(
     __dirname,
@@ -93,7 +106,8 @@ const sendEmail = async (
 
   if (!fs.existsSync(templatePath)) {
     const err = new Error(`[EmailService] Template not found: ${templatePath}`);
-    console.error(err.message);
+    console.error(`❌ [EmailService] Template Error: ${err.message}`);
+    console.log(`================== ❌ [EMAIL DISPATCH FAILED] ==================\n`);
     throw err;
   }
 
@@ -112,27 +126,38 @@ const sendEmail = async (
   // 2. Send with retry on transient SMTP errors
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const attemptStartTime = Date.now();
     try {
       console.log(
-        `📧 [EmailService] Sending email to "${to}" | subject: "${subject}" | attempt ${attempt}/${MAX_RETRIES}`
+        `🚀 [EmailService] Attempt ${attempt}/${MAX_RETRIES} → Dispatching to "${to}"...`
       );
 
       const t = getTransporter();
       const info = await t.sendMail(mailOptions);
+      const attemptDuration = Date.now() - attemptStartTime;
+      const totalDuration = Date.now() - startTime;
 
       console.log(
-        `✅ [EmailService] Email sent to "${to}" | messageId: ${info.messageId} | attempt ${attempt}`
+        `✅ [EmailService] Email successfully sent!`,
+        `\n   • Message ID: ${info.messageId}`,
+        `\n   • Response: ${info.response || 'OK'}`,
+        `\n   • Attempt Time: ${attemptDuration}ms`,
+        `\n   • Total Elapsed: ${totalDuration}ms`
       );
-      return { success: true, messageId: info.messageId };
+      console.log(`================== 🏁 [EMAIL DISPATCH SUCCESS] ==================\n`);
+      return { success: true, messageId: info.messageId, durationMs: totalDuration };
     } catch (error) {
       lastError = error;
+      const attemptDuration = Date.now() - attemptStartTime;
       const smtpCode = error.responseCode || error.code;
 
       console.error(
-        `❌ [EmailService] Attempt ${attempt}/${MAX_RETRIES} failed to send email to "${to}":`,
+        `❌ [EmailService] Attempt ${attempt}/${MAX_RETRIES} failed after ${attemptDuration}ms:`,
         {
-          message: error.message,
-          smtpCode,
+          recipient: to,
+          errorMessage: error.message,
+          code: error.code,
+          responseCode: error.responseCode,
           command: error.command,
           response: error.response,
         }
@@ -146,38 +171,37 @@ const sendEmail = async (
         error.code === "ESOCKET";
 
       if (isTransient && attempt < MAX_RETRIES) {
-        // Recreate transporter on connection errors to clear stale pool
         if (
           error.code === "ECONNRESET" ||
           error.code === "ETIMEDOUT" ||
           error.code === "ESOCKET"
         ) {
           console.warn(
-            `⚠️  [EmailService] Connection error detected — recreating SMTP transporter`
+            `⚠️  [EmailService] Connection dropped/stale — refreshing SMTP connection pool...`
           );
           try { transporter.close(); } catch (_) {}
           transporter = createTransporter();
         }
 
         const delay = RETRY_DELAY_MS * attempt;
-        console.log(`⏳ [EmailService] Retrying in ${delay}ms...`);
+        console.log(`⏳ [EmailService] Waiting ${delay}ms before attempt ${attempt + 1}...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
-      // Non-retryable or exhausted retries — break immediately
       break;
     }
   }
 
-  // All retries exhausted or non-retryable error
+  const totalDuration = Date.now() - startTime;
   console.error(
-    `💀 [EmailService] All ${MAX_RETRIES} attempts failed for email to "${to}" | subject: "${subject}"`,
+    `💀 [EmailService] All ${MAX_RETRIES} attempts failed for "${to}" after ${totalDuration}ms`,
     {
       finalError: lastError?.message,
       smtpCode: lastError?.responseCode || lastError?.code,
     }
   );
+  console.log(`================== ❌ [EMAIL DISPATCH EXHAUSTED] ==================\n`);
   throw lastError;
 };
 
