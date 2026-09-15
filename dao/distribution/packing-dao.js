@@ -1335,6 +1335,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             return resolve({
               success: false,
               code: "NO_OFFICER_ASSIGNED",
+              targetPosition: nextStep,
+              targetStationName: targetStationName,
               message: `No packing position user assigned for ${targetStationName}. Please assign an officer to this position first.`
             });
           }

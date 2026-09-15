@@ -133,7 +133,9 @@ const validateNextPositionBusy = async (dbInstance, orderId, nextStep, targetSta
       isOccupied: true,
       code: PACKING_ERROR_CODES.STATION_OCCUPIED,
       occupiedInvoice: occupiedInv,
-      message: `The ${targetStationName} is currently busy with Invoice ${occupiedInv}. Please wait until they clear their current box.`
+      targetPosition: nextStep,
+      targetStationName: targetStationName,
+      message: `Position ${nextStep} is currently busy with Invoice ${occupiedInv}. Please wait until Position ${nextStep} clears before passing the next box.`
     };
   }
 

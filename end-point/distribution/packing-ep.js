@@ -238,6 +238,10 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
   if (!result || !result.success || result.affectedRows === 0) {
     return res.status(200).json({
       success: false,
+      code: result?.code || (result?.isOccupied ? "STATION_OCCUPIED" : undefined),
+      occupiedInvoice: result?.occupiedInvoice,
+      targetPosition: result?.targetPosition,
+      targetStationName: result?.targetStationName,
       message: result?.message || "The next station is currently busy or the package has already been cleared.",
       data: result
     });
