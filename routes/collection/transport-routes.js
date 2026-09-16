@@ -7,6 +7,7 @@ const TransportEp = require("../../end-point/collection/transport-ep");
 
 
 router.get("/sent-today", authMiddleware, TransportEp.getSentProductsToday);
+router.get("/load/:transportId", authMiddleware, TransportEp.getTransportLoadDetails);
 
 router.post("/verify-driver-qr", authMiddleware, TransportEp.verifyDriverQR);
 

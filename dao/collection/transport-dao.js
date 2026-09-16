@@ -13,18 +13,23 @@ exports.getSentProductsToday = (officerId) => {
           tl.createdAt,
           COALESCE(SUM(lc.crateCount), 0) AS totalCrates,
           COALESCE(SUM(lc.qty), 0) AS totalWeight,
-          dc.centerName AS destination
+          dc.centerName AS destination,
+          vr.vRegNo AS vehicleNo,
+          driver.empId AS driverEmpId,
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName
       FROM transportload tl
       INNER JOIN companycenter cc ON cc.id = tl.comCenId
       INNER JOIN collectionofficer co
           ON co.centerId = cc.centerId AND co.companyId = cc.companyId
+      LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+      LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
       LEFT JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
       LEFT JOIN distributedcenter dc ON dc.id = dcc.centerId
       LEFT JOIN loadeditems li ON li.transportId = tl.id
       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
       WHERE co.id = ?
         AND DATE(tl.createdAt) = CURDATE()
-      GROUP BY tl.id
+      GROUP BY tl.id, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, dc.centerName
       ORDER BY tl.createdAt ASC
     `;
 
@@ -36,6 +41,10 @@ exports.getSentProductsToday = (officerId) => {
 
             const formatted = results.map((row) => ({
                 id: String(row.id),
+                transferCode: row.transferCode || "",
+                vehicleNo: row.vehicleNo || "N/A",
+                driverEmpId: row.driverEmpId || "",
+                driverName: (row.driverName || "").trim(),
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 destination: row.destination || "N/A",
@@ -43,6 +52,132 @@ exports.getSentProductsToday = (officerId) => {
             }));
 
             resolve(formatted);
+        });
+    });
+};
+
+exports.getTransportLoadDetails = (transportId) => {
+    return new Promise((resolve, reject) => {
+        if (!transportId) {
+            return reject(new Error("Transport ID is required"));
+        }
+
+        const headerSql = `
+          SELECT 
+              tl.id,
+              tl.transferCode,
+              tl.createdAt,
+              tl.driverId,
+              COALESCE(dc.centerName, dc_direct.centerName, 'N/A') AS destination,
+              driver.empId AS driverEmpId,
+              CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName,
+              vr.vRegNo AS vehicleNo,
+              vr.vType,
+              vr.vCapacity
+          FROM transportload tl
+          LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+          LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
+          LEFT JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
+          LEFT JOIN distributedcenter dc ON dc.id = dcc.centerId
+          LEFT JOIN distributedcenter dc_direct ON dc_direct.id = tl.disComCenId
+          WHERE tl.id = ? OR tl.transferCode = ?
+          LIMIT 1
+        `;
+
+        collectionofficer.query(headerSql, [transportId, transportId], (err, headerResults) => {
+            if (err) {
+                console.error("Database error fetching transport load header:", err);
+                return reject(err);
+            }
+
+            if (headerResults.length === 0) {
+                return resolve(null);
+            }
+
+            const loadHeader = headerResults[0];
+
+            const itemsSql = `
+              SELECT 
+                  li.id AS loadedItemId,
+                  li.varietyId,
+                  cv.varietyNameEnglish,
+                  cv.image AS varietyImage,
+                  cg.id AS cropId,
+                  cg.cropNameEnglish,
+                  cg.image AS cropImage,
+                  lc.id AS crateId,
+                  lc.grade,
+                  lc.crateCount,
+                  lc.crateIndex,
+                  lc.qty
+              FROM loadeditems li
+              LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
+              LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
+              LEFT JOIN loadedcrates lc ON lc.loadId = li.id
+              WHERE li.transportId = ?
+              ORDER BY li.id ASC, lc.grade ASC, lc.crateIndex ASC
+            `;
+
+            collectionofficer.query(itemsSql, [loadHeader.id], (err2, itemRows) => {
+                if (err2) {
+                    console.error("Database error fetching transport load items:", err2);
+                    return reject(err2);
+                }
+
+                // Group by loadedItem / variety
+                const itemsMap = new Map();
+
+                (itemRows || []).forEach((row) => {
+                    const itemId = String(row.loadedItemId);
+                    if (!itemsMap.has(itemId)) {
+                        itemsMap.set(itemId, {
+                            id: String(row.varietyId || row.loadedItemId),
+                            loadedItemId: row.loadedItemId,
+                            varietyId: row.varietyId ? String(row.varietyId) : undefined,
+                            varietyLabel: row.varietyNameEnglish || "",
+                            cropId: row.cropId ? String(row.cropId) : undefined,
+                            cropLabel: row.cropNameEnglish || "",
+                            cropName: row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
+                            imageUri: row.varietyImage || row.cropImage || "",
+                            totalWeightKg: 0,
+                            totalCrates: 0,
+                            gradeSets: [],
+                        });
+                    }
+
+                    const itemObj = itemsMap.get(itemId);
+
+                    if (row.crateId) {
+                        const crateCount = parseInt(row.crateCount, 10) || 0;
+                        const weightKg = parseFloat(row.qty) || 0;
+                        const gradeLetter = (row.grade || "A").trim().toUpperCase();
+
+                        itemObj.totalCrates += crateCount;
+                        itemObj.totalWeightKg += weightKg;
+
+                        itemObj.gradeSets.push({
+                            grade: `Grade ${gradeLetter}`,
+                            gradeKey: gradeLetter,
+                            set: parseInt(row.crateIndex, 10) || 1,
+                            crates: crateCount,
+                            weightKg: weightKg,
+                        });
+                    }
+                });
+
+                const formattedItems = Array.from(itemsMap.values());
+
+                resolve({
+                    transportId: String(loadHeader.id),
+                    transferCode: loadHeader.transferCode || "",
+                    vehicleNo: loadHeader.vehicleNo || "N/A",
+                    driverEmpId: loadHeader.driverEmpId || "",
+                    driverName: (loadHeader.driverName || "").trim(),
+                    centreName: loadHeader.destination || "N/A",
+                    createdAt: loadHeader.createdAt,
+                    items: formattedItems,
+                });
+            });
         });
     });
 };
@@ -58,7 +193,8 @@ function formatTime(dateValue) {
     return `At ${hours}:${mm} ${ampm}`;
 }
 
-const HEAVY_WEIGHT_DRIVER_ROLE = "Heavy Weight Driver";
+const { DRIVER_ROLES } = require("../../constants/user-roles");
+const HEAVY_WEIGHT_DRIVER_ROLE = DRIVER_ROLES.HEAVY_WEIGHT_DRIVER;
 
 exports.getDriverByQRCode = (qrData, extractedEmpId = null) => {
     return new Promise((resolve, reject) => {
@@ -93,7 +229,6 @@ exports.getDriverByQRCode = (qrData, extractedEmpId = null) => {
       FROM collectionofficer co
       LEFT JOIN vehicleregistration vr ON vr.coId = co.id
       WHERE ${whereClause}
-        AND (co.status = 1 OR co.status = '1' OR co.status = 'Approved' OR co.status = 'Active')
       LIMIT 1
     `;
 
@@ -114,23 +249,53 @@ exports.getDriverByQRCode = (qrData, extractedEmpId = null) => {
 
 exports.HEAVY_WEIGHT_DRIVER_ROLE = HEAVY_WEIGHT_DRIVER_ROLE;
 
-exports.getAllDistributionCentres = () => {
+exports.getAllDistributionCentres = (officerId = null) => {
     return new Promise((resolve, reject) => {
-        const sql = `
-  SELECT
-      id,
-      centerName,
-      city,
-      district,
-      province,
-      country,
-      longitude,
-      latitude
-  FROM distributedcenter
-  ORDER BY centerName ASC
-`;
+        let sql;
+        let params = [];
 
-        collectionofficer.query(sql, (err, results) => {
+        if (officerId) {
+            sql = `
+              SELECT
+                  dc.id,
+                  COALESCE(
+                      (SELECT dcc1.id FROM distributedcompanycenter dcc1 
+                       WHERE dcc1.centerId = dc.id 
+                         AND dcc1.companyId = (SELECT companyId FROM collectionofficer WHERE id = ? LIMIT 1) 
+                       LIMIT 1),
+                      (SELECT dcc2.id FROM distributedcompanycenter dcc2 
+                       WHERE dcc2.centerId = dc.id 
+                       LIMIT 1)
+                  ) AS disComCenId,
+                  dc.centerName,
+                  dc.city,
+                  dc.district,
+                  dc.province,
+                  dc.country,
+                  dc.longitude,
+                  dc.latitude
+              FROM distributedcenter dc
+              ORDER BY dc.centerName ASC
+            `;
+            params = [officerId];
+        } else {
+            sql = `
+              SELECT
+                  dc.id,
+                  (SELECT dcc2.id FROM distributedcompanycenter dcc2 WHERE dcc2.centerId = dc.id LIMIT 1) AS disComCenId,
+                  dc.centerName,
+                  dc.city,
+                  dc.district,
+                  dc.province,
+                  dc.country,
+                  dc.longitude,
+                  dc.latitude
+              FROM distributedcenter dc
+              ORDER BY dc.centerName ASC
+            `;
+        }
+
+        collectionofficer.query(sql, params, (err, results) => {
             if (err) {
                 console.error("Database error:", err);
                 return reject(err);
@@ -138,6 +303,7 @@ exports.getAllDistributionCentres = () => {
 
             const formatted = results.map((row) => ({
                 id: String(row.id),
+                disComCenId: row.disComCenId ? String(row.disComCenId) : null,
                 name: row.centerName,
                 code: [row.city, row.district].filter(Boolean).join(", "),
             }));
@@ -278,7 +444,7 @@ exports.getCropsAndVarietiesForCenter = (companyCenterId) => {
 };
 
 // Saves a complete transport load into transportload, loadeditems, and loadedcrates
-exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
+exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items }) => {
     return new Promise((resolve, reject) => {
         collectionofficer.getConnection(async (err, connection) => {
             if (err) {
@@ -289,6 +455,10 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
                 await connection.promise().beginTransaction();
 
                 // 1. Get companyCenterId and companyId for officer
+                let comCenId = null;
+                let companyId = null;
+                let officerEmpId = null;
+
                 const officerQuery = `
                   SELECT cc.id AS companyCenterId, co.companyId, co.empId
                   FROM collectionofficer co
@@ -298,29 +468,95 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
                   LIMIT 1
                 `;
                 const [officerRows] = await connection.promise().query(officerQuery, [officerId]);
-                if (officerRows.length === 0) {
-                    throw new Error("Officer's company center not found");
-                }
-                const comCenId = officerRows[0].companyCenterId;
-                const companyId = officerRows[0].companyId;
-                const officerEmpId = officerRows[0].empId;
-
-                // 2. Get distributedCompanyCenterId (disComCenId)
-                let disComCenId = null;
-                if (centreId) {
-                    const disCenterQuery = `
-                      SELECT id FROM distributedcompanycenter
-                      WHERE companyId = ? AND centerId = ?
-                      LIMIT 1
-                    `;
-                    const [disCenterRows] = await connection.promise().query(disCenterQuery, [companyId, centreId]);
-                    if (disCenterRows.length > 0) {
-                        disComCenId = disCenterRows[0].id;
+                if (officerRows.length > 0) {
+                    comCenId = officerRows[0].companyCenterId;
+                    companyId = officerRows[0].companyId;
+                    officerEmpId = officerRows[0].empId;
+                } else {
+                    const [coRows] = await connection.promise().query(
+                        "SELECT companyId, centerId, empId FROM collectionofficer WHERE id = ? LIMIT 1",
+                        [officerId]
+                    );
+                    if (coRows.length > 0) {
+                        companyId = coRows[0].companyId;
+                        officerEmpId = coRows[0].empId;
+                        const [ccFallback] = await connection.promise().query(
+                            "SELECT id FROM companycenter WHERE companyId = ? LIMIT 1",
+                            [companyId]
+                        );
+                        if (ccFallback.length > 0) {
+                            comCenId = ccFallback[0].id;
+                        }
                     }
                 }
 
-                // 3. Generate transferCode: L-{driverEmpId}{YYMMDD}{seq4}
-                // e.g. L-DRV000252609160001
+                if (!comCenId) {
+                    throw new Error("Officer's company center not found");
+                }
+
+                // 2. Resolve distributedCompanyCenterId (disComCenId)
+                let resolvedDisComCenId = null;
+
+                // Step 2a: If disComCenId was passed, check if it exists in distributedcompanycenter
+                if (disComCenId) {
+                    const parsedId = parseInt(disComCenId, 10);
+                    if (!isNaN(parsedId)) {
+                        const [checkRows] = await connection.promise().query(
+                            "SELECT id FROM distributedcompanycenter WHERE id = ? LIMIT 1",
+                            [parsedId]
+                        );
+                        if (checkRows.length > 0) {
+                            resolvedDisComCenId = checkRows[0].id;
+                        }
+                    }
+                }
+
+                // Step 2b: If not resolved yet, resolve using centreId or disComCenId as centerId
+                const targetCenterId = parseInt(centreId || disComCenId, 10);
+                if (!resolvedDisComCenId && !isNaN(targetCenterId)) {
+                    // Check if matched with companyId
+                    if (companyId) {
+                        const [disCenterRows] = await connection.promise().query(
+                            "SELECT id FROM distributedcompanycenter WHERE companyId = ? AND centerId = ? LIMIT 1",
+                            [companyId, targetCenterId]
+                        );
+                        if (disCenterRows.length > 0) {
+                            resolvedDisComCenId = disCenterRows[0].id;
+                        }
+                    }
+
+                    // Fallback to any distributedcompanycenter matching centerId
+                    if (!resolvedDisComCenId) {
+                        const [anyDccRows] = await connection.promise().query(
+                            "SELECT id FROM distributedcompanycenter WHERE centerId = ? LIMIT 1",
+                            [targetCenterId]
+                        );
+                        if (anyDccRows.length > 0) {
+                            resolvedDisComCenId = anyDccRows[0].id;
+                        }
+                    }
+
+                    // If still not found, create new mapping in distributedcompanycenter
+                    if (!resolvedDisComCenId) {
+                        const [insertDcc] = await connection.promise().query(
+                            "INSERT INTO distributedcompanycenter (companyId, centerId, createdAt) VALUES (?, ?, NOW())",
+                            [companyId || 1, targetCenterId]
+                        );
+                        resolvedDisComCenId = insertDcc.insertId;
+                    }
+                }
+
+                // Step 2c: Ultimate fallback
+                if (!resolvedDisComCenId) {
+                    const [firstDcc] = await connection.promise().query(
+                        "SELECT id FROM distributedcompanycenter LIMIT 1"
+                    );
+                    if (firstDcc.length > 0) {
+                        resolvedDisComCenId = firstDcc[0].id;
+                    }
+                }
+
+                // 3. Generate transferCode: L-{driverEmpId}{YYMMDD}{seq3}
                 let driverEmpId = "DRV00000";
                 if (driverId) {
                     const [driverRows] = await connection.promise().query(
@@ -357,7 +593,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
                 const seqStr = String(nextSeq).padStart(3, "0");
                 const transferCode = `${prefix}${seqStr}`;
 
-                // 4. Insert into transportload (unloadOfficerId = NULL, rcmdBy = NULL)
+                // 4. Insert into transportload
                 const insertLoadQuery = `
                   INSERT INTO transportload (
                     driverId,
@@ -374,7 +610,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
                 const [loadResult] = await connection.promise().query(insertLoadQuery, [
                     driverId || null,
                     comCenId,
-                    disComCenId,
+                    resolvedDisComCenId,
                     transferCode,
                 ]);
 
@@ -424,6 +660,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, items }) => {
                     success: true,
                     transportId,
                     transferCode,
+                    disComCenId: resolvedDisComCenId,
                     message: "Transport load created successfully",
                 });
             } catch (txError) {
