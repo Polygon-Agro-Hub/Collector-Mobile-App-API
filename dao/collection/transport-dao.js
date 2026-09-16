@@ -56,6 +56,64 @@ exports.getSentProductsToday = (officerId) => {
     });
 };
 
+exports.getReceivedProductsToday = (officerId) => {
+    return new Promise((resolve, reject) => {
+        if (!officerId) {
+            return reject(new Error("Officer ID is required"));
+        }
+
+        const sql = `
+      SELECT
+          tl.id,
+          tl.transferCode,
+          tl.createdAt,
+          COALESCE(SUM(lc.crateCount), 0) AS totalCrates,
+          COALESCE(SUM(lc.qty), 0) AS totalWeight,
+          COALESCE(clc.centerName, 'N/A') AS origin,
+          vr.vRegNo AS vehicleNo,
+          driver.empId AS driverEmpId,
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName
+      FROM transportload tl
+      INNER JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
+      INNER JOIN collectionofficer co
+          ON (co.distributedCenterId IS NULL AND co.companyId = dcc.companyId)
+          OR (co.distributedCenterId = dcc.centerId AND (co.companyId = dcc.companyId OR co.companyId IS NULL))
+          OR (co.distributedCenterId = dcc.id)
+      LEFT JOIN companycenter cc ON cc.id = tl.comCenId
+      LEFT JOIN collectioncenter clc ON clc.id = cc.centerId
+      LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+      LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
+      LEFT JOIN loadeditems li ON li.transportId = tl.id
+      LEFT JOIN loadedcrates lc ON lc.loadId = li.id
+      WHERE co.id = ?
+        AND DATE(tl.createdAt) = CURDATE()
+      GROUP BY tl.id, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, clc.centerName
+      ORDER BY tl.createdAt DESC
+    `;
+
+        collectionofficer.query(sql, [officerId], (err, results) => {
+            if (err) {
+                console.error("Database error in getReceivedProductsToday:", err);
+                return reject(err);
+            }
+
+            const formatted = results.map((row) => ({
+                id: String(row.id),
+                transferCode: row.transferCode || "",
+                vehicleNo: row.vehicleNo || "N/A",
+                driverEmpId: row.driverEmpId || "",
+                driverName: (row.driverName || "").trim(),
+                crates: parseInt(row.totalCrates, 10) || 0,
+                weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
+                origin: row.origin || "N/A",
+                time: formatTime(row.createdAt),
+            }));
+
+            resolve(formatted);
+        });
+    });
+};
+
 exports.getTransportLoadDetails = (transportId) => {
     return new Promise((resolve, reject) => {
         if (!transportId) {
@@ -244,6 +302,183 @@ exports.getDriverByQRCode = (qrData, extractedEmpId = null) => {
 
             resolve(results[0]);
         });
+    });
+};
+
+exports.verifyLoadQR = (qrData, officerId = null) => {
+    return new Promise((resolve, reject) => {
+        if (!qrData) {
+            return resolve({
+                success: false,
+                code: "INVALID_QR",
+                message: "Invalid QR code.\nPlease scan a valid Load QR code.",
+            });
+        }
+
+        let cleanCode = qrData.trim();
+        try {
+            const parsed = JSON.parse(qrData);
+            if (parsed && typeof parsed === "object") {
+                const codeVal = parsed.transferCode || parsed.loadCode || parsed.code;
+                if (codeVal && typeof codeVal === "string") {
+                    cleanCode = codeVal.trim();
+                }
+            }
+        } catch (e) {
+            // Raw string
+        }
+
+        // Must match format "L-DRV00001260912001" -> ^L-DRV\d+$
+        if (!cleanCode || !/^L-DRV\d+$/i.test(cleanCode)) {
+            return resolve({
+                success: false,
+                code: "INVALID_QR",
+                message: "Invalid QR code.\nPlease scan a valid Load QR code.",
+            });
+        }
+
+        const sql = `
+          SELECT 
+              tl.id,
+              tl.transferCode,
+              tl.disComCenId,
+              tl.comCenId,
+              tl.driverId,
+              tl.createdAt,
+              dcc.companyId AS dccCompanyId,
+              dcc.centerId AS dccCenterId
+          FROM transportload tl
+          LEFT JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
+          WHERE tl.transferCode = ?
+          LIMIT 1
+        `;
+
+        collectionofficer.query(sql, [cleanCode], (err, loadResults) => {
+            if (err) {
+                console.error("Database error in verifyLoadQR:", err);
+                return reject(err);
+            }
+
+            if (!loadResults || loadResults.length === 0) {
+                return resolve({
+                    success: false,
+                    code: "INVALID_QR",
+                    message: "Invalid QR code.\nPlease scan a valid Load QR code.",
+                });
+            }
+
+            const load = loadResults[0];
+
+            // If officerId is provided, check relevancy to officer's distribution center
+            if (officerId) {
+                const officerSql = `
+                  SELECT id, centerId, distributedCenterId, companyId, jobRole
+                  FROM collectionofficer
+                  WHERE id = ?
+                  LIMIT 1
+                `;
+
+                collectionofficer.query(officerSql, [officerId], async (err2, officerResults) => {
+                    if (err2) {
+                        console.error("Database error checking officer in verifyLoadQR:", err2);
+                        return reject(err2);
+                    }
+
+                    if (officerResults && officerResults.length > 0) {
+                        const officer = officerResults[0];
+
+                        // Check if officer matches the load's disComCenId
+                        let isAuthorized = false;
+
+                        if (load.disComCenId == null) {
+                            if (officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId) {
+                                isAuthorized = true;
+                            } else {
+                                isAuthorized = true;
+                            }
+                        } else {
+                            if (
+                                (officer.distributedCenterId == null && officer.companyId && officer.companyId === load.dccCompanyId) ||
+                                (officer.distributedCenterId === load.dccCenterId && (officer.companyId === load.dccCompanyId || officer.companyId == null)) ||
+                                (officer.distributedCenterId === load.disComCenId) ||
+                                (officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId)
+                            ) {
+                                isAuthorized = true;
+                            }
+                        }
+
+                        if (!isAuthorized) {
+                            return resolve({
+                                success: false,
+                                code: "DISTRIBUTION_CENTER_MISMATCH",
+                                message: "This load is assigned to a different distribution center.",
+                            });
+                        }
+                    }
+
+                    try {
+                        const loadDetails = await exports.getTransportLoadDetails(load.id);
+                        return resolve({
+                            success: true,
+                            data: loadDetails,
+                            message: "Load QR verified successfully.",
+                        });
+                    } catch (detailErr) {
+                        return reject(detailErr);
+                    }
+                });
+            } else {
+                exports.getTransportLoadDetails(load.id)
+                    .then((loadDetails) => {
+                        resolve({
+                            success: true,
+                            data: loadDetails,
+                            message: "Load QR verified successfully.",
+                        });
+                    })
+                    .catch(reject);
+            }
+        });
+    });
+};
+
+exports.finishUnloading = (transportId, loadCode, officerId) => {
+    return new Promise((resolve, reject) => {
+        if (!officerId) {
+            return reject(new Error("Officer ID is required"));
+        }
+        if (!transportId && !loadCode) {
+            return reject(new Error("Transport ID or Load Code is required"));
+        }
+
+        const sql = `
+          UPDATE transportload
+          SET unloadOfficerId = ?, unloadTime = NOW()
+          WHERE id = ? OR transferCode = ?
+        `;
+
+        collectionofficer.query(
+            sql,
+            [officerId, transportId || null, loadCode || null],
+            (err, result) => {
+                if (err) {
+                    console.error("Database error in finishUnloading:", err);
+                    return reject(err);
+                }
+
+                if (result.affectedRows === 0) {
+                    return resolve({
+                        success: false,
+                        message: "Transport load not found",
+                    });
+                }
+
+                resolve({
+                    success: true,
+                    message: "Transport load marked as unloaded successfully",
+                });
+            }
+        );
     });
 };
 

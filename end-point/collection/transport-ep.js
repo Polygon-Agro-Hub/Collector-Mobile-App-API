@@ -28,6 +28,32 @@ exports.getSentProductsToday = async (req, res) => {
     }
 };
 
+exports.getReceivedProductsToday = async (req, res) => {
+    try {
+        const officerId = req.user.id;
+
+        if (!officerId) {
+            return res.status(400).json({
+                success: false,
+                message: "Officer ID not found in token",
+            });
+        }
+
+        const receivedProducts = await TransportDAO.getReceivedProductsToday(officerId);
+
+        res.status(200).json({
+            success: true,
+            data: receivedProducts,
+        });
+    } catch (error) {
+        console.error("Error fetching received products today:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to fetch received products today",
+        });
+    }
+};
+
 exports.getTransportLoadDetails = async (req, res) => {
     try {
         const { transportId } = req.params;
@@ -153,6 +179,89 @@ exports.verifyDriverQR = async (req, res) => {
             success: false,
             code: "SERVER_ERROR",
             message: error.message || "Failed to verify QR code",
+        });
+    }
+};
+
+exports.verifyLoadQR = async (req, res) => {
+    try {
+        let { qrData } = req.body;
+        const officerId = req.user?.id || req.body?.officerId;
+
+        if (!qrData || typeof qrData !== "string") {
+            return res.status(400).json({
+                success: false,
+                code: "INVALID_QR",
+                message: "Invalid QR code.\nPlease scan a valid Load QR code.",
+            });
+        }
+
+        const result = await TransportDAO.verifyLoadQR(qrData, officerId);
+
+        if (!result.success) {
+            if (result.code === "DISTRIBUTION_CENTER_MISMATCH") {
+                return res.status(403).json({
+                    success: false,
+                    code: result.code,
+                    message: result.message || "This load is assigned to a different distribution center.",
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                code: result.code || "INVALID_QR",
+                message: result.message || "Invalid QR code.\nPlease scan a valid Load QR code.",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: result.message || "Load QR verified successfully",
+            data: result.data,
+        });
+    } catch (error) {
+        console.error("Error verifying load QR:", error);
+        return res.status(500).json({
+            success: false,
+            code: "SERVER_ERROR",
+            message: error.message || "Failed to verify Load QR code",
+        });
+    }
+};
+
+exports.finishUnloading = async (req, res) => {
+    try {
+        const { transportId, loadCode } = req.body;
+        const officerId = req.user?.id || req.body?.officerId;
+
+        if (!officerId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized. Officer ID not found.",
+            });
+        }
+
+        if (!transportId && !loadCode) {
+            return res.status(400).json({
+                success: false,
+                message: "Transport ID or Load Code is required",
+            });
+        }
+
+        const result = await TransportDAO.finishUnloading(transportId, loadCode, officerId);
+
+        if (!result.success) {
+            return res.status(404).json(result);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Transport load marked as unloaded successfully.",
+        });
+    } catch (error) {
+        console.error("Error in finishUnloading:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to finish unloading",
         });
     }
 };
