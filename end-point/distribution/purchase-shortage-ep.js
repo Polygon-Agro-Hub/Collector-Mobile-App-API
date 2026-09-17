@@ -96,6 +96,9 @@ exports.submitPurchase = async (req, res) => {
 
     let slipUrl = null;
 
+    console.log("[submitPurchase] req.file:", req.file ? `name=${req.file.originalname}, mime=${req.file.mimetype}, size=${req.file.size}` : "undefined");
+    console.log("[submitPurchase] req.body.slip:", slip ? (slip.length > 80 ? slip.substring(0, 80) + "..." : slip) : "undefined");
+
     if (req.file) {
       try {
         slipUrl = await uploadFileToS3(
@@ -103,6 +106,7 @@ exports.submitPurchase = async (req, res) => {
           req.file.originalname,
           "shortagepurchase/slips"
         );
+        console.log("[submitPurchase] R2 upload success:", slipUrl);
       } catch (uploadError) {
         console.error("Error uploading file slip to R2 bucket:", uploadError);
         return res.status(500).json({
