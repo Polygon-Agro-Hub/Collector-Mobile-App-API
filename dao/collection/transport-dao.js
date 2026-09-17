@@ -10,6 +10,7 @@ exports.getSentProductsToday = (officerId) => {
       SELECT
           tl.id,
           tl.transferCode,
+          tl.conformDriverId,
           tl.createdAt,
           COALESCE(SUM(lc.crateCount), 0) AS totalCrates,
           COALESCE(SUM(lc.qty), 0) AS totalWeight,
@@ -21,7 +22,7 @@ exports.getSentProductsToday = (officerId) => {
       INNER JOIN companycenter cc ON cc.id = tl.comCenId
       INNER JOIN collectionofficer co
           ON co.centerId = cc.centerId AND co.companyId = cc.companyId
-      LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+      LEFT JOIN collectionofficer driver ON driver.id = COALESCE(tl.conformDriverId, tl.driverId)
       LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
       LEFT JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
       LEFT JOIN distributedcenter dc ON dc.id = dcc.centerId
@@ -29,7 +30,7 @@ exports.getSentProductsToday = (officerId) => {
       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
       WHERE co.id = ?
         AND DATE(tl.createdAt) = CURDATE()
-      GROUP BY tl.id, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, dc.centerName
+      GROUP BY tl.id, tl.conformDriverId, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, dc.centerName
       ORDER BY tl.createdAt ASC
     `;
 
@@ -49,6 +50,7 @@ exports.getSentProductsToday = (officerId) => {
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 destination: row.destination || "N/A",
                 time: formatTime(row.createdAt),
+                conformDriverId: row.conformDriverId ? Number(row.conformDriverId) : null,
             }));
 
             resolve(formatted);
@@ -126,6 +128,7 @@ exports.getTransportLoadDetails = (transportId) => {
               tl.transferCode,
               tl.createdAt,
               tl.driverId,
+              tl.conformDriverId,
               COALESCE(dc.centerName, dc_direct.centerName, 'N/A') AS destination,
               driver.empId AS driverEmpId,
               CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName,
@@ -133,7 +136,7 @@ exports.getTransportLoadDetails = (transportId) => {
               vr.vType,
               vr.vCapacity
           FROM transportload tl
-          LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+          LEFT JOIN collectionofficer driver ON driver.id = COALESCE(tl.conformDriverId, tl.driverId)
           LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
           LEFT JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
           LEFT JOIN distributedcenter dc ON dc.id = dcc.centerId
@@ -233,6 +236,7 @@ exports.getTransportLoadDetails = (transportId) => {
                     driverName: (loadHeader.driverName || "").trim(),
                     centreName: loadHeader.destination || "N/A",
                     createdAt: loadHeader.createdAt,
+                    conformDriverId: loadHeader.conformDriverId ? Number(loadHeader.conformDriverId) : null,
                     items: formattedItems,
                 });
             });
