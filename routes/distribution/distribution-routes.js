@@ -14,6 +14,7 @@ router.get(
 );
 
 router.get("/received-today", auth, TransportEp.getReceivedProductsToday);
+router.get("/load/:transportId", auth, TransportEp.getTransportLoadDetails);
 router.post("/verify-load-qr", auth, TransportEp.verifyLoadQR);
 router.post("/finish-unloading", auth, TransportEp.finishUnloading);
 

@@ -68,29 +68,31 @@ exports.getReceivedProductsToday = (officerId) => {
       SELECT
           tl.id,
           tl.transferCode,
+          tl.unloadTime,
           tl.createdAt,
-          COALESCE(SUM(lc.crateCount), 0) AS totalCrates,
-          COALESCE(SUM(lc.qty), 0) AS totalWeight,
+          COALESCE(
+              (SELECT SUM(uc.crateCount) FROM unloadedcrates uc JOIN loadeditems li ON li.id = uc.loadId WHERE li.transportId = tl.id),
+              (SELECT SUM(lc.crateCount) FROM loadedcrates lc JOIN loadeditems li ON li.id = lc.loadId WHERE li.transportId = tl.id),
+              0
+          ) AS totalCrates,
+          COALESCE(
+              (SELECT SUM(uc.qty) FROM unloadedcrates uc JOIN loadeditems li ON li.id = uc.loadId WHERE li.transportId = tl.id),
+              (SELECT SUM(lc.qty) FROM loadedcrates lc JOIN loadeditems li ON li.id = lc.loadId WHERE li.transportId = tl.id),
+              0
+          ) AS totalWeight,
           COALESCE(clc.centerName, 'N/A') AS origin,
           vr.vRegNo AS vehicleNo,
           driver.empId AS driverEmpId,
           CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName
       FROM transportload tl
-      INNER JOIN distributedcompanycenter dcc ON dcc.id = tl.disComCenId
-      INNER JOIN collectionofficer co
-          ON (co.distributedCenterId IS NULL AND co.companyId = dcc.companyId)
-          OR (co.distributedCenterId = dcc.centerId AND (co.companyId = dcc.companyId OR co.companyId IS NULL))
-          OR (co.distributedCenterId = dcc.id)
       LEFT JOIN companycenter cc ON cc.id = tl.comCenId
       LEFT JOIN collectioncenter clc ON clc.id = cc.centerId
-      LEFT JOIN collectionofficer driver ON driver.id = tl.driverId
+      LEFT JOIN collectionofficer driver ON driver.id = COALESCE(tl.conformDriverId, tl.driverId)
       LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
-      LEFT JOIN loadeditems li ON li.transportId = tl.id
-      LEFT JOIN loadedcrates lc ON lc.loadId = li.id
-      WHERE co.id = ?
-        AND DATE(tl.createdAt) = CURDATE()
-      GROUP BY tl.id, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, clc.centerName
-      ORDER BY tl.createdAt DESC
+      WHERE tl.unloadOfficerId = ?
+        AND DATE(tl.unloadTime) = CURDATE()
+      GROUP BY tl.id, tl.unloadTime, tl.createdAt, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, clc.centerName
+      ORDER BY tl.unloadTime DESC
     `;
 
         collectionofficer.query(sql, [officerId], (err, results) => {
@@ -108,7 +110,7 @@ exports.getReceivedProductsToday = (officerId) => {
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 origin: row.origin || "N/A",
-                time: formatTime(row.createdAt),
+                time: formatTime(row.unloadTime || row.createdAt),
             }));
 
             resolve(formatted);
@@ -116,7 +118,7 @@ exports.getReceivedProductsToday = (officerId) => {
     });
 };
 
-exports.getTransportLoadDetails = (transportId) => {
+exports.getTransportLoadDetails = (transportId, requestedType = null) => {
     return new Promise((resolve, reject) => {
         if (!transportId) {
             return reject(new Error("Transport ID is required"));
@@ -127,6 +129,8 @@ exports.getTransportLoadDetails = (transportId) => {
               tl.id,
               tl.transferCode,
               tl.createdAt,
+              tl.unloadTime,
+              tl.unloadOfficerId,
               tl.driverId,
               tl.conformDriverId,
               COALESCE(dc.centerName, dc_direct.centerName, 'N/A') AS destination,
@@ -157,87 +161,133 @@ exports.getTransportLoadDetails = (transportId) => {
 
             const loadHeader = headerResults[0];
 
-            const itemsSql = `
-              SELECT 
-                  li.id AS loadedItemId,
-                  li.varietyId,
-                  cv.varietyNameEnglish,
-                  cv.image AS varietyImage,
-                  cg.id AS cropId,
-                  cg.cropNameEnglish,
-                  cg.image AS cropImage,
-                  lc.id AS crateId,
-                  lc.grade,
-                  lc.crateCount,
-                  lc.crateIndex,
-                  lc.qty
+            // Check if unloaded crates exist for this transport
+            const checkUnloadedSql = `
+              SELECT COUNT(uc.id) AS unloadedCount
               FROM loadeditems li
-              LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
-              LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
-              LEFT JOIN loadedcrates lc ON lc.loadId = li.id
+              INNER JOIN unloadedcrates uc ON uc.loadId = li.id
               WHERE li.transportId = ?
-              ORDER BY li.id ASC, lc.grade ASC, lc.crateIndex ASC
             `;
 
-            collectionofficer.query(itemsSql, [loadHeader.id], (err2, itemRows) => {
-                if (err2) {
-                    console.error("Database error fetching transport load items:", err2);
-                    return reject(err2);
+            collectionofficer.query(checkUnloadedSql, [loadHeader.id], (checkErr, checkResults) => {
+                if (checkErr) {
+                    console.error("Database error checking unloadedcrates:", checkErr);
+                    return reject(checkErr);
                 }
 
-                // Group by loadedItem / variety
-                const itemsMap = new Map();
+                const hasUnloaded = checkResults && checkResults[0]?.unloadedCount > 0;
+                const useUnloaded = requestedType === "unloaded" 
+                    ? hasUnloaded 
+                    : (requestedType === "loaded" ? false : hasUnloaded);
 
-                (itemRows || []).forEach((row) => {
-                    const itemId = String(row.loadedItemId);
-                    if (!itemsMap.has(itemId)) {
-                        itemsMap.set(itemId, {
-                            id: String(row.varietyId || row.loadedItemId),
-                            loadedItemId: row.loadedItemId,
-                            varietyId: row.varietyId ? String(row.varietyId) : undefined,
-                            varietyLabel: row.varietyNameEnglish || "",
-                            cropId: row.cropId ? String(row.cropId) : undefined,
-                            cropLabel: row.cropNameEnglish || "",
-                            cropName: row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
-                            imageUri: row.varietyImage || row.cropImage || "",
-                            totalWeightKg: 0,
-                            totalCrates: 0,
-                            gradeSets: [],
-                        });
+                const itemsSql = useUnloaded
+                  ? `
+                      SELECT 
+                          li.id AS loadedItemId,
+                          li.varietyId,
+                          cv.varietyNameEnglish,
+                          cv.image AS varietyImage,
+                          cg.id AS cropId,
+                          cg.cropNameEnglish,
+                          cg.image AS cropImage,
+                          uc.id AS crateId,
+                          uc.grade,
+                          uc.crateCount,
+                          uc.crateIndex,
+                          uc.qty
+                      FROM loadeditems li
+                      LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
+                      LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
+                      INNER JOIN unloadedcrates uc ON uc.loadId = li.id
+                      WHERE li.transportId = ?
+                      ORDER BY li.id ASC, uc.grade ASC, uc.crateIndex ASC
+                    `
+                  : `
+                      SELECT 
+                          li.id AS loadedItemId,
+                          li.varietyId,
+                          cv.varietyNameEnglish,
+                          cv.image AS varietyImage,
+                          cg.id AS cropId,
+                          cg.cropNameEnglish,
+                          cg.image AS cropImage,
+                          lc.id AS crateId,
+                          lc.grade,
+                          lc.crateCount,
+                          lc.crateIndex,
+                          lc.qty
+                      FROM loadeditems li
+                      LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
+                      LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
+                      LEFT JOIN loadedcrates lc ON lc.loadId = li.id
+                      WHERE li.transportId = ?
+                      ORDER BY li.id ASC, lc.grade ASC, lc.crateIndex ASC
+                    `;
+
+                collectionofficer.query(itemsSql, [loadHeader.id], (err2, itemRows) => {
+                    if (err2) {
+                        console.error("Database error fetching transport load items:", err2);
+                        return reject(err2);
                     }
 
-                    const itemObj = itemsMap.get(itemId);
+                    // Group by loadedItem / variety
+                    const itemsMap = new Map();
 
-                    if (row.crateId) {
-                        const crateCount = parseInt(row.crateCount, 10) || 0;
-                        const weightKg = parseFloat(row.qty) || 0;
-                        const gradeLetter = (row.grade || "A").trim().toUpperCase();
+                    (itemRows || []).forEach((row) => {
+                        const itemId = String(row.loadedItemId);
+                        if (!itemsMap.has(itemId)) {
+                            itemsMap.set(itemId, {
+                                id: String(row.varietyId || row.loadedItemId),
+                                loadedItemId: row.loadedItemId,
+                                varietyId: row.varietyId ? String(row.varietyId) : undefined,
+                                varietyLabel: row.varietyNameEnglish || "",
+                                cropId: row.cropId ? String(row.cropId) : undefined,
+                                cropLabel: row.cropNameEnglish || "",
+                                cropName: row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
+                                imageUri: row.varietyImage || row.cropImage || "",
+                                totalWeightKg: 0,
+                                totalCrates: 0,
+                                gradeSets: [],
+                            });
+                        }
 
-                        itemObj.totalCrates += crateCount;
-                        itemObj.totalWeightKg += weightKg;
+                        const itemObj = itemsMap.get(itemId);
 
-                        itemObj.gradeSets.push({
-                            grade: `Grade ${gradeLetter}`,
-                            gradeKey: gradeLetter,
-                            set: parseInt(row.crateIndex, 10) || 1,
-                            crates: crateCount,
-                            weightKg: weightKg,
-                        });
-                    }
-                });
+                        if (row.crateId) {
+                            const crateCount = parseInt(row.crateCount, 10) || 0;
+                            const weightKg = parseFloat(row.qty) || 0;
+                            const gradeLetter = (row.grade || "A").trim().toUpperCase();
 
-                const formattedItems = Array.from(itemsMap.values());
+                            itemObj.totalCrates += crateCount;
+                            itemObj.totalWeightKg += weightKg;
 
-                resolve({
-                    transportId: String(loadHeader.id),
-                    transferCode: loadHeader.transferCode || "",
-                    vehicleNo: loadHeader.vehicleNo || "N/A",
-                    driverEmpId: loadHeader.driverEmpId || "",
-                    driverName: (loadHeader.driverName || "").trim(),
-                    centreName: loadHeader.destination || "N/A",
-                    createdAt: loadHeader.createdAt,
-                    conformDriverId: loadHeader.conformDriverId ? Number(loadHeader.conformDriverId) : null,
-                    items: formattedItems,
+                            itemObj.gradeSets.push({
+                                grade: `Grade ${gradeLetter}`,
+                                gradeKey: gradeLetter,
+                                set: parseInt(row.crateIndex, 10) || 1,
+                                crates: crateCount,
+                                weightKg: weightKg,
+                            });
+                        }
+                    });
+
+                    const formattedItems = Array.from(itemsMap.values());
+
+                    resolve({
+                        transportId: String(loadHeader.id),
+                        transferCode: loadHeader.transferCode || "",
+                        vehicleNo: loadHeader.vehicleNo || "N/A",
+                        driverEmpId: loadHeader.driverEmpId || "",
+                        driverName: (loadHeader.driverName || "").trim(),
+                        centreName: loadHeader.destination || "N/A",
+                        createdAt: loadHeader.createdAt,
+                        unloadTime: loadHeader.unloadTime || null,
+                        unloadOfficerId: loadHeader.unloadOfficerId || null,
+                        isUnloaded: hasUnloaded,
+                        sourceTable: useUnloaded ? "unloadedcrates" : "loadedcrates",
+                        conformDriverId: loadHeader.conformDriverId ? Number(loadHeader.conformDriverId) : null,
+                        items: formattedItems,
+                    });
                 });
             });
         });
@@ -345,6 +395,7 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
           SELECT 
               tl.id,
               tl.transferCode,
+              tl.journeyStatus,
               tl.disComCenId,
               tl.comCenId,
               tl.driverId,
@@ -373,6 +424,15 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
 
             const load = loadResults[0];
 
+            // Check journeyStatus must be 'End'
+            if (load.journeyStatus !== "End") {
+                return resolve({
+                    success: false,
+                    code: "JOURNEY_NOT_ENDED",
+                    message: "This load's journey has not ended yet.\nPlease wait until the driver marks the journey as completed.",
+                });
+            }
+
             // If officerId is provided, check relevancy to officer's distribution center
             if (officerId) {
                 const officerSql = `
@@ -391,53 +451,44 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
                     if (officerResults && officerResults.length > 0) {
                         const officer = officerResults[0];
 
-                        // Check if officer matches the load's disComCenId
+                        // Check officer's distributedCenterId matches the load's disComCenId
                         let isAuthorized = false;
 
                         if (load.disComCenId == null) {
-                            if (officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId) {
-                                isAuthorized = true;
-                            } else {
-                                isAuthorized = true;
-                            }
+                            // No specific distribution center assigned — allow if same company
+                            isAuthorized = !!(officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId);
                         } else {
-                            if (
-                                (officer.distributedCenterId == null && officer.companyId && officer.companyId === load.dccCompanyId) ||
-                                (officer.distributedCenterId === load.dccCenterId && (officer.companyId === load.dccCompanyId || officer.companyId == null)) ||
-                                (officer.distributedCenterId === load.disComCenId) ||
-                                (officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId)
-                            ) {
-                                isAuthorized = true;
-                            }
+                            // Strict match: officer.distributedCenterId must equal load.disComCenId
+                            isAuthorized = (officer.distributedCenterId != null && officer.distributedCenterId == load.disComCenId);
                         }
 
                         if (!isAuthorized) {
                             return resolve({
                                 success: false,
                                 code: "DISTRIBUTION_CENTER_MISMATCH",
-                                message: "This load is assigned to a different distribution center.",
+                                message: "This load is not assigned to your distribution center.",
                             });
                         }
                     }
 
                     try {
-                        const loadDetails = await exports.getTransportLoadDetails(load.id);
+                        const loadDetails = await exports.getTransportLoadDetails(load.id, "unloaded");
                         return resolve({
                             success: true,
                             data: loadDetails,
-                            message: "Load QR verified successfully.",
+                            message: `QR code identified successfully. ${load.transferCode}`,
                         });
                     } catch (detailErr) {
                         return reject(detailErr);
                     }
                 });
             } else {
-                exports.getTransportLoadDetails(load.id)
+                exports.getTransportLoadDetails(load.id, "unloaded")
                     .then((loadDetails) => {
                         resolve({
                             success: true,
                             data: loadDetails,
-                            message: "Load QR verified successfully.",
+                            message: `QR code identified successfully. ${load.transferCode}`,
                         });
                     })
                     .catch(reject);

@@ -57,6 +57,7 @@ exports.getReceivedProductsToday = async (req, res) => {
 exports.getTransportLoadDetails = async (req, res) => {
     try {
         const { transportId } = req.params;
+        const requestedType = req.query?.type || null;
 
         if (!transportId) {
             return res.status(400).json({
@@ -65,7 +66,7 @@ exports.getTransportLoadDetails = async (req, res) => {
             });
         }
 
-        const loadDetails = await TransportDAO.getTransportLoadDetails(transportId);
+        const loadDetails = await TransportDAO.getTransportLoadDetails(transportId, requestedType);
 
         if (!loadDetails) {
             return res.status(404).json({
@@ -203,7 +204,14 @@ exports.verifyLoadQR = async (req, res) => {
                 return res.status(403).json({
                     success: false,
                     code: result.code,
-                    message: result.message || "This load is assigned to a different distribution center.",
+                    message: result.message || "This load is not assigned to your distribution center.",
+                });
+            }
+            if (result.code === "JOURNEY_NOT_ENDED") {
+                return res.status(422).json({
+                    success: false,
+                    code: result.code,
+                    message: result.message || "This load's journey has not ended yet.",
                 });
             }
             return res.status(400).json({
