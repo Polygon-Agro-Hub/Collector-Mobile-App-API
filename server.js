@@ -27,6 +27,7 @@ const pensionRoute = require("./routes/collection/pension-routes");
 const collectionOfficerRoutes = require("./routes/common/user-routes");
 const searchRoutes = require("./routes/common/search-routes");
 const targetRoutes = require("./routes/collection/target-routes");
+const transportRoute = require("./routes/collection/transport-routes");
 const emailRoutes = require("./routes/common/email-routes");
 const packingRoute = require("./routes/distribution/packing-route");
 const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
@@ -129,6 +130,7 @@ mainApp.use(`${basePathMain}/api/email`, emailRoutes);
 mainApp.use(`${basePathMain}/api/packing`, packingRoute);
 mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
 mainApp.use(`${basePathMain}/api/web`, webRoute);
+mainApp.use(`${basePathMain}/api/transport`, transportRoute);
 mainApp.use(`/api/web`, webRoute);
 
 // Cron job for SMS sending
