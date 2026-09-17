@@ -16,6 +16,44 @@ function parseBase64File(base64String) {
   }
   const cleanData = base64String.replace(/^data:[^;]+;base64,/i, "");
   const buffer = Buffer.from(cleanData, "base64");
+
+  if (!mimeMatch && buffer.length >= 4) {
+    if (
+      buffer[0] === 0x25 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x44 &&
+      buffer[3] === 0x46
+    ) {
+      ext = "pdf";
+    } else if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      ext = "png";
+    } else if (
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    ) {
+      ext = "jpg";
+    } else if (
+      buffer[0] === 0x47 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46
+    ) {
+      ext = "gif";
+    } else if (
+      buffer[0] === 0x52 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46 &&
+      buffer[3] === 0x46
+    ) {
+      ext = "webp";
+    }
+  }
+
   return { ext, buffer };
 }
 
@@ -56,24 +94,51 @@ exports.submitPurchase = async (req, res) => {
       });
     }
 
-    let slipUrl = slip;
-    if (
-      slip &&
-      (slip.startsWith("data:") ||
-        slip.startsWith("data:image") ||
-        slip.startsWith("data:application/pdf") ||
-        slip.length > 500)
-    ) {
+    let slipUrl = null;
+
+    if (req.file) {
       try {
-        const { ext, buffer } = parseBase64File(slip);
-        const fileName = `slip_${Date.now()}.${ext}`;
         slipUrl = await uploadFileToS3(
-          buffer,
-          fileName,
+          req.file.buffer,
+          req.file.originalname,
           "shortagepurchase/slips"
         );
       } catch (uploadError) {
-        console.error("Error uploading photo/pdf slip to R2 bucket:", uploadError);
+        console.error("Error uploading file slip to R2 bucket:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload slip file to storage",
+          error: uploadError.message,
+        });
+      }
+    } else if (slip) {
+      if (slip.startsWith("http://") || slip.startsWith("https://")) {
+        slipUrl = slip;
+      } else if (
+        slip.startsWith("data:") ||
+        slip.length > 50
+      ) {
+        try {
+          const { ext, buffer } = parseBase64File(slip);
+          const fileName = `slip_${Date.now()}.${ext}`;
+          slipUrl = await uploadFileToS3(
+            buffer,
+            fileName,
+            "shortagepurchase/slips"
+          );
+        } catch (uploadError) {
+          console.error("Error uploading photo/pdf slip to R2 bucket:", uploadError);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload slip file to storage",
+            error: uploadError.message,
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid slip format. Please upload a valid image or PDF file.",
+        });
       }
     }
 

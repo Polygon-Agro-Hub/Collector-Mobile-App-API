@@ -3,6 +3,7 @@ const router = express.Router();
 const ep = require("../../end-point/distribution/purchase-shortage-ep");
 const auth = require("../../middleware/auth.middleware");
 const checkRole = require("../../middleware/role.middleware");
+const upload = require("../../middleware/multer.middleware");
 const { ROLES } = require("../../constants/user-roles");
 
 router.get(
@@ -16,6 +17,7 @@ router.post(
   "/submit",
   auth,
   checkRole([ROLES.DISTRIBUTION_OFFICER, ROLES.DISTRIBUTION_MANAGER]),
+  upload.single("slip"),
   ep.submitPurchase
 );
 
