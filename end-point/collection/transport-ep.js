@@ -160,12 +160,36 @@ exports.verifyDriverQR = async (req, res) => {
             });
         }
 
+        const fnEn = (officer.firstNameEnglish || "").trim();
+        const lnEn = (officer.lastNameEnglish || "").trim();
+        const fnSi = (officer.firstNameSinhala || "").trim() || fnEn;
+        const lnSi = (officer.lastNameSinhala || "").trim() || lnEn;
+        const fnTa = (officer.firstNameTamil || "").trim() || fnEn;
+        const lnTa = (officer.lastNameTamil || "").trim() || lnEn;
+
+        const fullNameEnglish = `${fnEn} ${lnEn}`.trim();
+        const fullNameSinhala = `${fnSi} ${lnSi}`.trim() || fullNameEnglish;
+        const fullNameTamil = `${fnTa} ${lnTa}`.trim() || fullNameEnglish;
+
         return res.status(200).json({
             success: true,
             data: {
                 driverId: officer.id,
                 empId: officer.empId,
-                fullName: `${officer.firstNameEnglish} ${officer.lastNameEnglish}`.trim(),
+                fullName: fullNameEnglish,
+                fullNameEnglish,
+                fullNameSinhala,
+                fullNameTamil,
+                driverName: fullNameEnglish,
+                driverNameEnglish: fullNameEnglish,
+                driverNameSinhala: fullNameSinhala,
+                driverNameTamil: fullNameTamil,
+                firstNameEnglish: officer.firstNameEnglish || "",
+                firstNameSinhala: officer.firstNameSinhala || "",
+                firstNameTamil: officer.firstNameTamil || "",
+                lastNameEnglish: officer.lastNameEnglish || "",
+                lastNameSinhala: officer.lastNameSinhala || "",
+                lastNameTamil: officer.lastNameTamil || "",
                 jobRole: officer.jobRole,
                 vehicleId: officer.vehicleId || null,
                 vRegNo: officer.vRegNo || null,

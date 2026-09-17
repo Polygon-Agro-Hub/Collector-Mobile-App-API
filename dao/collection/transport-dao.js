@@ -17,7 +17,16 @@ exports.getSentProductsToday = (officerId) => {
           dc.centerName AS destination,
           vr.vRegNo AS vehicleNo,
           driver.empId AS driverEmpId,
-          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName,
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverNameEnglish,
+          CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameSinhala), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameSinhala), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameSinhala,
+          CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameTamil), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameTamil), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameTamil,
+          driver.firstNameEnglish,
+          driver.firstNameSinhala,
+          driver.firstNameTamil,
+          driver.lastNameEnglish,
+          driver.lastNameSinhala,
+          driver.lastNameTamil
       FROM transportload tl
       INNER JOIN companycenter cc ON cc.id = tl.comCenId
       INNER JOIN collectionofficer co
@@ -30,7 +39,7 @@ exports.getSentProductsToday = (officerId) => {
       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
       WHERE co.id = ?
         AND DATE(tl.createdAt) = CURDATE()
-      GROUP BY tl.id, tl.conformDriverId, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, dc.centerName
+      GROUP BY tl.id, tl.conformDriverId, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, dc.centerName
       ORDER BY tl.createdAt ASC
     `;
 
@@ -46,6 +55,15 @@ exports.getSentProductsToday = (officerId) => {
                 vehicleNo: row.vehicleNo || "N/A",
                 driverEmpId: row.driverEmpId || "",
                 driverName: (row.driverName || "").trim(),
+                driverNameEnglish: (row.driverNameEnglish || row.driverName || "").trim(),
+                driverNameSinhala: (row.driverNameSinhala || row.driverName || "").trim(),
+                driverNameTamil: (row.driverNameTamil || row.driverName || "").trim(),
+                firstNameEnglish: row.firstNameEnglish || "",
+                firstNameSinhala: row.firstNameSinhala || "",
+                firstNameTamil: row.firstNameTamil || "",
+                lastNameEnglish: row.lastNameEnglish || "",
+                lastNameSinhala: row.lastNameSinhala || "",
+                lastNameTamil: row.lastNameTamil || "",
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 destination: row.destination || "N/A",
@@ -83,7 +101,16 @@ exports.getReceivedProductsToday = (officerId) => {
           COALESCE(clc.centerName, 'N/A') AS origin,
           vr.vRegNo AS vehicleNo,
           driver.empId AS driverEmpId,
-          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName,
+          CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverNameEnglish,
+          CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameSinhala), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameSinhala), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameSinhala,
+          CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameTamil), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameTamil), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameTamil,
+          driver.firstNameEnglish,
+          driver.firstNameSinhala,
+          driver.firstNameTamil,
+          driver.lastNameEnglish,
+          driver.lastNameSinhala,
+          driver.lastNameTamil
       FROM transportload tl
       LEFT JOIN companycenter cc ON cc.id = tl.comCenId
       LEFT JOIN collectioncenter clc ON clc.id = cc.centerId
@@ -91,7 +118,7 @@ exports.getReceivedProductsToday = (officerId) => {
       LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
       WHERE tl.unloadOfficerId = ?
         AND DATE(tl.unloadTime) = CURDATE()
-      GROUP BY tl.id, tl.unloadTime, tl.createdAt, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, clc.centerName
+      GROUP BY tl.id, tl.unloadTime, tl.createdAt, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, clc.centerName
       ORDER BY tl.unloadTime DESC
     `;
 
@@ -107,6 +134,15 @@ exports.getReceivedProductsToday = (officerId) => {
                 vehicleNo: row.vehicleNo || "N/A",
                 driverEmpId: row.driverEmpId || "",
                 driverName: (row.driverName || "").trim(),
+                driverNameEnglish: (row.driverNameEnglish || row.driverName || "").trim(),
+                driverNameSinhala: (row.driverNameSinhala || row.driverName || "").trim(),
+                driverNameTamil: (row.driverNameTamil || row.driverName || "").trim(),
+                firstNameEnglish: row.firstNameEnglish || "",
+                firstNameSinhala: row.firstNameSinhala || "",
+                firstNameTamil: row.firstNameTamil || "",
+                lastNameEnglish: row.lastNameEnglish || "",
+                lastNameSinhala: row.lastNameSinhala || "",
+                lastNameTamil: row.lastNameTamil || "",
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 origin: row.origin || "N/A",
@@ -135,7 +171,16 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
               tl.conformDriverId,
               COALESCE(dc.centerName, dc_direct.centerName, 'N/A') AS destination,
               driver.empId AS driverEmpId,
-              CONCAT(COALESCE(driver.firstNameEnglish, ''), ' ', COALESCE(driver.lastNameEnglish, '')) AS driverName,
+              CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverName,
+              CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameEnglish,
+              CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameSinhala), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameSinhala), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameSinhala,
+              CONCAT(COALESCE(NULLIF(TRIM(driver.firstNameTamil), ''), NULLIF(TRIM(driver.firstNameEnglish), ''), ''), ' ', COALESCE(NULLIF(TRIM(driver.lastNameTamil), ''), NULLIF(TRIM(driver.lastNameEnglish), ''), '')) AS driverNameTamil,
+              driver.firstNameEnglish,
+              driver.firstNameSinhala,
+              driver.firstNameTamil,
+              driver.lastNameEnglish,
+              driver.lastNameSinhala,
+              driver.lastNameTamil,
               vr.vRegNo AS vehicleNo,
               vr.vType,
               vr.vCapacity
@@ -186,9 +231,13 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           li.id AS loadedItemId,
                           li.varietyId,
                           cv.varietyNameEnglish,
+                          cv.varietyNameSinhala,
+                          cv.varietyNameTamil,
                           cv.image AS varietyImage,
                           cg.id AS cropId,
                           cg.cropNameEnglish,
+                          cg.cropNameSinhala,
+                          cg.cropNameTamil,
                           cg.image AS cropImage,
                           uc.id AS crateId,
                           uc.grade,
@@ -207,9 +256,13 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           li.id AS loadedItemId,
                           li.varietyId,
                           cv.varietyNameEnglish,
+                          cv.varietyNameSinhala,
+                          cv.varietyNameTamil,
                           cv.image AS varietyImage,
                           cg.id AS cropId,
                           cg.cropNameEnglish,
+                          cg.cropNameSinhala,
+                          cg.cropNameTamil,
                           cg.image AS cropImage,
                           lc.id AS crateId,
                           lc.grade,
@@ -241,8 +294,14 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 loadedItemId: row.loadedItemId,
                                 varietyId: row.varietyId ? String(row.varietyId) : undefined,
                                 varietyLabel: row.varietyNameEnglish || "",
+                                varietyNameEnglish: row.varietyNameEnglish || "",
+                                varietyNameSinhala: row.varietyNameSinhala || "",
+                                varietyNameTamil: row.varietyNameTamil || "",
                                 cropId: row.cropId ? String(row.cropId) : undefined,
                                 cropLabel: row.cropNameEnglish || "",
+                                cropNameEnglish: row.cropNameEnglish || "",
+                                cropNameSinhala: row.cropNameSinhala || "",
+                                cropNameTamil: row.cropNameTamil || "",
                                 cropName: row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
                                 imageUri: row.varietyImage || row.cropImage || "",
                                 totalWeightKg: 0,
@@ -279,6 +338,15 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                         vehicleNo: loadHeader.vehicleNo || "N/A",
                         driverEmpId: loadHeader.driverEmpId || "",
                         driverName: (loadHeader.driverName || "").trim(),
+                        driverNameEnglish: (loadHeader.driverNameEnglish || "").trim() || (loadHeader.driverName || "").trim(),
+                        driverNameSinhala: (loadHeader.driverNameSinhala || "").trim() || (loadHeader.driverNameEnglish || "").trim() || (loadHeader.driverName || "").trim(),
+                        driverNameTamil: (loadHeader.driverNameTamil || "").trim() || (loadHeader.driverNameEnglish || "").trim() || (loadHeader.driverName || "").trim(),
+                        firstNameEnglish: loadHeader.firstNameEnglish || "",
+                        firstNameSinhala: loadHeader.firstNameSinhala || "",
+                        firstNameTamil: loadHeader.firstNameTamil || "",
+                        lastNameEnglish: loadHeader.lastNameEnglish || "",
+                        lastNameSinhala: loadHeader.lastNameSinhala || "",
+                        lastNameTamil: loadHeader.lastNameTamil || "",
                         centreName: loadHeader.destination || "N/A",
                         createdAt: loadHeader.createdAt,
                         unloadTime: loadHeader.unloadTime || null,
@@ -329,6 +397,10 @@ exports.getDriverByQRCode = (qrData, extractedEmpId = null) => {
           co.empId,
           co.firstNameEnglish,
           co.lastNameEnglish,
+          co.firstNameSinhala,
+          co.lastNameSinhala,
+          co.firstNameTamil,
+          co.lastNameTamil,
           co.jobRole,
           co.status,
           co.claimStatus,
@@ -640,6 +712,7 @@ exports.getAllDistributionCentres = (officerId = null) => {
                        LIMIT 1)
                   ) AS disComCenId,
                   dc.centerName,
+                  dc.regCode,
                   dc.city,
                   dc.district,
                   dc.province,
@@ -656,6 +729,7 @@ exports.getAllDistributionCentres = (officerId = null) => {
                   dc.id,
                   (SELECT dcc2.id FROM distributedcompanycenter dcc2 WHERE dcc2.centerId = dc.id LIMIT 1) AS disComCenId,
                   dc.centerName,
+                  dc.regCode,
                   dc.city,
                   dc.district,
                   dc.province,
@@ -677,7 +751,9 @@ exports.getAllDistributionCentres = (officerId = null) => {
                 id: String(row.id),
                 disComCenId: row.disComCenId ? String(row.disComCenId) : null,
                 name: row.centerName,
-                code: [row.city, row.district].filter(Boolean).join(", "),
+                centerName: row.centerName,
+                regCode: row.regCode || "",
+                code: row.regCode || "",
             }));
 
             resolve(formatted);
