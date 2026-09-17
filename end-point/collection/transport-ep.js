@@ -230,7 +230,7 @@ exports.verifyLoadQR = async (req, res) => {
 
 exports.finishUnloading = async (req, res) => {
     try {
-        const { transportId, loadCode } = req.body;
+        const { transportId, loadCode, unloadedItems } = req.body;
         const officerId = req.user?.id || req.body?.officerId;
 
         if (!officerId) {
@@ -247,7 +247,7 @@ exports.finishUnloading = async (req, res) => {
             });
         }
 
-        const result = await TransportDAO.finishUnloading(transportId, loadCode, officerId);
+        const result = await TransportDAO.finishUnloading(transportId, loadCode, officerId, unloadedItems);
 
         if (!result.success) {
             return res.status(404).json(result);

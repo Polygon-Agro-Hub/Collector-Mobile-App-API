@@ -1,9 +1,22 @@
 const dao = require("../../dao/distribution/purchase-shortage-dao");
 const uploadFileToS3 = require("../../middleware/s3upload");
 
-function convertBase64ToBuffer(base64String) {
-  const base64Data = base64String.replace(/^data:image\/\w+;base64,/, "");
-  return Buffer.from(base64Data, "base64");
+function parseBase64File(base64String) {
+  let ext = "jpg";
+  const mimeMatch = base64String.match(/^data:([^;]+);base64,/i);
+  if (mimeMatch) {
+    const mime = mimeMatch[1].toLowerCase();
+    if (mime.includes("pdf")) ext = "pdf";
+    else if (mime.includes("png")) ext = "png";
+    else if (mime.includes("webp")) ext = "webp";
+    else if (mime.includes("gif")) ext = "gif";
+    else if (mime.includes("heic")) ext = "heic";
+    else if (mime.includes("heif")) ext = "heif";
+    else if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
+  }
+  const cleanData = base64String.replace(/^data:[^;]+;base64,/i, "");
+  const buffer = Buffer.from(cleanData, "base64");
+  return { ext, buffer };
 }
 
 exports.getOfficerShortages = async (req, res) => {
@@ -44,17 +57,23 @@ exports.submitPurchase = async (req, res) => {
     }
 
     let slipUrl = slip;
-    if (slip && (slip.startsWith("data:image") || slip.length > 500)) {
+    if (
+      slip &&
+      (slip.startsWith("data:") ||
+        slip.startsWith("data:image") ||
+        slip.startsWith("data:application/pdf") ||
+        slip.length > 500)
+    ) {
       try {
-        const fileBuffer = convertBase64ToBuffer(slip);
-        const fileName = `slip_${Date.now()}.jpg`;
+        const { ext, buffer } = parseBase64File(slip);
+        const fileName = `slip_${Date.now()}.${ext}`;
         slipUrl = await uploadFileToS3(
-          fileBuffer,
+          buffer,
           fileName,
           "shortagepurchase/slips"
         );
       } catch (uploadError) {
-        console.error("Error uploading photo slip to R2 bucket:", uploadError);
+        console.error("Error uploading photo/pdf slip to R2 bucket:", uploadError);
       }
     }
 

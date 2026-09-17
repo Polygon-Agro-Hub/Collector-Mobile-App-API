@@ -442,7 +442,7 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
     });
 };
 
-exports.finishUnloading = (transportId, loadCode, officerId) => {
+exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = []) => {
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is required"));
@@ -451,34 +451,116 @@ exports.finishUnloading = (transportId, loadCode, officerId) => {
             return reject(new Error("Transport ID or Load Code is required"));
         }
 
-        const sql = `
-          UPDATE transportload
-          SET unloadOfficerId = ?, unloadTime = NOW()
-          WHERE id = ? OR transferCode = ?
-        `;
+        collectionofficer.getConnection(async (connErr, connection) => {
+            if (connErr) {
+                return reject(connErr);
+            }
 
-        collectionofficer.query(
-            sql,
-            [officerId, transportId || null, loadCode || null],
-            (err, result) => {
-                if (err) {
-                    console.error("Database error in finishUnloading:", err);
-                    return reject(err);
-                }
+            try {
+                await connection.promise().beginTransaction();
 
-                if (result.affectedRows === 0) {
+                // 1. Find transport load
+                const [loadRows] = await connection.promise().query(
+                    "SELECT id, transferCode FROM transportload WHERE id = ? OR transferCode = ? LIMIT 1",
+                    [transportId || null, loadCode || null]
+                );
+
+                if (loadRows.length === 0) {
+                    await connection.promise().rollback();
+                    connection.release();
                     return resolve({
                         success: false,
                         message: "Transport load not found",
                     });
                 }
 
+                const actualTransportId = loadRows[0].id;
+
+                // 2. Update transportload with officer and timestamp
+                await connection.promise().query(
+                    "UPDATE transportload SET unloadOfficerId = ?, unloadTime = NOW() WHERE id = ?",
+                    [officerId, actualTransportId]
+                );
+
+                // 3. Save into unloadedcrates if unloadedItems are provided
+                if (Array.isArray(unloadedItems) && unloadedItems.length > 0) {
+                    // Fetch existing loadeditems for this transport
+                    const [existingLoadedItems] = await connection.promise().query(
+                        "SELECT id, varietyId FROM loadeditems WHERE transportId = ?",
+                        [actualTransportId]
+                    );
+
+                    const loadedItemByVariety = new Map();
+                    const loadedItemById = new Map();
+                    existingLoadedItems.forEach((li) => {
+                        loadedItemById.set(li.id, li.id);
+                        if (li.varietyId) {
+                            loadedItemByVariety.set(String(li.varietyId), li.id);
+                        }
+                    });
+
+                    for (const item of unloadedItems) {
+                        // Determine loadId (the id in loadeditems)
+                        let targetLoadId = null;
+                        if (item.loadedItemId && loadedItemById.has(parseInt(item.loadedItemId, 10))) {
+                            targetLoadId = parseInt(item.loadedItemId, 10);
+                        } else if (item.varietyId && loadedItemByVariety.has(String(item.varietyId))) {
+                            targetLoadId = loadedItemByVariety.get(String(item.varietyId));
+                        } else if (item.id && loadedItemByVariety.has(String(item.id))) {
+                            targetLoadId = loadedItemByVariety.get(String(item.id));
+                        } else if (item.id && loadedItemById.has(parseInt(item.id, 10))) {
+                            targetLoadId = parseInt(item.id, 10);
+                        }
+
+                        if (!targetLoadId && item.varietyId) {
+                            const [newLi] = await connection.promise().query(
+                                "INSERT INTO loadeditems (transportId, varietyId) VALUES (?, ?)",
+                                [actualTransportId, item.varietyId]
+                            );
+                            targetLoadId = newLi.insertId;
+                            loadedItemById.set(targetLoadId, targetLoadId);
+                            loadedItemByVariety.set(String(item.varietyId), targetLoadId);
+                        }
+
+                        if (targetLoadId && Array.isArray(item.grades) && item.grades.length > 0) {
+                            // Delete previous unloadedcrates for this loadId if any
+                            await connection.promise().query(
+                                "DELETE FROM unloadedcrates WHERE loadId = ?",
+                                [targetLoadId]
+                            );
+
+                            for (const g of item.grades) {
+                                const rawGrade = (g.grade || g.gradeKey || "A").trim().toUpperCase();
+                                const cleanGrade = rawGrade.replace(/^GRADE\s*/i, "");
+                                const validGrade = ["A", "B", "C"].includes(cleanGrade) ? cleanGrade : "A";
+
+                                const crateCount = parseInt(g.crateCount ?? g.crates, 10) || 0;
+                                const crateIndex = parseInt(g.crateIndex ?? g.set ?? g.setIndex, 10) || 1;
+                                const qty = parseFloat(g.qty ?? g.weightKg ?? g.weight) || 0;
+
+                                await connection.promise().query(
+                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, qty) VALUES (?, ?, ?, ?, ?)",
+                                    [targetLoadId, validGrade, crateCount, crateIndex, qty]
+                                );
+                            }
+                        }
+                    }
+                }
+
+                await connection.promise().commit();
+                connection.release();
+
                 resolve({
                     success: true,
                     message: "Transport load marked as unloaded successfully",
                 });
+            } catch (txError) {
+                await connection.promise().rollback();
+                connection.release();
+                console.error("Database error in finishUnloading:", txError);
+                reject(txError);
             }
-        );
+        });
     });
 };
 
