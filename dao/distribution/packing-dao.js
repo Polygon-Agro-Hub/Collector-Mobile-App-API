@@ -84,6 +84,7 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
     const sql = `
       SELECT 
         pr.id,
+        pr.rowIndex,
         CONCAT('Row ', pr.rowIndex) AS name,
         CAST(COALESCE(
           COUNT(pp.id) - COUNT(tp.id),
@@ -95,7 +96,18 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
           JOIN positionscrops pc ON pp2.id = pc.posId
           JOIN marketplaceitems mi ON pc.mpiId = mi.id
           WHERE pp2.rowId = pr.id AND pp2.pType = 'NOR'
-        ) AS crops
+        ) AS crops,
+        (
+          SELECT COUNT(dti.id)
+          FROM distributedtarget dt
+          JOIN distributedtargetitems dti ON dt.id = dti.targetId
+          WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
+        ) AS ordersCount,
+        (
+          SELECT COUNT(dt.id)
+          FROM distributedtarget dt
+          WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
+        ) AS targetCount
       FROM packingrows pr
       LEFT JOIN packingpositions pp ON pr.id = pp.rowId
       LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
@@ -119,7 +131,61 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
         console.error("Error in getPackingRowsForCenter:", err);
         return reject(err);
       }
-      resolve(results);
+      const mapped = results.map((r) => {
+        const ordersCount = Number(r.ordersCount || 0);
+        const targetCount = Number(r.targetCount || 0);
+        const hasOrders = ordersCount > 0 || targetCount > 0;
+        return {
+          ...r,
+          rowIndex: r.rowIndex,
+          ordersCount,
+          targetCount,
+          hasOrders,
+          allocatedCount: ordersCount,
+          orderCount: ordersCount,
+          ordersAssigned: ordersCount,
+          totalOrders: ordersCount,
+        };
+      });
+      resolve(mapped);
+    });
+  });
+};
+
+/**
+ * Check if a specific row has assigned orders in distributedtarget today
+ * @param {number} rowId 
+ * @returns {Promise<{hasOrders: boolean, ordersCount: number, targetCount: number}>}
+ */
+exports.checkRowHasAssignedOrders = (rowId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        (
+          SELECT COUNT(dti.id)
+          FROM distributedtarget dt
+          JOIN distributedtargetitems dti ON dt.id = dti.targetId
+          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+        ) AS ordersCount,
+        (
+          SELECT COUNT(dt.id)
+          FROM distributedtarget dt
+          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+        ) AS targetCount
+    `;
+    db.collectionofficer.query(sql, [rowId, rowId], (err, results) => {
+      if (err) {
+        console.error("Error in checkRowHasAssignedOrders:", err);
+        return reject(err);
+      }
+      const ordersCount = results && results.length > 0 ? Number(results[0].ordersCount || 0) : 0;
+      const targetCount = results && results.length > 0 ? Number(results[0].targetCount || 0) : 0;
+      const hasOrders = ordersCount > 0 || targetCount > 0;
+      resolve({
+        hasOrders,
+        ordersCount,
+        targetCount,
+      });
     });
   });
 };

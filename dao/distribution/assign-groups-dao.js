@@ -20,10 +20,13 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(po.sheduleDate) = CURDATE()
         AND dcen.id = ?
-        AND EXISTS (
-          SELECT 1 FROM orderpackage op 
-          WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
-            AND op.packingStatus = 'Dispatch'
+        AND (
+          COALESCE(o.isPackage, 0) != 1
+          OR EXISTS (
+            SELECT 1 FROM orderpackage op 
+            WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
+              AND op.packingStatus = 'Dispatch'
+          )
         )
       GROUP BY o.sheduleTime, COALESCE(mu.buyerType, 'Retail')
     `;
@@ -68,10 +71,13 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
         AND COALESCE(mu.buyerType, 'Retail') = ?
         AND o.sheduleTime = ?
         AND dcen.id = ?
-        AND EXISTS (
-          SELECT 1 FROM orderpackage op 
-          WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
-            AND op.packingStatus = 'Dispatch'
+        AND (
+          COALESCE(o.isPackage, 0) != 1
+          OR EXISTS (
+            SELECT 1 FROM orderpackage op 
+            WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
+              AND op.packingStatus = 'Dispatch'
+          )
         )
     `;
     db.collectionofficer.query(sql, [buyerType, sheduleTime, companyCenterId], (err, results) => {
