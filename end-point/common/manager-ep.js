@@ -484,6 +484,7 @@ exports.getFarmerPaymentsSummary = async (req, res) => {
 
 exports.getOfficerDetailsForReport = async (req, res) => {
   const { empId } = req.params;
+  const { language } = req.query;
 
   if (!empId) {
     return res.status(400).json({
@@ -502,9 +503,27 @@ exports.getOfficerDetailsForReport = async (req, res) => {
       });
     }
 
+    const officer = rows[0];
+    const lang = (language || "en").toLowerCase();
+
+    let firstName = officer.firstNameEnglish;
+    let lastName = officer.lastNameEnglish;
+
+    if (lang.startsWith("si")) {
+      firstName = officer.firstNameSinhala || officer.firstNameEnglish;
+      lastName = officer.lastNameSinhala || officer.lastNameEnglish;
+    } else if (lang.startsWith("ta")) {
+      firstName = officer.firstNameTamil || officer.firstNameEnglish;
+      lastName = officer.lastNameTamil || officer.lastNameEnglish;
+    }
+
     res.status(200).json({
       status: "success",
-      data: rows[0],
+      data: {
+        firstName,
+        lastName,
+        jobRole: officer.jobRole,
+      },
     });
   } catch (error) {
     console.error("Error fetching employee details:", error);

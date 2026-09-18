@@ -27,4 +27,11 @@ router.post(
   dmanagerEp.createClaimOfficer,
 );
 
+router.get(
+  "/notifications",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.getNotifications,
+);
+
 module.exports = router;

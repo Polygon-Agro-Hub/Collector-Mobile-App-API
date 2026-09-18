@@ -1248,3 +1248,35 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
     );
   });
 };
+
+exports.getHandoverReturnNotifications = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        hro.id,
+        hro.drvOrderId,
+        hro.handOverOfficerId,
+        hro.otpCode,
+        hro.expireTime,
+        hro.createdAt,
+        do.orderId AS processOrderId,
+        do.drvStatus,
+        po.invNo,
+        po.orderId AS mainOrderId
+      FROM handoverreturnorder hro
+      LEFT JOIN driverorders \`do\` ON hro.drvOrderId = \`do\`.id
+      LEFT JOIN processorders po ON \`do\`.orderId = po.id
+      WHERE hro.handOverOfficerId = ?
+      ORDER BY hro.createdAt DESC
+    `;
+
+    db.collectionofficer.query(sql, [officerId], (error, results) => {
+      if (error) {
+        console.error("Error fetching handover return notifications:", error);
+        return reject(error);
+      }
+      resolve(results || []);
+    });
+  });
+};
+
