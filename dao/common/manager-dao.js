@@ -610,8 +610,12 @@ exports.getCollectionOfficersList = async (managerId) => {
 exports.getOfficerDetails = async (empId) => {
   const sql = `
     SELECT 
-      firstNameEnglish AS firstName, 
-      lastNameEnglish AS lastName, 
+      firstNameEnglish AS firstNameEnglish, 
+      lastNameEnglish AS lastNameEnglish, 
+      firstNameSinhala AS firstNameSinhala,
+      firstNameTamil AS firstNameTamil,
+      lastNameSinhala AS lastNameSinhala,
+      lastNameTamil AS lastNameTamil,
       jobRole 
     FROM 
       collectionofficer
