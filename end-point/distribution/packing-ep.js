@@ -42,11 +42,26 @@ exports.getRowPositions = asyncHandler(async (req, res) => {
     });
   }
 
+  const orderCheck = await packingDao.checkRowHasAssignedOrders(Number(rowId));
+  if (!orderCheck.hasOrders) {
+    return res.status(200).json({
+      success: false,
+      message: "No orders assigned to this row",
+      hasOrders: false,
+      ordersCount: 0,
+      targetCount: 0,
+      data: []
+    });
+  }
+
   const positions = await packingDao.getPositionsForRow(Number(rowId));
 
   res.status(200).json({
     success: true,
     message: "Row positions retrieved successfully",
+    hasOrders: true,
+    ordersCount: orderCheck.ordersCount,
+    targetCount: orderCheck.targetCount,
     data: positions
   });
 });
@@ -238,6 +253,10 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
   if (!result || !result.success || result.affectedRows === 0) {
     return res.status(200).json({
       success: false,
+      code: result?.code || (result?.isOccupied ? "STATION_OCCUPIED" : undefined),
+      occupiedInvoice: result?.occupiedInvoice,
+      targetPosition: result?.targetPosition,
+      targetStationName: result?.targetStationName,
       message: result?.message || "The next station is currently busy or the package has already been cleared.",
       data: result
     });

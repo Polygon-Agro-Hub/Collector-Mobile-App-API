@@ -20,6 +20,14 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
       WHERE DATE(po.sheduleDate) = CURDATE()
         AND dcen.id = ?
+        AND (
+          COALESCE(o.isPackage, 0) != 1
+          OR EXISTS (
+            SELECT 1 FROM orderpackage op 
+            WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
+              AND op.packingStatus = 'Dispatch'
+          )
+        )
       GROUP BY o.sheduleTime, COALESCE(mu.buyerType, 'Retail')
     `;
     db.collectionofficer.query(sql, [companyCenterId], (err, results) => {
@@ -63,6 +71,14 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
         AND COALESCE(mu.buyerType, 'Retail') = ?
         AND o.sheduleTime = ?
         AND dcen.id = ?
+        AND (
+          COALESCE(o.isPackage, 0) != 1
+          OR EXISTS (
+            SELECT 1 FROM orderpackage op 
+            WHERE (op.orderId = po.orderId OR op.orderId = po.id) 
+              AND op.packingStatus = 'Dispatch'
+          )
+        )
     `;
     db.collectionofficer.query(sql, [buyerType, sheduleTime, companyCenterId], (err, results) => {
       if (err) {
@@ -254,10 +270,11 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
             let orderPackages = [];
             let additionalItems = [];
 
-            // Query packages linked to processorders.id OR master orders.id
+            // Query packages linked to processorders.id OR master orders.id with packingStatus = 'Dispatch'
             const getPackagesSql = `
               SELECT id FROM orderpackage 
-              WHERE orderId = ? OR orderId = ?
+              WHERE (orderId = ? OR orderId = ?) 
+                AND packingStatus = 'Dispatch'
             `;
             orderPackages = await new Promise((res, rej) => {
               connection.query(getPackagesSql, [orderId, masterOrderId], (err, results) => {
