@@ -53,6 +53,16 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined room row_${rowId}`);
   });
 
+  socket.on("join_user", (userId) => {
+    socket.join(`user_${userId}`);
+    console.log(`Socket ${socket.id} joined room user_${userId}`);
+  });
+
+  socket.on("join_officer", (officerId) => {
+    socket.join(`user_${officerId}`);
+    console.log(`Socket ${socket.id} joined room user_${officerId}`);
+  });
+
   socket.on("disconnect", () => {
     console.log("🔌 Client disconnected from Socket.IO:", socket.id);
   });

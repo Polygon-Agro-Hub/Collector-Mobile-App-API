@@ -1248,3 +1248,73 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
     );
   });
 };
+
+exports.getHandoverReturnNotifications = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        hro.id,
+        hro.drvOrderId,
+        hro.handOverOfficerId,
+        hro.otpCode,
+        hro.isRead,
+        hro.expireTime,
+        hro.createdAt,
+        do.orderId AS processOrderId,
+        do.drvStatus,
+        po.invNo,
+        po.orderId AS mainOrderId
+      FROM handoverreturnorder hro
+      LEFT JOIN driverorders \`do\` ON hro.drvOrderId = \`do\`.id
+      LEFT JOIN processorders po ON \`do\`.orderId = po.id
+      WHERE hro.handOverOfficerId = ?
+      ORDER BY hro.createdAt DESC
+    `;
+
+    db.collectionofficer.query(sql, [officerId], (error, results) => {
+      if (error) {
+        console.error("Error fetching handover return notifications:", error);
+        return reject(error);
+      }
+      resolve(results || []);
+    });
+  });
+};
+
+exports.markNotificationAsRead = (notificationId, officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE handoverreturnorder
+      SET isRead = 1
+      WHERE id = ? AND handOverOfficerId = ?
+    `;
+
+    db.collectionofficer.query(sql, [notificationId, officerId], (error, results) => {
+      if (error) {
+        console.error("Error marking notification as read:", error);
+        return reject(error);
+      }
+      resolve(results);
+    });
+  });
+};
+
+exports.markAllNotificationsAsRead = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE handoverreturnorder
+      SET isRead = 1
+      WHERE handOverOfficerId = ?
+    `;
+
+    db.collectionofficer.query(sql, [officerId], (error, results) => {
+      if (error) {
+        console.error("Error marking all notifications as read:", error);
+        return reject(error);
+      }
+      resolve(results);
+    });
+  });
+};
+
+
