@@ -132,4 +132,53 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
+exports.markNotificationAsRead = async (req, res) => {
+  try {
+    const officerId = req.user.id;
+    const notificationId = req.params.id || req.body.id;
+
+    if (!notificationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Notification ID is required",
+      });
+    }
+
+    await targetDDao.markNotificationAsRead(notificationId, officerId);
+
+    res.status(200).json({
+      success: true,
+      message: "Notification marked as read successfully",
+    });
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark notification as read",
+      error: error.message,
+    });
+  }
+};
+
+exports.markAllNotificationsAsRead = async (req, res) => {
+  try {
+    const officerId = req.user.id;
+
+    await targetDDao.markAllNotificationsAsRead(officerId);
+
+    res.status(200).json({
+      success: true,
+      message: "All notifications marked as read successfully",
+    });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark all notifications as read",
+      error: error.message,
+    });
+  }
+};
+
+
 

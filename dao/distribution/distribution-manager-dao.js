@@ -1257,6 +1257,7 @@ exports.getHandoverReturnNotifications = (officerId) => {
         hro.drvOrderId,
         hro.handOverOfficerId,
         hro.otpCode,
+        hro.isRead,
         hro.expireTime,
         hro.createdAt,
         do.orderId AS processOrderId,
@@ -1279,4 +1280,41 @@ exports.getHandoverReturnNotifications = (officerId) => {
     });
   });
 };
+
+exports.markNotificationAsRead = (notificationId, officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE handoverreturnorder
+      SET isRead = 1
+      WHERE id = ? AND handOverOfficerId = ?
+    `;
+
+    db.collectionofficer.query(sql, [notificationId, officerId], (error, results) => {
+      if (error) {
+        console.error("Error marking notification as read:", error);
+        return reject(error);
+      }
+      resolve(results);
+    });
+  });
+};
+
+exports.markAllNotificationsAsRead = (officerId) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE handoverreturnorder
+      SET isRead = 1
+      WHERE handOverOfficerId = ?
+    `;
+
+    db.collectionofficer.query(sql, [officerId], (error, results) => {
+      if (error) {
+        console.error("Error marking all notifications as read:", error);
+        return reject(error);
+      }
+      resolve(results);
+    });
+  });
+};
+
 

@@ -34,4 +34,32 @@ router.get(
   dmanagerEp.getNotifications,
 );
 
+router.patch(
+  "/notifications/mark-all-read",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.markAllNotificationsAsRead,
+);
+
+router.post(
+  "/notifications/mark-all-read",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.markAllNotificationsAsRead,
+);
+
+router.patch(
+  "/notifications/:id/read",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.markNotificationAsRead,
+);
+
+router.post(
+  "/notifications/:id/read",
+  auth,
+  checkRole([ROLES.DISTRIBUTION_MANAGER]),
+  dmanagerEp.markNotificationAsRead,
+);
+
 module.exports = router;
