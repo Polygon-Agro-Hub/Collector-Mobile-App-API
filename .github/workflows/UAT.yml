@@ -1,4 +1,4 @@
-name: Deploy to Vercel GoviCare api for UAT
+name: Deploy to Vercel CoDi UAT api
 
 on:
   push:
