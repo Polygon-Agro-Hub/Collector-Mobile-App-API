@@ -530,8 +530,12 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
                             // No specific distribution center assigned — allow if same company
                             isAuthorized = !!(officer.companyId && load.dccCompanyId && officer.companyId === load.dccCompanyId);
                         } else {
-                            // Strict match: officer.distributedCenterId must equal load.disComCenId
-                            isAuthorized = (officer.distributedCenterId != null && officer.distributedCenterId == load.disComCenId);
+                            // Strict match: officer's distribution center must match load's destination center
+                            isAuthorized = (
+                                officer.distributedCenterId != null &&
+                                (officer.distributedCenterId == load.disComCenId ||
+                                 officer.distributedCenterId == load.dccCenterId)
+                            );
                         }
 
                         if (!isAuthorized) {

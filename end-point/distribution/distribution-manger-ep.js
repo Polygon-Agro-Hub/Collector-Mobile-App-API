@@ -4,10 +4,7 @@ const Joi = require("joi");
 const distributionofficerDao = require("../../dao/distribution/distribution-manager-dao");
 const collectionofficerDao = require("../../dao/common/manager-dao");
 const asyncHandler = require("express-async-handler");
-
-
-
-
+const pushNotificationService = require("../../services/pushNotificationService");
 exports.getProfile = async (req, res) => {
   try {
     const officerId = req.user.id;
@@ -180,5 +177,60 @@ exports.markAllNotificationsAsRead = async (req, res) => {
   }
 };
 
+exports.savePushToken = async (req, res) => {
+  try {
+    const officerId = req.user.id;
+    const { pushToken, tokenType, deviceType } = req.body;
 
+    if (!pushToken) {
+      return res.status(400).json({
+        success: false,
+        message: "pushToken is required",
+      });
+    }
 
+    await pushNotificationService.saveOfficerPushToken(
+      officerId,
+      pushToken,
+      tokenType || "fcm",
+      deviceType || "android"
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Push token registered successfully",
+    });
+  } catch (error) {
+    console.error("Error saving push token:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save push token",
+      error: error.message,
+    });
+  }
+};
+
+exports.sendTestPush = async (req, res) => {
+  try {
+    const officerId = req.user.id;
+    const { title, body, data } = req.body;
+
+    const result = await pushNotificationService.sendPushToOfficer(officerId, {
+      title: title || "Return Order OTP",
+      body: body || "Please use OTP to receive return order at the centre.",
+      data: data || { test: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      result,
+    });
+  } catch (error) {
+    console.error("Error sending test push:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send test push",
+      error: error.message,
+    });
+  }
+};

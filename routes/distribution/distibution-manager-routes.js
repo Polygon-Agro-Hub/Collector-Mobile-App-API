@@ -62,4 +62,16 @@ router.post(
   dmanagerEp.markNotificationAsRead,
 );
 
+router.post(
+  "/save-push-token",
+  auth,
+  dmanagerEp.savePushToken,
+);
+
+router.post(
+  "/test-push",
+  auth,
+  dmanagerEp.sendTestPush,
+);
+
 module.exports = router;
