@@ -1,8 +1,7 @@
-const path = require("path");
-const fs = require("fs");
 const { collectionofficer } = require("../startup/database");
 const { getApps, initializeApp, cert } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
+const firebaseConfig = require("../constants/firebase-config");
 
 let firebaseApp = null;
 let messaging = null;
@@ -12,39 +11,16 @@ function initFirebase() {
   if (firebaseInitialized) return messaging;
 
   try {
-    let serviceAccount = null;
-
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      } catch (_) {
-        try {
-          serviceAccount = JSON.parse(
-            Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, "base64").toString("utf8")
-          );
-        } catch (parseErr) {
-          console.error("❌ [PushService] Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable:", parseErr.message);
-        }
-      }
-    }
-
-    if (!serviceAccount) {
-      const serviceAccountPath = path.join(__dirname, "../config/firebase-service-account.json");
-      if (fs.existsSync(serviceAccountPath)) {
-        serviceAccount = require(serviceAccountPath);
-      }
-    }
-
-    if (!serviceAccount) {
-      console.warn("⚠️ [PushService] No Firebase credentials found (checked FIREBASE_SERVICE_ACCOUNT env and config/firebase-service-account.json)");
+    if (!firebaseConfig || !firebaseConfig.project_id) {
+      console.warn("⚠️ [PushService] Firebase configuration not found in constants/firebase-config");
       return null;
     }
 
     if (getApps().length === 0) {
       firebaseApp = initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert(firebaseConfig),
       });
-      console.log("🔥 [PushService] Firebase Admin SDK initialized successfully with project:", serviceAccount.project_id);
+      console.log("🔥 [PushService] Firebase Admin SDK initialized successfully with project:", firebaseConfig.project_id);
     } else {
       firebaseApp = getApps()[0];
     }
