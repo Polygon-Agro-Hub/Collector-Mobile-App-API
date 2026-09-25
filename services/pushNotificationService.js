@@ -128,6 +128,8 @@ async function sendPushToOfficer(officerId, { title, body, data = {} }) {
                 sound: "default",
                 priority: "high",
                 channelId: "dcm-otp-notifications",
+                color: "#980775",
+                _displayInForeground: true,
                 data: stringifiedData,
               }),
             });
@@ -156,6 +158,7 @@ async function sendPushToOfficer(officerId, { title, body, data = {} }) {
                 notification: {
                   channelId: "dcm-otp-notifications",
                   sound: "default",
+                  icon: "notification_icon",
                   color: "#980775",
                   priority: "max",
                   defaultVibrateTimings: true,

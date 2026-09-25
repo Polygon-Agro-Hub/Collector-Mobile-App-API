@@ -162,6 +162,12 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     co.lastNameEnglish AS replyByLastNameEnglish,
                     co.lastNameSinhala AS replyByLastNameSinhala,
                     co.lastNameTamil AS replyByLastNameTamil,
+                    complainant.firstNameEnglish AS officerFirstNameEnglish,
+                    complainant.firstNameSinhala AS officerFirstNameSinhala,
+                    complainant.firstNameTamil AS officerFirstNameTamil,
+                    complainant.lastNameEnglish AS officerLastNameEnglish,
+                    complainant.lastNameSinhala AS officerLastNameSinhala,
+                    complainant.lastNameTamil AS officerLastNameTamil,
                     comp.companyNameEnglish,
                     comp.companyNameSinhala,
                     comp.companyNameTamil,
@@ -169,6 +175,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     cc.regCode AS replierCenterRegCode
                 FROM officercomplains oc
                 LEFT JOIN collectionofficer co ON oc.replyBy = co.id
+                LEFT JOIN collectionofficer complainant ON oc.officerId = complainant.id
                 LEFT JOIN company comp ON co.companyId = comp.id
                 LEFT JOIN collectioncenter cc ON co.centerId = cc.id
                 WHERE oc.officerId = ?
@@ -196,6 +203,12 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     co.lastNameEnglish AS replyByLastNameEnglish,
                     co.lastNameSinhala AS replyByLastNameSinhala,
                     co.lastNameTamil AS replyByLastNameTamil,
+                    complainant.firstNameEnglish AS officerFirstNameEnglish,
+                    complainant.firstNameSinhala AS officerFirstNameSinhala,
+                    complainant.firstNameTamil AS officerFirstNameTamil,
+                    complainant.lastNameEnglish AS officerLastNameEnglish,
+                    complainant.lastNameSinhala AS officerLastNameSinhala,
+                    complainant.lastNameTamil AS officerLastNameTamil,
                     comp.companyNameEnglish,
                     comp.companyNameSinhala,
                     comp.companyNameTamil,
@@ -203,6 +216,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     cc.regCode AS replierCenterRegCode
                 FROM officercomplains oc
                 LEFT JOIN collectionofficer co ON oc.replyBy = co.id
+                LEFT JOIN collectionofficer complainant ON oc.officerId = complainant.id
                 LEFT JOIN company comp ON co.companyId = comp.id
                 LEFT JOIN collectioncenter cc ON co.centerId = cc.id
                 WHERE oc.officerId = ?
@@ -227,6 +241,12 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     co.lastNameEnglish AS replyByLastNameEnglish,
                     co.lastNameSinhala AS replyByLastNameSinhala,
                     co.lastNameTamil AS replyByLastNameTamil,
+                    complainant.firstNameEnglish AS officerFirstNameEnglish,
+                    complainant.firstNameSinhala AS officerFirstNameSinhala,
+                    complainant.firstNameTamil AS officerFirstNameTamil,
+                    complainant.lastNameEnglish AS officerLastNameEnglish,
+                    complainant.lastNameSinhala AS officerLastNameSinhala,
+                    complainant.lastNameTamil AS officerLastNameTamil,
                     comp.companyNameEnglish,
                     comp.companyNameSinhala,
                     comp.companyNameTamil,
@@ -234,6 +254,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     dc_center.regCode AS replierCenterRegCode
                 FROM distributedcomplains dc
                 LEFT JOIN collectionofficer co ON dc.replyBy = co.id
+                LEFT JOIN collectionofficer complainant ON dc.officerId = complainant.id
                 LEFT JOIN company comp ON co.companyId = comp.id
                 LEFT JOIN distributedcenter dc_center ON co.distributedCenterId = dc_center.id
                 WHERE dc.officerId = ?
@@ -258,6 +279,12 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     co.lastNameEnglish AS replyByLastNameEnglish,
                     co.lastNameSinhala AS replyByLastNameSinhala,
                     co.lastNameTamil AS replyByLastNameTamil,
+                    complainant.firstNameEnglish AS officerFirstNameEnglish,
+                    complainant.firstNameSinhala AS officerFirstNameSinhala,
+                    complainant.firstNameTamil AS officerFirstNameTamil,
+                    complainant.lastNameEnglish AS officerLastNameEnglish,
+                    complainant.lastNameSinhala AS officerLastNameSinhala,
+                    complainant.lastNameTamil AS officerLastNameTamil,
                     comp.companyNameEnglish,
                     comp.companyNameSinhala,
                     comp.companyNameTamil,
@@ -265,6 +292,7 @@ exports.getAllComplaintsByUserId = async (userId, officerRole) => {
                     dc_center.regCode AS replierCenterRegCode
                 FROM distributedcomplains dc
                 LEFT JOIN collectionofficer co ON dc.replyBy = co.id
+                LEFT JOIN collectionofficer complainant ON dc.officerId = complainant.id
                 LEFT JOIN company comp ON co.companyId = comp.id
                 LEFT JOIN distributedcenter dc_center ON co.distributedCenterId = dc_center.id
                 WHERE dc.officerId = ?
