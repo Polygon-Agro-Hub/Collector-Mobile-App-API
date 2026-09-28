@@ -63,6 +63,22 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined room user_${officerId}`);
   });
 
+  socket.on("update_officer_status", (data) => {
+    if (data?.officerId || data?.userId) {
+      const targetId = data.officerId || data.userId;
+      io.to(`user_${targetId}`).emit("officer_status_changed", data);
+      console.log(`Officer status changed emitted to user_${targetId}:`, data);
+    }
+  });
+
+  socket.on("force_logout_user", (data) => {
+    if (data?.userId || data?.officerId) {
+      const targetId = data.userId || data.officerId;
+      io.to(`user_${targetId}`).emit("force_logout", data);
+      console.log(`Force logout emitted to user_${targetId}:`, data);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("🔌 Client disconnected from Socket.IO:", socket.id);
   });

@@ -1383,6 +1383,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           JOIN distributedtargetitems dti ON dt.id = dti.targetId
           WHERE dti.orderId = ? 
             AND DATE(tp.createdAt) = CURDATE()
+            AND tp.isFinished = 1
+            AND tp.officerId IS NOT NULL
             AND (
               (${nextStep} = ${qcPIndex} AND pp.pType = 'QC') OR
               (pp.pType = 'NOR' AND pp.pIndex = ${nextStep})
@@ -1397,7 +1399,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
 
           console.log("=== OFFICER NEXT ROWS ===", offRows);
 
-          if (!offRows || offRows.length === 0) {
+          if (!offRows || offRows.length === 0 || !offRows[0].officerId) {
             return resolve({
               success: false,
               code: "NO_OFFICER_ASSIGNED",
