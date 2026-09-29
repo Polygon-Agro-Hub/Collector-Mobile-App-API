@@ -179,8 +179,8 @@ exports.markAllNotificationsAsRead = async (req, res) => {
 
 exports.savePushToken = async (req, res) => {
   try {
-    const officerId = req.user.id;
-    const { pushToken, tokenType, deviceType } = req.body;
+    const officerId = req.user?.id || req.user?.officerId;
+    const { pushToken, tokenType, deviceType, marketplaceUserId } = req.body;
 
     if (!pushToken) {
       return res.status(400).json({
@@ -189,12 +189,26 @@ exports.savePushToken = async (req, res) => {
       });
     }
 
-    await pushNotificationService.saveOfficerPushToken(
-      officerId,
-      pushToken,
-      tokenType || "fcm",
-      deviceType || "android"
-    );
+    // Determine target user type (marketplace user vs collection officer)
+    const effectiveMktUserId = marketplaceUserId || req.user?.marketplaceUserId;
+    if (effectiveMktUserId) {
+      await pushNotificationService.saveMarketplaceUserPushToken(
+        effectiveMktUserId,
+        pushToken,
+        deviceType
+      );
+    } else if (officerId) {
+      await pushNotificationService.saveOfficerPushToken(
+        officerId,
+        pushToken,
+        deviceType
+      );
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "officerId or marketplaceUserId is required",
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -212,14 +226,23 @@ exports.savePushToken = async (req, res) => {
 
 exports.sendTestPush = async (req, res) => {
   try {
-    const officerId = req.user.id;
-    const { title, body, data } = req.body;
+    const officerId = req.user?.id || req.user?.officerId;
+    const { title, body, data, marketplaceUserId } = req.body;
 
-    const result = await pushNotificationService.sendPushToOfficer(officerId, {
-      title: title || "Return Order OTP",
-      body: body || "Please use OTP to receive return order at the centre.",
-      data: data || { test: true },
-    });
+    let result;
+    if (marketplaceUserId) {
+      result = await pushNotificationService.sendPushToMarketplaceUser(marketplaceUserId, {
+        title: title || "Test Notification",
+        body: body || "This is a test notification for marketplace user.",
+        data: data || { test: true },
+      });
+    } else {
+      result = await pushNotificationService.sendPushToOfficer(officerId, {
+        title: title || "Return Order OTP",
+        body: body || "Please use OTP to receive return order at the centre.",
+        data: data || { test: true },
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -273,6 +296,19 @@ exports.notifyReturnOtp = async (req, res) => {
         io.emit("new_return_otp", payload);
         io.emit("new_notification", payload);
       }
+    }
+
+    if (officerId) {
+      pushNotificationService.sendPushToOfficer(Number(officerId), {
+        title: payload.title,
+        body: payload.message,
+        data: {
+          type: "return_order_otp",
+          otpCode: String(otpCode || ""),
+          invNo: invNo || "",
+          id: String(id || ""),
+        },
+      }).catch((err) => console.error("Error sending push in notifyReturnOtp:", err));
     }
 
     return res.status(200).json({

@@ -250,7 +250,8 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
     orderpackageId ? Number(orderpackageId) : null,
     currentPIndex !== undefined ? Number(currentPIndex) : null,
     officerId,
-    trackingId ? Number(trackingId) : null
+    trackingId ? Number(trackingId) : null,
+    rowId ? Number(rowId) : null
   );
 
   if (!result || !result.success || result.affectedRows === 0) {
