@@ -178,6 +178,9 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
   );
 
   if (result && result.success === false) {
+    if (result.isOccupied && !result.code) {
+      result.code = "STATION_OCCUPIED";
+    }
     return res.status(200).json(result);
   }
 
@@ -247,7 +250,8 @@ exports.advancePositionIndex = asyncHandler(async (req, res) => {
     orderpackageId ? Number(orderpackageId) : null,
     currentPIndex !== undefined ? Number(currentPIndex) : null,
     officerId,
-    trackingId ? Number(trackingId) : null
+    trackingId ? Number(trackingId) : null,
+    rowId ? Number(rowId) : null
   );
 
   if (!result || !result.success || result.affectedRows === 0) {

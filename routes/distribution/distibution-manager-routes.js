@@ -74,4 +74,9 @@ router.post(
   dmanagerEp.sendTestPush,
 );
 
+router.post(
+  "/notify-return-otp",
+  dmanagerEp.notifyReturnOtp,
+);
+
 module.exports = router;
