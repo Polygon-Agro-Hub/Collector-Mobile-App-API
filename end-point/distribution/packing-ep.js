@@ -178,6 +178,9 @@ exports.markOrderAsOpened = asyncHandler(async (req, res) => {
   );
 
   if (result && result.success === false) {
+    if (result.isOccupied && !result.code) {
+      result.code = "STATION_OCCUPIED";
+    }
     return res.status(200).json(result);
   }
 
