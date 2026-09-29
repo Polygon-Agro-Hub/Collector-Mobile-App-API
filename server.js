@@ -3,7 +3,6 @@ const cors = require("cors");
 const cron = require("node-cron");
 const bodyParser = require("body-parser");
 const http = require("http");
-const { Server } = require("socket.io");
 require("dotenv").config();
 
 // Database connections
@@ -33,58 +32,17 @@ const packingRoute = require("./routes/distribution/packing-route");
 const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
 const webRoute = require("./routes/web/web-route");
 const farmerEp = require("./end-point/collection/farmer-ep");
+const userAuthEp = require("./end-point/common/user-auth-ep");
+const dmanagerEp = require("./end-point/distribution/distribution-manger-ep");
+
+const { initSocket } = require("./socket/socket");
 
 // Initialize Express app and HTTP server with Socket.IO
 const mainApp = express();
 const server = http.createServer(mainApp);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
 
-// Socket.IO connection handling
-io.on("connection", (socket) => {
-  console.log("⚡ Client connected to Socket.IO:", socket.id);
-
-  socket.on("join_row", (rowId) => {
-    socket.join(`row_${rowId}`);
-    console.log(`Socket ${socket.id} joined room row_${rowId}`);
-  });
-
-  socket.on("join_user", (userId) => {
-    socket.join(`user_${userId}`);
-    console.log(`Socket ${socket.id} joined room user_${userId}`);
-  });
-
-  socket.on("join_officer", (officerId) => {
-    socket.join(`user_${officerId}`);
-    console.log(`Socket ${socket.id} joined room user_${officerId}`);
-  });
-
-  socket.on("update_officer_status", (data) => {
-    if (data?.officerId || data?.userId) {
-      const targetId = data.officerId || data.userId;
-      io.to(`user_${targetId}`).emit("officer_status_changed", data);
-      console.log(`Officer status changed emitted to user_${targetId}:`, data);
-    }
-  });
-
-  socket.on("force_logout_user", (data) => {
-    if (data?.userId || data?.officerId) {
-      const targetId = data.userId || data.officerId;
-      io.to(`user_${targetId}`).emit("force_logout", data);
-      console.log(`Force logout emitted to user_${targetId}:`, data);
-    }
-  });
-
-  socket.on("disconnect", () => {
-    console.log("🔌 Client disconnected from Socket.IO:", socket.id);
-  });
-});
-
-// Attach io instance to express app
+// Initialize Socket.IO (matching Govi Transport pattern)
+const io = initSocket(server);
 mainApp.set("io", io);
 
 // CORS and body parser configuration
@@ -133,7 +91,13 @@ const checkConnections = async () => {
 };
 
 // Start the connection checks
-checkConnections();
+checkConnections().then(() => {
+  // Pre-warm rejected officers cache (matching Govi Transport structure)
+  const officerStatusCache = require("./services/officer-status-cache");
+  officerStatusCache.triggerGetRejectOfficers().catch((err) => {
+    console.warn("Could not pre-warm rejected officers cache:", err.message);
+  });
+});
 
 // Base path configuration
 const basePathMain = "/agro-api/collection-api";
@@ -157,7 +121,8 @@ mainApp.use(`${basePathMain}/api/packing`, packingRoute);
 mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
 mainApp.use(`${basePathMain}/api/web`, webRoute);
 mainApp.use(`${basePathMain}/api/transport`, transportRoute);
-mainApp.use(`/api/web`, webRoute);
+mainApp.post(`${basePathMain}/api/auth/notify-status-changed`, userAuthEp.notifyStatusChanged);
+mainApp.post(`${basePathMain}/api/distribution-manager/notify-return-otp`, dmanagerEp.notifyReturnOtp);
 
 // Cron job for SMS sending
 cron.schedule(

@@ -25,4 +25,6 @@ router.get("/get-claim-status", authenticate, userAuthEp.GetClaimStatus);
 
 router.get("/password-update", authenticate, userAuthEp.getPassword);
 
+router.post("/notify-status-changed", userAuthEp.notifyStatusChanged);
+
 module.exports = router;

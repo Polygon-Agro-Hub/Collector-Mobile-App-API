@@ -351,3 +351,109 @@ exports.getPassword = async (req, res) => {
     });
   }
 };
+
+exports.notifyStatusChanged = async (req, res) => {
+  try {
+    const { userId, empId, status, message } = req.body;
+
+    if (!userId && !empId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId or empId is required in request body.",
+      });
+    }
+
+    const officerStatusCache = require("../../services/officer-status-cache");
+    let resolvedUserId = userId ? Number(userId) : null;
+    let resolvedEmpId = empId || null;
+
+    let targetStatus = status || null;
+
+    // Auto-resolve missing empId, userId, and status from database
+    if (resolvedUserId) {
+      try {
+        const db = require("../../startup/database");
+        const [rows] = await db.collectionofficer.promise().query(
+          "SELECT empId, status FROM collectionofficer WHERE id = ?",
+          [resolvedUserId]
+        );
+        if (rows.length > 0) {
+          if (!resolvedEmpId) resolvedEmpId = rows[0].empId;
+          if (!targetStatus) targetStatus = rows[0].status;
+        }
+      } catch (_) {}
+    } else if (resolvedEmpId) {
+      try {
+        const db = require("../../startup/database");
+        const [rows] = await db.collectionofficer.promise().query(
+          "SELECT id, status FROM collectionofficer WHERE empId = ?",
+          [resolvedEmpId]
+        );
+        if (rows.length > 0) {
+          if (!resolvedUserId) resolvedUserId = rows[0].id;
+          if (!targetStatus) targetStatus = rows[0].status;
+        }
+      } catch (_) {}
+    }
+
+    targetStatus = targetStatus || "Rejected";
+
+    // Update in-memory cache without expiration (stdTTL: 0)
+    if (resolvedUserId) {
+      officerStatusCache.setOfficerStatus(resolvedUserId, targetStatus);
+    }
+
+    const payload = {
+      userId: resolvedUserId,
+      empId: resolvedEmpId,
+      status: targetStatus,
+      accountStatus: targetStatus,
+      message:
+        message ||
+        (targetStatus === "Rejected"
+          ? "Your account has been rejected by administration."
+          : `Your account status has changed to ${targetStatus}.`),
+      timestamp: new Date().toISOString(),
+    };
+
+    const io = req.app.get("io");
+    if (io) {
+      const rooms = new Set();
+      if (resolvedUserId) rooms.add(`user_${resolvedUserId}`);
+      if (resolvedEmpId) rooms.add(`user_${resolvedEmpId}`);
+
+      rooms.forEach((room) => {
+        io.to(room).emit("officer_status_changed", payload);
+        io.to(room).emit("account_status_changed", payload);
+        io.to(room).emit("user_status_changed", payload);
+        console.log(`[Socket] Emitted status change to ${room}:`, payload);
+      });
+
+      // If rejected, forcibly disconnect socket connection from server side
+      if (targetStatus === "Rejected") {
+        setTimeout(() => {
+          rooms.forEach((room) => {
+            io.in(room).disconnectSockets(true);
+            console.log(`[Socket] Forcibly disconnected sockets in ${room}`);
+          });
+        }, 1200); // 1.2-second delay allows the client to receive the rejection event first
+      }
+    } else {
+      console.warn("[Socket] 'io' instance not found on req.app");
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Status change notification dispatched, cache updated, and socket managed successfully.",
+      data: payload,
+    });
+  } catch (error) {
+    console.error("Error in notifyStatusChanged:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while notifying status change.",
+      error: error.message,
+    });
+  }
+};
+
