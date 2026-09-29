@@ -234,3 +234,59 @@ exports.sendTestPush = async (req, res) => {
     });
   }
 };
+
+/**
+ * Real-time Return OTP notification webhook called by Transporter Mobile API.
+ * Emits instant Socket.IO push to the target DCM's room.
+ */
+exports.notifyReturnOtp = async (req, res) => {
+  try {
+    const { id, officerId, dcmEmpId, invNo, otpCode, createdAt } = req.body;
+
+    const payload = {
+      id: Number(id),
+      invNo: invNo || "",
+      invoiceNo: invNo || "",
+      otpCode: String(otpCode || ""),
+      otp: String(otpCode || ""),
+      officerId: officerId ? Number(officerId) : undefined,
+      dcmEmpId: dcmEmpId || "",
+      title: "Handover Return Order OTP",
+      message: `Please use the following OTP code, "${otpCode}", to receive the order from the driver at the centre.`,
+      createdAt: createdAt || new Date().toISOString(),
+      isRead: 0,
+    };
+
+    const io = req.app.get("io");
+    if (io) {
+      const rooms = [];
+      if (officerId) rooms.push(`user_${officerId}`);
+      if (dcmEmpId) rooms.push(`user_${dcmEmpId}`);
+
+      if (rooms.length > 0) {
+        io.to(rooms).emit("new_return_otp", payload);
+        io.to(rooms).emit("handover_return_otp", payload);
+        io.to(rooms).emit("new_notification", payload);
+        io.to(rooms).emit("newNotification", payload);
+        console.log(`📢 [Socket] Emitted real-time return OTP notification to ${rooms.join(", ")}:`, payload);
+      } else {
+        io.emit("new_return_otp", payload);
+        io.emit("new_notification", payload);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Return OTP socket notification dispatched successfully.",
+      data: payload,
+    });
+  } catch (error) {
+    console.error("Error in notifyReturnOtp:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to dispatch return OTP notification",
+      error: error.message,
+    });
+  }
+};
+

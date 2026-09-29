@@ -80,7 +80,9 @@ const validatePosition1Busy = async (
   return {
     success: false,
     isOccupied: true,
-    code: PACKING_ERROR_CODES.POSITION_1_BUSY,
+    code: PACKING_ERROR_CODES.STATION_OCCUPIED,
+    targetPosition: 1,
+    targetStationName: "Packing Position 1",
     occupiedInvoice: occupiedInv,
     message: `Position 1 is currently busy with Invoice ${occupiedInv}. Please wait until Position 1 clears before passing the next box.`
   };
@@ -128,14 +130,16 @@ const validateNextPositionBusy = async (dbInstance, orderId, nextStep, targetSta
 
   if (activeRows && activeRows.length > 0) {
     const occupiedInv = activeRows[0].invNo;
+    const isQc = targetStationName && targetStationName.toLowerCase().includes("qc");
+    const stationLabel = isQc ? "QC Station" : (targetStationName || `Position ${nextStep}`);
     return {
       success: false,
       isOccupied: true,
       code: PACKING_ERROR_CODES.STATION_OCCUPIED,
       occupiedInvoice: occupiedInv,
       targetPosition: nextStep,
-      targetStationName: targetStationName,
-      message: `Position ${nextStep} is currently busy with Invoice ${occupiedInv}. Please wait until Position ${nextStep} clears before passing the next box.`
+      targetStationName: stationLabel,
+      message: `${stationLabel} is currently busy with Invoice ${occupiedInv}. Please wait until ${stationLabel} clears before passing the next box.`
     };
   }
 
