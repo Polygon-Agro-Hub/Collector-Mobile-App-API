@@ -544,7 +544,10 @@ exports.getCollectionOfficers = async (managerId) => {
       status,
       image
     FROM collectionofficer
-    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
+    WHERE (
+      jobRole IN ('Collection Officer', 'Driver', 'Heavy Weight Driver', 'Light Weight Driver', 'Distribution Officer') 
+      OR jobRole LIKE '%Driver%'
+    )
       AND irmId = ?
       AND status = 'Approved'
   `;
@@ -572,7 +575,10 @@ exports.getCollectionOfficersReciever = async (
     FROM collectionofficer co
     INNER JOIN officertarget ot ON co.id = ot.officerId
     INNER JOIN dailytarget dt ON ot.dailyTargetId = dt.id
-    WHERE co.jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') 
+    WHERE (
+      co.jobRole IN ('Collection Officer', 'Driver', 'Heavy Weight Driver', 'Light Weight Driver', 'Distribution Officer') 
+      OR co.jobRole LIKE '%Driver%'
+    )
       AND co.irmId = ?
       AND co.status = 'Approved'
       AND dt.companyCenterId = ?
@@ -602,7 +608,10 @@ exports.getCollectionOfficersList = async (managerId) => {
       status,
       image
     FROM collectionofficer
-    WHERE jobRole IN ('Collection Officer', 'Driver', 'Distribution Officer') AND irmId = ? 
+    WHERE (
+      jobRole IN ('Collection Officer', 'Driver', 'Heavy Weight Driver', 'Light Weight Driver', 'Distribution Officer') 
+      OR jobRole LIKE '%Driver%'
+    ) AND irmId = ? 
   `;
   return db.collectionofficer.promise().query(sql, [managerId]);
 };
