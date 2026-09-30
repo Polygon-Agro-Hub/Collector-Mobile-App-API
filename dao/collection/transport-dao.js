@@ -67,6 +67,7 @@ exports.getSentProductsToday = (officerId) => {
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 destination: row.destination || "N/A",
+                createdAt: row.createdAt,
                 time: formatTime(row.createdAt),
                 conformDriverId: row.conformDriverId ? Number(row.conformDriverId) : null,
             }));
@@ -364,9 +365,20 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
 
 function formatTime(dateValue) {
     if (!dateValue) return "";
-    const date = new Date(dateValue);
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
+    let date;
+    if (typeof dateValue === "string" && !dateValue.endsWith("Z") && !dateValue.includes("+")) {
+        date = new Date(dateValue.replace(" ", "T") + "Z");
+    } else {
+        date = new Date(dateValue);
+    }
+    if (isNaN(date.getTime())) {
+        date = new Date(dateValue);
+    }
+    if (isNaN(date.getTime())) return "";
+    // Add 5:30 hrs (330 minutes) to transportload's created time to match Sri Lanka local time (UTC+5:30)
+    const slDate = new Date(date.getTime() + (5 * 60 + 30) * 60 * 1000);
+    let hours = slDate.getUTCHours();
+    const minutes = slDate.getUTCMinutes();
     const ampm = hours >= 12 ? "PM" : "AM";
     hours = hours % 12 || 12;
     const mm = minutes < 10 ? `0${minutes}` : minutes;
