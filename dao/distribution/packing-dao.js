@@ -1271,7 +1271,7 @@ exports.rollbackOrderOpened = (orderId, orderpackageId = null, isMainContainer =
  * @param {number|null} orderpackageId 
  * @returns {Promise<Object>}
  */
-exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = null, officerId = null, trackingId = null) => {
+exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = null, officerId = null, trackingId = null, rowId = null) => {
   return new Promise((resolve, reject) => {
     const nextStep = currentPIndex ? Number(currentPIndex) + 1 : null;
     const isMainContainer = (orderpackageId === -1 || orderpackageId === "-1");
@@ -1379,20 +1379,23 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           SELECT tp.id, tp.officerId
           FROM targetposition tp
           JOIN packingpositions pp ON tp.positionId = pp.id
-          JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
-          JOIN distributedtargetitems dti ON dt.id = dti.targetId
-          WHERE dti.orderId = ? 
-            AND DATE(tp.createdAt) = CURDATE()
+          LEFT JOIN distributedtarget dt ON (tp.targetId = dt.id OR pp.rowId = dt.rowId)
+          LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
+          WHERE (
+            (? IS NOT NULL AND pp.rowId = ?)
+            OR (? IS NOT NULL AND dti.orderId = ?)
+          )
             AND tp.isFinished = 1
             AND tp.officerId IS NOT NULL
             AND (
               (${nextStep} = ${qcPIndex} AND pp.pType = 'QC') OR
               (pp.pType = 'NOR' AND pp.pIndex = ${nextStep})
             )
+          ORDER BY tp.id DESC
           LIMIT 1
         `;
 
-        db.collectionofficer.query(checkOfficerNextSql, [orderId], async (offErr, offRows) => {
+        db.collectionofficer.query(checkOfficerNextSql, [rowId, rowId, orderId, orderId], async (offErr, offRows) => {
           if (offErr) {
             console.error("Error checking officer assignment for next station:", offErr);
           }
