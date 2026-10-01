@@ -244,6 +244,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           uc.grade,
                           uc.crateCount,
                           uc.crateIndex,
+                          uc.crateWeight,
                           uc.qty
                       FROM loadeditems li
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
@@ -269,6 +270,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           lc.grade,
                           lc.crateCount,
                           lc.crateIndex,
+                          lc.crateWeight,
                           lc.qty
                       FROM loadeditems li
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
@@ -316,6 +318,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                         if (row.crateId) {
                             const crateCount = parseInt(row.crateCount, 10) || 0;
                             const weightKg = parseFloat(row.qty) || 0;
+                            const crateWeight = parseFloat(row.crateWeight) || 0;
                             const gradeLetter = (row.grade || "A").trim().toUpperCase();
 
                             itemObj.totalCrates += crateCount;
@@ -327,6 +330,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 set: parseInt(row.crateIndex, 10) || 1,
                                 crates: crateCount,
                                 weightKg: weightKg,
+                                crateWeight: crateWeight,
                             });
                         }
                     });
@@ -680,10 +684,11 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 const crateCount = parseInt(g.crateCount ?? g.crates, 10) || 0;
                                 const crateIndex = parseInt(g.crateIndex ?? g.set ?? g.setIndex, 10) || 1;
                                 const qty = parseFloat(g.qty ?? g.weightKg ?? g.weight) || 0;
+                                const crateWeight = parseFloat(g.crateWeight || g.containerTypeWeight) || 0;
 
                                 await connection.promise().query(
-                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, qty) VALUES (?, ?, ?, ?, ?)",
-                                    [targetLoadId, validGrade, crateCount, crateIndex, qty]
+                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES (?, ?, ?, ?, ?, ?)",
+                                    [targetLoadId, validGrade, crateCount, crateIndex, crateWeight, qty]
                                 );
                             }
                         }
@@ -1100,16 +1105,18 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                 const crateCount = parseInt(gs.crates, 10) || 0;
                                 const crateIndex = parseInt(gs.set, 10) || 1;
                                 const qty = parseFloat(gs.weightKg ?? gs.weight) || 0;
+                                const crateWeight = parseFloat(gs.crateWeight || gs.containerTypeWeight) || 0;
 
                                 const insertCrateQuery = `
-                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, qty)
-                                  VALUES (?, ?, ?, ?, ?)
+                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
+                                  VALUES (?, ?, ?, ?, ?, ?)
                                 `;
                                 await connection.promise().query(insertCrateQuery, [
                                     loadId,
                                     grade,
                                     crateCount,
                                     crateIndex,
+                                    crateWeight,
                                     qty,
                                 ]);
                             }
@@ -1136,3 +1143,26 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
         });
     });
 };
+
+exports.getContainerTypes = () => {
+    return new Promise((resolve, reject) => {
+        const sql = `
+          SELECT id, labelName, weight, createdAt
+          FROM creates
+          ORDER BY id ASC
+        `;
+        collectionofficer.query(sql, (err, results) => {
+            if (err) {
+                console.error("Database error fetching creates table:", err);
+                return reject(err);
+            }
+            const formatted = (results || []).map((row) => ({
+                id: row.id,
+                labelName: row.labelName || "",
+                weight: parseFloat(row.weight || 0),
+            }));
+            resolve(formatted);
+        });
+    });
+};
+
