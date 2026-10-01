@@ -31,6 +31,7 @@ const emailRoutes = require("./routes/common/email-routes");
 const packingRoute = require("./routes/distribution/packing-route");
 const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
 const webRoute = require("./routes/web/web-route");
+const appVersionRoutes = require("./routes/common/app-version.routes");
 const farmerEp = require("./end-point/collection/farmer-ep");
 const userAuthEp = require("./end-point/common/user-auth-ep");
 const dmanagerEp = require("./end-point/distribution/distribution-manger-ep");
@@ -121,6 +122,8 @@ mainApp.use(`${basePathMain}/api/packing`, packingRoute);
 mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
 mainApp.use(`${basePathMain}/api/web`, webRoute);
 mainApp.use(`${basePathMain}/api/transport`, transportRoute);
+mainApp.use(`${basePathMain}/api/app-version`, appVersionRoutes);
+mainApp.use("/api/app-version", appVersionRoutes);
 mainApp.post(`${basePathMain}/api/auth/notify-status-changed`, userAuthEp.notifyStatusChanged);
 mainApp.post(`${basePathMain}/api/distribution-manager/notify-return-otp`, dmanagerEp.notifyReturnOtp);
 
