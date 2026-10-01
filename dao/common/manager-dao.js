@@ -584,10 +584,10 @@ exports.getCollectionOfficersReciever = async (
       AND dt.companyCenterId = ?
       AND dt.varietyId = ?
       AND dt.grade = ?
-      AND DATE(dt.date) = CURDATE()
+      AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))
       AND ot.target IS NOT NULL
       AND ot.target > 0
-      AND ot.target > ot.complete
+      AND ot.target > COALESCE(ot.complete, 0)
   `;
   return db.collectionofficer
     .promise()
