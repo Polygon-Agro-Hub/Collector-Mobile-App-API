@@ -383,3 +383,19 @@ exports.saveTransportLoad = async (req, res) => {
         });
     }
 };
+
+exports.getContainerTypes = async (req, res) => {
+    try {
+        const containers = await TransportDAO.getContainerTypes();
+        res.status(200).json({
+            success: true,
+            data: containers,
+        });
+    } catch (error) {
+        console.error("Error fetching container types:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to fetch container types",
+        });
+    }
+};

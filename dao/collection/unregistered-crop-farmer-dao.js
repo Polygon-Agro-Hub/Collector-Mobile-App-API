@@ -331,7 +331,6 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
         console.error("Error fetching officer crop details:", error);
         return reject(error);
       }
-      console.log("Crop details fetched successfully:", results);
       resolve(results);
     });
   });
