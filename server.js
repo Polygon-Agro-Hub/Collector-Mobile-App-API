@@ -18,7 +18,7 @@ const farmerRoutes = require("./routes/collection/farmer-routes");
 const complainRoutes = require("./routes/common/complains-routes");
 const priceUpdatesRoutes = require("./routes/collection/price-routes");
 const managerRoutes = require("./routes/common/manager-routes");
-const heathRoutes = require("./routes/common/heath-routes");
+const healthRoutes = require("./routes/common/health-routes");
 const distribution = require("./routes/distribution/distribution-routes");
 const distributionManager = require("./routes/distribution/distibution-manager-routes");
 const pickupRoute = require("./routes/common/pickup-routes");
@@ -104,7 +104,8 @@ checkConnections().then(() => {
 const basePathMain = "/agro-api/collection-api";
 
 // Route registrations
-mainApp.use(`${basePathMain}`, heathRoutes);
+mainApp.use("", healthRoutes);
+mainApp.use(`${basePathMain}`, healthRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
 mainApp.use(`${basePathMain}/api/unregisteredfarmercrop`, addCropDetails);
