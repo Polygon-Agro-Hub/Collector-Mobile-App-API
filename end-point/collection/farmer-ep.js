@@ -361,7 +361,7 @@ exports.sendSMSToFarmers = asyncHandler(async (req, res) => {
             };
 
             const body = {
-                source: "PolygonAgro",
+                source: "Polygon",
                 destinations: [formattedPhone],
                 content: { sms: message },
                 transports: ["sms"],
