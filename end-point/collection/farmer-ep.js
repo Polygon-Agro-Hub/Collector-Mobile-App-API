@@ -394,3 +394,166 @@ const generateSmsMessage = (language) => {
     }
     return message;
 };
+
+exports.sendOtp = asyncHandler(async (req, res) => {
+    try {
+        const {
+            phoneNumber,
+            destination,
+            message,
+            content,
+            accHolderName,
+            accNumber,
+            bankName,
+            branchName,
+            language,
+            companyName,
+        } = req.body;
+
+        const targetPhone = phoneNumber || destination;
+        if (!targetPhone) {
+            return res.status(400).json({ error: "Phone number is required" });
+        }
+
+        const formattedPhone = String(targetPhone).startsWith("+")
+            ? String(targetPhone)
+            : `+${String(targetPhone).replace(/^0+/, "")}`;
+
+        let smsText = message || (content && content.sms);
+        if (!smsText) {
+            if (accHolderName && accNumber && bankName && branchName) {
+                const normLang = (language || "").toLowerCase().trim();
+                const cName = companyName || "Polygon";
+                if (
+                    normLang === "sinhala" ||
+                    normLang === "si" ||
+                    normLang === "sinhalese" ||
+                    normLang === "සිංහල"
+                ) {
+                    smsText = `${cName} සමඟ බැංකු විස්තර සත්‍යාපනය සඳහා ඔබගේ OTP: {{code}}\n\n${accHolderName}\n${accNumber}\n${bankName}\n${branchName}\n\nනිවැරදි නම්, ඔබව සම්බන්ධ කර ගන්නා ${cName} නියෝජිතයා සමඟ පමණක් OTP අංකය බෙදා ගන්න.`;
+                } else if (
+                    normLang === "tamil" ||
+                    normLang === "ta" ||
+                    normLang === "தமிழ்"
+                ) {
+                    smsText = `${cName} உடன் வங்கி விவர சரிபார்ப்புக்கான உங்கள் OTP: {{code}}\n\n${accHolderName}\n${accNumber}\n${bankName}\n${branchName}\n\nசரியாக இருந்தால், உங்களைத் தொடர்பு கொள்ளும் ${cName} பிரதிநிதியுடன் மட்டும் OTP ஐப் பகிரவும்.`;
+                } else {
+                    smsText = `Your OTP for bank detail verification with ${cName} is: {{code}}\n\n${accHolderName}\n${accNumber}\n${bankName}\n${branchName}\n\nIf correct, share OTP only with the ${cName} representative who contacts you.`;
+                }
+            } else {
+                smsText = "Your code is {{code}}";
+            }
+        }
+
+        const apiUrl = "https://api.getshoutout.com/otpservice/send";
+        const headers = {
+            Authorization: `Apikey ${process.env.SHOUTOUT_API_KEY}`,
+            "Content-Type": "application/json",
+        };
+
+        const body = {
+            source: "Polygon",
+            transport: "sms",
+            content: { sms: smsText },
+            destination: formattedPhone,
+        };
+
+        const response = await axios.post(apiUrl, body, { headers });
+
+        return res.status(200).json({
+            success: true,
+            referenceId: response.data?.referenceId,
+            ...response.data,
+        });
+    } catch (error) {
+        console.error("Error sending OTP in backend:", error?.response?.data || error.message);
+        return res.status(error.response?.status || 500).json({
+            error: "Failed to send OTP",
+            details: error.response?.data || error.message,
+        });
+    }
+});
+
+exports.verifyOtp = asyncHandler(async (req, res) => {
+    try {
+        const { code, referenceId } = req.body;
+
+        if (!code || !referenceId) {
+            return res.status(400).json({
+                statusCode: "1001",
+                error: "Code and referenceId are required",
+            });
+        }
+
+        const apiUrl = "https://api.getshoutout.com/otpservice/verify";
+        const headers = {
+            Authorization: `Apikey ${process.env.SHOUTOUT_API_KEY}`,
+            "Content-Type": "application/json",
+        };
+
+        try {
+            const response = await axios.post(
+                apiUrl,
+                { code, referenceId },
+                { headers }
+            );
+
+            return res.status(200).json(response.data);
+        } catch (apiError) {
+            const errData = apiError.response?.data;
+            if (errData && errData.statusCode) {
+                return res.status(200).json(errData);
+            }
+            throw apiError;
+        }
+    } catch (error) {
+        console.error("Error verifying OTP in backend:", error?.response?.data || error.message);
+        return res.status(error.response?.status || 500).json({
+            statusCode: error.response?.data?.statusCode || "1001",
+            message: error.response?.data?.message || "OTP Verification Failed",
+            error: error.message,
+        });
+    }
+});
+
+exports.sendCustomSms = asyncHandler(async (req, res) => {
+    try {
+        const { phoneNumber, destination, message } = req.body;
+        const targetPhone = phoneNumber || destination;
+
+        if (!targetPhone || !message) {
+            return res.status(400).json({ error: "Phone number and message are required" });
+        }
+
+        const formattedPhone = String(targetPhone).startsWith("+")
+            ? String(targetPhone)
+            : `+${String(targetPhone).replace(/^0+/, "")}`;
+
+        const apiUrl = "https://api.getshoutout.com/coreservice/messages";
+        const headers = {
+            Authorization: `Apikey ${process.env.SHOUTOUT_API_KEY}`,
+            "Content-Type": "application/json",
+        };
+
+        const body = {
+            source: "Polygon",
+            destinations: [formattedPhone],
+            content: { sms: message },
+            transports: ["sms"],
+        };
+
+        const response = await axios.post(apiUrl, body, { headers });
+
+        return res.status(200).json({
+            success: true,
+            message: "SMS sent successfully",
+            data: response.data,
+        });
+    } catch (error) {
+        console.error("Error sending custom SMS in backend:", error?.response?.data || error.message);
+        return res.status(error.response?.status || 500).json({
+            error: "Failed to send SMS",
+            details: error.response?.data || error.message,
+        });
+    }
+});
