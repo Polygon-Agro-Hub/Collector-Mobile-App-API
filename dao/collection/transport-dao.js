@@ -67,6 +67,7 @@ exports.getSentProductsToday = (officerId) => {
                 crates: parseInt(row.totalCrates, 10) || 0,
                 weight: `${parseFloat(row.totalWeight || 0).toFixed(2)} kg`,
                 destination: row.destination || "N/A",
+                createdAt: row.createdAt,
                 time: formatTime(row.createdAt),
                 conformDriverId: row.conformDriverId ? Number(row.conformDriverId) : null,
             }));
@@ -221,12 +222,12 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                 }
 
                 const hasUnloaded = checkResults && checkResults[0]?.unloadedCount > 0;
-                const useUnloaded = requestedType === "unloaded" 
-                    ? hasUnloaded 
+                const useUnloaded = requestedType === "unloaded"
+                    ? hasUnloaded
                     : (requestedType === "loaded" ? false : hasUnloaded);
 
                 const itemsSql = useUnloaded
-                  ? `
+                    ? `
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
@@ -243,6 +244,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           uc.grade,
                           uc.crateCount,
                           uc.crateIndex,
+                          uc.crateWeight,
                           uc.qty
                       FROM loadeditems li
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
@@ -251,7 +253,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       WHERE li.transportId = ?
                       ORDER BY li.id ASC, uc.grade ASC, uc.crateIndex ASC
                     `
-                  : `
+                    : `
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
@@ -268,6 +270,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           lc.grade,
                           lc.crateCount,
                           lc.crateIndex,
+                          lc.crateWeight,
                           lc.qty
                       FROM loadeditems li
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
@@ -315,6 +318,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                         if (row.crateId) {
                             const crateCount = parseInt(row.crateCount, 10) || 0;
                             const weightKg = parseFloat(row.qty) || 0;
+                            const crateWeight = parseFloat(row.crateWeight) || 0;
                             const gradeLetter = (row.grade || "A").trim().toUpperCase();
 
                             itemObj.totalCrates += crateCount;
@@ -326,6 +330,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 set: parseInt(row.crateIndex, 10) || 1,
                                 crates: crateCount,
                                 weightKg: weightKg,
+                                crateWeight: crateWeight,
                             });
                         }
                     });
@@ -364,9 +369,20 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
 
 function formatTime(dateValue) {
     if (!dateValue) return "";
-    const date = new Date(dateValue);
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
+    let date;
+    if (typeof dateValue === "string" && !dateValue.endsWith("Z") && !dateValue.includes("+")) {
+        date = new Date(dateValue.replace(" ", "T") + "Z");
+    } else {
+        date = new Date(dateValue);
+    }
+    if (isNaN(date.getTime())) {
+        date = new Date(dateValue);
+    }
+    if (isNaN(date.getTime())) return "";
+    // Add 5:30 hrs (330 minutes) to transportload's created time to match Sri Lanka local time (UTC+5:30)
+    const slDate = new Date(date.getTime() + (5 * 60 + 30) * 60 * 1000);
+    let hours = slDate.getUTCHours();
+    const minutes = slDate.getUTCMinutes();
     const ampm = hours >= 12 ? "PM" : "AM";
     hours = hours % 12 || 12;
     const mm = minutes < 10 ? `0${minutes}` : minutes;
@@ -534,7 +550,7 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
                             isAuthorized = (
                                 officer.distributedCenterId != null &&
                                 (officer.distributedCenterId == load.disComCenId ||
-                                 officer.distributedCenterId == load.dccCenterId)
+                                    officer.distributedCenterId == load.dccCenterId)
                             );
                         }
 
@@ -668,10 +684,11 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 const crateCount = parseInt(g.crateCount ?? g.crates, 10) || 0;
                                 const crateIndex = parseInt(g.crateIndex ?? g.set ?? g.setIndex, 10) || 1;
                                 const qty = parseFloat(g.qty ?? g.weightKg ?? g.weight) || 0;
+                                const crateWeight = parseFloat(g.crateWeight || g.containerTypeWeight) || 0;
 
                                 await connection.promise().query(
-                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, qty) VALUES (?, ?, ?, ?, ?)",
-                                    [targetLoadId, validGrade, crateCount, crateIndex, qty]
+                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES (?, ?, ?, ?, ?, ?)",
+                                    [targetLoadId, validGrade, crateCount, crateIndex, crateWeight, qty]
                                 );
                             }
                         }
@@ -1088,16 +1105,18 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                 const crateCount = parseInt(gs.crates, 10) || 0;
                                 const crateIndex = parseInt(gs.set, 10) || 1;
                                 const qty = parseFloat(gs.weightKg ?? gs.weight) || 0;
+                                const crateWeight = parseFloat(gs.crateWeight || gs.containerTypeWeight) || 0;
 
                                 const insertCrateQuery = `
-                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, qty)
-                                  VALUES (?, ?, ?, ?, ?)
+                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
+                                  VALUES (?, ?, ?, ?, ?, ?)
                                 `;
                                 await connection.promise().query(insertCrateQuery, [
                                     loadId,
                                     grade,
                                     crateCount,
                                     crateIndex,
+                                    crateWeight,
                                     qty,
                                 ]);
                             }
@@ -1124,3 +1143,27 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
         });
     });
 };
+
+exports.getContainerTypes = () => {
+    return new Promise((resolve, reject) => {
+        const sql = `
+          SELECT id, labelName, weight, createIndex, createdAt
+          FROM creates
+          ORDER BY createIndex ASC
+        `;
+        collectionofficer.query(sql, (err, results) => {
+            if (err) {
+                console.error("Database error fetching creates table:", err);
+                return reject(err);
+            }
+            const formatted = (results || []).map((row) => ({
+                id: row.id,
+                labelName: row.labelName || "",
+                weight: parseFloat(row.weight || 0),
+                createIndex: row.createIndex,
+            }));
+            resolve(formatted);
+        });
+    });
+};
+

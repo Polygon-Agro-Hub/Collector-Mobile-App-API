@@ -238,6 +238,12 @@ exports.getPositionsForRow = (rowId) => {
  * @param {number} packingPositionId 
  * @returns {Promise<Object>}
  */
+const createError = (message, code) => {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+};
+
 exports.assignOfficerToPosition = (officerId, packingPositionId) => {
   return new Promise((resolve, reject) => {
     db.collectionofficer.getConnection((err, connection) => {
@@ -265,7 +271,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           if (!posInfo) {
             connection.rollback(() => {
               connection.release();
-              reject(new Error("Selected packing position not found."));
+              reject(createError("Selected packing position not found.", "POSITION_NOT_FOUND"));
             });
             return;
           }
@@ -306,9 +312,9 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
             targetId = insertTargetRes.insertId;
           }
 
-          // 3. Ensure a record exists in positionscrops for this packingPositionId (if needed)
+          // 3. Ensure a record exists in positionscrops for this packingPositionId
           const getPosCropSql = `SELECT id FROM positionscrops WHERE posId = ? LIMIT 1`;
-          let positionCropId = await new Promise((res, rej) => {
+          const positionCropId = await new Promise((res, rej) => {
             connection.query(getPosCropSql, [packingPositionId], (err, results) => {
               if (err) return rej(err);
               res(results.length > 0 ? results[0].id : null);
@@ -341,12 +347,17 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           if (posOccupant && posOccupant.officerId !== officerId) {
             connection.rollback(() => {
               connection.release();
-              reject(new Error("This position is already occupied by another officer today."));
+              reject(
+                createError(
+                  "This position is already occupied by another officer today.",
+                  "POSITION_OCCUPIED"
+                )
+              );
             });
             return;
           }
 
-          // 5. Upsert targetposition with officerId, positionId (= packingPositionId), and targetId
+          // 5. Upsert targetposition
           const checkOfficerSql = `
             SELECT id FROM targetposition 
             WHERE officerId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
@@ -366,10 +377,14 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
               WHERE id = ?
             `;
             await new Promise((res, rej) => {
-              connection.query(updateSql, [packingPositionId, targetId, existingAssignment.id], (err, result) => {
-                if (err) return rej(err);
-                res(result);
-              });
+              connection.query(
+                updateSql,
+                [packingPositionId, targetId, existingAssignment.id],
+                (err, result) => {
+                  if (err) return rej(err);
+                  res(result);
+                }
+              );
             });
           } else {
             const insertSql = `
@@ -394,7 +409,6 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
             connection.release();
             resolve({ success: true, targetId, positionId: packingPositionId });
           });
-
         } catch (error) {
           connection.rollback(() => {
             connection.release();

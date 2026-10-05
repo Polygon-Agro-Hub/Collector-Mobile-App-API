@@ -18,7 +18,7 @@ const farmerRoutes = require("./routes/collection/farmer-routes");
 const complainRoutes = require("./routes/common/complains-routes");
 const priceUpdatesRoutes = require("./routes/collection/price-routes");
 const managerRoutes = require("./routes/common/manager-routes");
-const heathRoutes = require("./routes/common/heath-routes");
+const healthRoutes = require("./routes/common/health-routes");
 const distribution = require("./routes/distribution/distribution-routes");
 const distributionManager = require("./routes/distribution/distibution-manager-routes");
 const pickupRoute = require("./routes/common/pickup-routes");
@@ -31,6 +31,7 @@ const emailRoutes = require("./routes/common/email-routes");
 const packingRoute = require("./routes/distribution/packing-route");
 const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
 const webRoute = require("./routes/web/web-route");
+const appVersionRoutes = require("./routes/common/app-version.routes");
 const farmerEp = require("./end-point/collection/farmer-ep");
 const userAuthEp = require("./end-point/common/user-auth-ep");
 const dmanagerEp = require("./end-point/distribution/distribution-manger-ep");
@@ -103,7 +104,8 @@ checkConnections().then(() => {
 const basePathMain = "/agro-api/collection-api";
 
 // Route registrations
-mainApp.use(`${basePathMain}`, heathRoutes);
+mainApp.use("", healthRoutes);
+mainApp.use(`${basePathMain}`, healthRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
 mainApp.use(`${basePathMain}/api/unregisteredfarmercrop`, addCropDetails);
@@ -121,6 +123,8 @@ mainApp.use(`${basePathMain}/api/packing`, packingRoute);
 mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
 mainApp.use(`${basePathMain}/api/web`, webRoute);
 mainApp.use(`${basePathMain}/api/transport`, transportRoute);
+mainApp.use(`${basePathMain}/api/app-version`, appVersionRoutes);
+mainApp.use("/api/app-version", appVersionRoutes);
 mainApp.post(`${basePathMain}/api/auth/notify-status-changed`, userAuthEp.notifyStatusChanged);
 mainApp.post(`${basePathMain}/api/distribution-manager/notify-return-otp`, dmanagerEp.notifyReturnOtp);
 
