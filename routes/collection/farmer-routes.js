@@ -15,4 +15,10 @@ router.post("/farmer-register", farmerEp.addFarmer);
 
 router.post("/FarmerBankDetails", farmerEp.addFarmerBankDetails);
 
+router.post("/send-otp", farmerEp.sendOtp);
+
+router.post("/verify-otp", farmerEp.verifyOtp);
+
+router.post("/send-sms", farmerEp.sendCustomSms);
+
 module.exports = router;

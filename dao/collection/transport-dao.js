@@ -222,12 +222,12 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                 }
 
                 const hasUnloaded = checkResults && checkResults[0]?.unloadedCount > 0;
-                const useUnloaded = requestedType === "unloaded" 
-                    ? hasUnloaded 
+                const useUnloaded = requestedType === "unloaded"
+                    ? hasUnloaded
                     : (requestedType === "loaded" ? false : hasUnloaded);
 
                 const itemsSql = useUnloaded
-                  ? `
+                    ? `
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
@@ -253,7 +253,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       WHERE li.transportId = ?
                       ORDER BY li.id ASC, uc.grade ASC, uc.crateIndex ASC
                     `
-                  : `
+                    : `
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
@@ -550,7 +550,7 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
                             isAuthorized = (
                                 officer.distributedCenterId != null &&
                                 (officer.distributedCenterId == load.disComCenId ||
-                                 officer.distributedCenterId == load.dccCenterId)
+                                    officer.distributedCenterId == load.dccCenterId)
                             );
                         }
 
@@ -1147,9 +1147,9 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
 exports.getContainerTypes = () => {
     return new Promise((resolve, reject) => {
         const sql = `
-          SELECT id, labelName, weight, createdAt
+          SELECT id, labelName, weight, createIndex, createdAt
           FROM creates
-          ORDER BY id ASC
+          ORDER BY createIndex ASC
         `;
         collectionofficer.query(sql, (err, results) => {
             if (err) {
@@ -1160,6 +1160,7 @@ exports.getContainerTypes = () => {
                 id: row.id,
                 labelName: row.labelName || "",
                 weight: parseFloat(row.weight || 0),
+                createIndex: row.createIndex,
             }));
             resolve(formatted);
         });
