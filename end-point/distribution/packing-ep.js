@@ -76,7 +76,8 @@ exports.assignPosition = asyncHandler(async (req, res) => {
   if (!positionId || isNaN(positionId)) {
     return res.status(400).json({
       success: false,
-      message: "Valid positionId is required"
+      code: "INVALID_POSITION_ID",
+      message: "Valid positionId is required",
     });
   }
 
@@ -86,18 +87,23 @@ exports.assignPosition = asyncHandler(async (req, res) => {
     const io = req.app.get("io");
     if (io) {
       io.emit("rows_updated");
-      io.emit("position_updated", { positionId: Number(positionId), status: "Occupied", officerId });
+      io.emit("position_updated", {
+        positionId: Number(positionId),
+        status: "Occupied",
+        officerId,
+      });
     }
 
     res.status(200).json({
       success: true,
       message: "Officer assigned to position successfully",
-      data: result
+      data: result,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: error.message || "Failed to assign position"
+      code: error.code || "ASSIGN_FAILED",
+      message: error.message || "Failed to assign position",
     });
   }
 });

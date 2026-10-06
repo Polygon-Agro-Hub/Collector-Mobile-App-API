@@ -16,6 +16,7 @@ router.post("/verify-load-qr", authMiddleware, TransportEp.verifyLoadQR);
 router.get("/distribution-centres", authMiddleware, TransportEp.getAllDistributionCentres);
 
 router.get("/crops-varieties", authMiddleware, TransportEp.getCropsAndVarietiesForOfficer);
+router.get("/container-types", authMiddleware, TransportEp.getContainerTypes);
 
 router.post("/save-load", authMiddleware, TransportEp.saveTransportLoad);
 router.post("/finish-unloading", authMiddleware, TransportEp.finishUnloading);
