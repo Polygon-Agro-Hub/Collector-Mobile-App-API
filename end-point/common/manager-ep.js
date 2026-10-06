@@ -379,7 +379,6 @@ exports.getCollectionOfficersReciever = async (req, res) => {
 
     const [rows] = await collectionofficerDao.getCollectionOfficersReciever(
       managerId,
-      companycenterId,
       varietyId,
       grade,
     );

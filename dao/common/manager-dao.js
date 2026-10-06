@@ -556,7 +556,6 @@ exports.getCollectionOfficers = async (managerId) => {
 
 exports.getCollectionOfficersReciever = async (
   managerId,
-  companycenterId,
   varietyId,
   grade,
 ) => {
@@ -573,15 +572,17 @@ exports.getCollectionOfficersReciever = async (
       co.status,
       co.image
     FROM collectionofficer co
+    INNER JOIN collectionofficer mgr ON mgr.id = ?
     INNER JOIN officertarget ot ON co.id = ot.officerId
     INNER JOIN dailytarget dt ON ot.dailyTargetId = dt.id
     WHERE (
       co.jobRole IN ('Collection Officer', 'Driver', 'Heavy Weight Driver', 'Light Weight Driver', 'Distribution Officer') 
       OR co.jobRole LIKE '%Driver%'
     )
-      AND co.irmId = ?
+      AND co.centerId = mgr.centerId
+      AND co.companyId = mgr.companyId
+      AND co.irmId = mgr.id
       AND co.status = 'Approved'
-      AND dt.companyCenterId = ?
       AND dt.varietyId = ?
       AND dt.grade = ?
       AND DATE(dt.date) = CURDATE()
@@ -591,7 +592,7 @@ exports.getCollectionOfficersReciever = async (
   `;
   return db.collectionofficer
     .promise()
-    .query(sql, [managerId, companycenterId, varietyId, grade]);
+    .query(sql, [managerId, varietyId, grade]);
 };
 
 exports.getCollectionOfficersList = async (managerId) => {
