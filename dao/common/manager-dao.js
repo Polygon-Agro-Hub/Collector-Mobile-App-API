@@ -581,7 +581,6 @@ exports.getCollectionOfficersReciever = async (
     )
       AND co.irmId = ?
       AND co.status = 'Approved'
-      AND dt.companyCenterId = ?
       AND dt.varietyId = ?
       AND dt.grade = ?
       AND DATE(dt.date) = CURDATE()
