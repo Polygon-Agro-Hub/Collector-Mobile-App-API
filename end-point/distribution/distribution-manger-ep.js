@@ -269,8 +269,8 @@ exports.notifyReturnOtp = async (req, res) => {
       req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
       req.body?.serviceToken;
 
-    const expectedSecret =
-      process.env.CODINET_TRIGGER_SECRET || "codi_sec_trg_192tk596ikg90e9kf9t6b21";
+    const { CODINET_TRIGGER_SECRET } = require("../../constants/notification-secrets");
+    const expectedSecret = CODINET_TRIGGER_SECRET;
 
     if (expectedSecret && serviceToken !== expectedSecret) {
       return res.status(401).json({
