@@ -264,6 +264,22 @@ exports.sendTestPush = async (req, res) => {
  */
 exports.notifyReturnOtp = async (req, res) => {
   try {
+    const serviceToken =
+      req.headers["x-service-token"] ||
+      req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
+      req.body?.serviceToken;
+
+    const expectedSecret =
+      process.env.CODINET_TRIGGER_SECRET || "codi_sec_trg_192tk596ikg90e9kf9t6b21";
+
+    if (expectedSecret && serviceToken !== expectedSecret) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Unauthorized: Invalid service token for Codi Net notification trigger",
+      });
+    }
+
     const { id, officerId, dcmEmpId, invNo, otpCode, createdAt } = req.body;
 
     const payload = {
