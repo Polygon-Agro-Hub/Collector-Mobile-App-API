@@ -231,6 +231,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
+                          mi.displayName,
                           cv.varietyNameEnglish,
                           cv.varietyNameSinhala,
                           cv.varietyNameTamil,
@@ -247,6 +248,15 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           uc.crateWeight,
                           uc.qty
                       FROM loadeditems li
+                      LEFT JOIN (
+                          SELECT varietyId, displayName 
+                          FROM (
+                              SELECT varietyId, displayName, ROW_NUMBER() OVER (PARTITION BY varietyId ORDER BY isEnable DESC, id DESC) AS rn 
+                              FROM marketplaceitems 
+                              WHERE varietyId IS NOT NULL
+                          ) sub 
+                          WHERE rn = 1
+                      ) mi ON mi.varietyId = li.varietyId
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       INNER JOIN unloadedcrates uc ON uc.loadId = li.id
@@ -257,6 +267,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       SELECT 
                           li.id AS loadedItemId,
                           li.varietyId,
+                          mi.displayName,
                           cv.varietyNameEnglish,
                           cv.varietyNameSinhala,
                           cv.varietyNameTamil,
@@ -273,6 +284,15 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                           lc.crateWeight,
                           lc.qty
                       FROM loadeditems li
+                      LEFT JOIN (
+                          SELECT varietyId, displayName 
+                          FROM (
+                              SELECT varietyId, displayName, ROW_NUMBER() OVER (PARTITION BY varietyId ORDER BY isEnable DESC, id DESC) AS rn 
+                              FROM marketplaceitems 
+                              WHERE varietyId IS NOT NULL
+                          ) sub 
+                          WHERE rn = 1
+                      ) mi ON mi.varietyId = li.varietyId
                       LEFT JOIN plant_care.cropvariety cv ON li.varietyId = cv.id
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
@@ -296,7 +316,8 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 id: String(row.varietyId || row.loadedItemId),
                                 loadedItemId: row.loadedItemId,
                                 varietyId: row.varietyId ? String(row.varietyId) : undefined,
-                                varietyLabel: row.varietyNameEnglish || "",
+                                displayName: row.displayName || null,
+                                varietyLabel: row.displayName || row.varietyNameEnglish || "",
                                 varietyNameEnglish: row.varietyNameEnglish || "",
                                 varietyNameSinhala: row.varietyNameSinhala || "",
                                 varietyNameTamil: row.varietyNameTamil || "",
@@ -305,7 +326,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 cropNameEnglish: row.cropNameEnglish || "",
                                 cropNameSinhala: row.cropNameSinhala || "",
                                 cropNameTamil: row.cropNameTamil || "",
-                                cropName: row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
+                                cropName: row.displayName || row.varietyNameEnglish || row.cropNameEnglish || "Crop Item",
                                 imageUri: row.varietyImage || row.cropImage || "",
                                 totalWeightKg: 0,
                                 totalCrates: 0,
@@ -716,59 +737,8 @@ exports.HEAVY_WEIGHT_DRIVER_ROLE = HEAVY_WEIGHT_DRIVER_ROLE;
 
 exports.getAllDistributionCentres = (officerId = null) => {
     return new Promise((resolve, reject) => {
-        let sql;
-        let params = [];
-
-        if (officerId) {
-            sql = `
-              SELECT
-                  dc.id,
-                  COALESCE(
-                      (SELECT dcc1.id FROM distributedcompanycenter dcc1 
-                       WHERE dcc1.centerId = dc.id 
-                         AND dcc1.companyId = (SELECT companyId FROM collectionofficer WHERE id = ? LIMIT 1) 
-                       LIMIT 1),
-                      (SELECT dcc2.id FROM distributedcompanycenter dcc2 
-                       WHERE dcc2.centerId = dc.id 
-                       LIMIT 1)
-                  ) AS disComCenId,
-                  dc.centerName,
-                  dc.regCode,
-                  dc.city,
-                  dc.district,
-                  dc.province,
-                  dc.country,
-                  dc.longitude,
-                  dc.latitude
-              FROM distributedcenter dc
-              ORDER BY dc.centerName ASC
-            `;
-            params = [officerId];
-        } else {
-            sql = `
-              SELECT
-                  dc.id,
-                  (SELECT dcc2.id FROM distributedcompanycenter dcc2 WHERE dcc2.centerId = dc.id LIMIT 1) AS disComCenId,
-                  dc.centerName,
-                  dc.regCode,
-                  dc.city,
-                  dc.district,
-                  dc.province,
-                  dc.country,
-                  dc.longitude,
-                  dc.latitude
-              FROM distributedcenter dc
-              ORDER BY dc.centerName ASC
-            `;
-        }
-
-        collectionofficer.query(sql, params, (err, results) => {
-            if (err) {
-                console.error("Database error:", err);
-                return reject(err);
-            }
-
-            const formatted = results.map((row) => ({
+        const formatCentres = (results) => {
+            return (results || []).map((row) => ({
                 id: String(row.id),
                 disComCenId: row.disComCenId ? String(row.disComCenId) : null,
                 name: row.centerName,
@@ -776,8 +746,82 @@ exports.getAllDistributionCentres = (officerId = null) => {
                 regCode: row.regCode || "",
                 code: row.regCode || "",
             }));
+        };
 
-            resolve(formatted);
+        const onlyCenterOwnCitySql = `
+          SELECT DISTINCT
+              dc.id,
+              dcc.id AS disComCenId,
+              dc.centerName,
+              dc.regCode,
+              dc.city,
+              dc.district,
+              dc.province,
+              dc.country,
+              dc.longitude,
+              dc.latitude
+          FROM centerowncity coc
+          JOIN distributedcompanycenter dcc ON coc.companyCenterId = dcc.id
+          JOIN distributedcenter dc ON dcc.centerId = dc.id
+          ORDER BY dc.centerName ASC
+        `;
+
+        if (!officerId) {
+            collectionofficer.query(onlyCenterOwnCitySql, [], (err, results) => {
+                if (err) return reject(err);
+                return resolve(formatCentres(results));
+            });
+            return;
+        }
+
+        // Only fetch assigned distribution centers from centerowncity for the officer's company
+        // Checks direct companyId or the distributed company matching the collection officer's company name
+        const centerOwnCitySql = `
+          SELECT DISTINCT
+              dc.id,
+              dcc.id AS disComCenId,
+              dc.centerName,
+              dc.regCode,
+              dc.city,
+              dc.district,
+              dc.province,
+              dc.country,
+              dc.longitude,
+              dc.latitude
+          FROM centerowncity coc
+          JOIN distributedcompanycenter dcc ON coc.companyCenterId = dcc.id
+          JOIN distributedcenter dc ON dcc.centerId = dc.id
+          WHERE (
+              dcc.companyId = (SELECT companyId FROM collectionofficer WHERE id = ? LIMIT 1)
+              OR dcc.companyId IN (
+                  SELECT c2.id 
+                  FROM collectionofficer co 
+                  JOIN company c1 ON co.companyId = c1.id 
+                  JOIN company c2 ON c1.companyNameEnglish = c2.companyNameEnglish AND c2.isDistributed = 1 
+                  WHERE co.id = ?
+              )
+          )
+          ORDER BY dc.centerName ASC
+        `;
+
+        collectionofficer.query(centerOwnCitySql, [officerId, officerId], (err, results) => {
+            if (err) {
+                console.error("Database error querying centerowncity:", err);
+                return reject(err);
+            }
+
+            if (results && results.length > 0) {
+                return resolve(formatCentres(results));
+            }
+
+            // Fallback: strictly return assigned centers from centerowncity only
+            collectionofficer.query(onlyCenterOwnCitySql, [], (err2, fallbackResults) => {
+                if (err2) {
+                    console.error("Database error querying centerowncity fallback:", err2);
+                    return reject(err2);
+                }
+                return resolve(formatCentres(fallbackResults));
+            });
         });
     });
 };

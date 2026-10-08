@@ -1,5 +1,6 @@
 const { collectionofficer } = require("../../startup/database");
 const db = require("../../startup/database");
+const polygonNotificationService = require("../../services/polygon-notification-service");
 
 exports.getPickupOrders = (officerId) => {
     return new Promise((resolve, reject) => {
@@ -237,6 +238,16 @@ exports.updatePickupDetails = async (
             'Order Picked up',
             pickupNotifMessage,
         ]);
+
+        // Trigger real-time webhook to Polygon Customer Mobile App (since only ordernotfication is used here)
+        polygonNotificationService.triggerPolygonNotification({
+            orderId: processOrderId,
+            title: "Order Picked up",
+            message: pickupNotifMessage,
+            eventType: "order_delivered",
+            data: { processOrderId, invNo: invoiceNumber },
+            skipDbInsert: true,
+        }).catch(() => {});
 
         await connection.commit();
 

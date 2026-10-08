@@ -63,6 +63,11 @@ const auth = (req, res, next) => {
       (dbErr, results) => {
         if (dbErr) {
           console.error("Database query error in auth middleware:", dbErr);
+          // Fail-safe: if DB connection drops/times out but JWT is verified & marked Approved, allow request to proceed
+          if ((decoded.accountStatus || "").trim().toLowerCase() === "approved") {
+            req.user = decoded;
+            return next();
+          }
           return res.status(500).json({
             status: "error",
             message: "Database error during authentication check",
@@ -76,22 +81,28 @@ const auth = (req, res, next) => {
           });
         }
 
-        const currentStatus = results[0].status;
-        officerStatusCache.setOfficerStatus(officerId, currentStatus);
+        const rawStatus = results[0].status || "";
+        const normalizedStatus = rawStatus.trim().toLowerCase();
 
-        if (currentStatus !== "Approved") {
+        // Update in-memory cache with normalized status
+        officerStatusCache.setOfficerStatus(
+          officerId,
+          normalizedStatus === "approved" ? "Approved" : rawStatus.trim()
+        );
+
+        if (normalizedStatus !== "approved") {
           const io = req.app?.get("io");
           if (io) {
             io.to(`user_${officerId}`).emit("officer_status_changed", {
-              accountStatus: currentStatus,
-              message: `This account is ${currentStatus || "not approved"}.`,
+              accountStatus: rawStatus,
+              message: `This account is ${rawStatus || "not approved"}.`,
             });
           }
 
           return res.status(403).json({
             status: "error",
-            message: `This account is ${currentStatus || "not approved"}.`,
-            accountStatus: currentStatus,
+            message: `This account is ${rawStatus || "not approved"}.`,
+            accountStatus: rawStatus,
           });
         }
 
