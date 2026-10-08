@@ -26,10 +26,11 @@ const triggerGetRejectOfficers = async () => {
 
         results.forEach((row) => {
           const id = Number(row.id);
-          const status = (row.status || "").toLowerCase() === "rejected" ? "Rejected" : row.status;
+          const raw = (row.status || "").trim();
+          const status = raw.toLowerCase() === "rejected" ? "Rejected" : raw;
           cache.set(`${OFFICER_STATUS_PREFIX}${id}`, status);
 
-          if (status === "Rejected") {
+          if (status.toLowerCase() === "rejected") {
             rejectedIds.push(id);
           } else {
             notApprovedIds.push(id);
@@ -102,7 +103,9 @@ const isApproved = (officerId) => {
  */
 const setOfficerStatus = (officerId, status) => {
   const numericId = Number(officerId);
-  const normStatus = (status || "").toLowerCase() === "approved" ? "Approved" : (status || "").toLowerCase() === "rejected" ? "Rejected" : status;
+  const trimmed = (status || "").trim();
+  const lower = trimmed.toLowerCase();
+  const normStatus = lower === "approved" ? "Approved" : lower === "rejected" ? "Rejected" : trimmed;
   cache.set(`${OFFICER_STATUS_PREFIX}${numericId}`, normStatus);
 
   let rejectedIds = cache.get(REJECTED_OFFICERS_KEY) || [];

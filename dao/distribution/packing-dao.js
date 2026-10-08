@@ -2,6 +2,8 @@ const db = require("../../startup/database");
 const { TIME_SLOT_MAP, formatTimeSlot } = require("../../utils/packing/time-slots");
 const { validatePosition1Busy, validateNextPositionBusy } = require("../../utils/packing/packing-validator");
 const { PACKING_ERROR_CODES } = require("../../utils/packing/error-codes");
+const polygonNotificationService = require("../../services/polygon-notification-service");
+const salesdashNotificationService = require("../../services/salesdash-notification-service");
 
 /**
  * Get company center ID for a collection officer
@@ -1816,20 +1818,24 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
 
                       // Only insert the dashnotification for "Out For Delivery" orders (not Pickup)
                       if (!isPickup) {
+                        const dashNotifTitle = 'Order is Out for Delivery';
                         const insertNotifSql = `
-                          INSERT INTO dashnotification 
+                          INSERT INTO collection_officer.dashnotification 
                             (orderId, title, readStatus, createdAt)
                           VALUES (?, ?, 0, NOW())
                         `;
                         db.collectionofficer.query(
                           insertNotifSql,
-                          [orderId, 'Order is Out for Delivery'],
+                          [orderId, dashNotifTitle],
                           (nErr) => {
                             if (nErr) {
                               console.error("Error inserting dashnotification row:", nErr);
                             }
                           }
                         );
+
+                        // Trigger Sales Dash notification matching dashnotification table structure (title: dashNotifTitle)
+                        salesdashNotificationService.notifySalesDashOrderPacked(orderId, invNo, dashNotifTitle).catch(() => {});
                       }
 
                       // Insert into ordernotfication for customer app notification
@@ -1850,6 +1856,10 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
                           if (onErr) {
                             console.error("Error inserting ordernotfication row:", onErr);
                           }
+
+                          // Trigger Polygon Customer notification matching ordernotfication table structure
+                          polygonNotificationService.notifyOrderPacked(orderId, invNo, notifTitle, notifMessage).catch(() => {});
+
                           resolve({ success: true, isFullyCompleted: true, orderStatus: "Completed" });
                         }
                       );
