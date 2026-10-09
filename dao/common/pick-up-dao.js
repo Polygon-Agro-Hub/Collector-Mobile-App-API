@@ -122,9 +122,10 @@ exports.updatePickupDetails = async (
         await connection.beginTransaction();
 
         const getProcessOrderQuery = `
-            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid, invNo
+            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid, invNo, status
             FROM processorders 
             WHERE invNo = ?
+            FOR UPDATE
         `;
 
         const [processOrderResult] = await connection.query(getProcessOrderQuery, [
@@ -139,6 +140,25 @@ exports.updatePickupDetails = async (
         const processOrderId = processOrder.id;
         const paymentMethod = processOrder.paymentMethod;
         const creditPaid = Number(processOrder.creditPaid) || 0;
+
+        // Idempotency check: prevent duplicate pickup records if already submitted
+        const [existingPickup] = await connection.query(
+            `SELECT id, signature FROM collection_officer.pickuporders WHERE orderId = ? LIMIT 1`,
+            [processOrderId]
+        );
+
+        if ((existingPickup && existingPickup.length > 0) || processOrder.status === "Picked up") {
+            await connection.commit();
+            return {
+                success: true,
+                insertId: existingPickup?.[0]?.id || processOrderId,
+                processOrderId: processOrderId,
+                signatureUrl: existingPickup?.[0]?.signature || signatureUrl,
+                paymentMethod: paymentMethod,
+                message: "Pickup details already recorded for this order",
+                alreadyProcessed: true,
+            };
+        }
 
         let moneyPaidAmount = null;
         let fullTotalAmount = null;
