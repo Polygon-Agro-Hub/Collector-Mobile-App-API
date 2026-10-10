@@ -221,7 +221,10 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                     return reject(checkErr);
                 }
 
-                const hasUnloaded = checkResults && checkResults[0]?.unloadedCount > 0;
+                const hasUnloaded =
+                    (checkResults && checkResults[0]?.unloadedCount > 0) ||
+                    Boolean(loadHeader.unloadTime) ||
+                    Boolean(loadHeader.unloadOfficerId);
                 const useUnloaded = requestedType === "unloaded"
                     ? hasUnloaded
                     : (requestedType === "loaded" ? false : hasUnloaded);
@@ -508,6 +511,8 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
               tl.disComCenId,
               tl.comCenId,
               tl.driverId,
+              tl.unloadTime,
+              tl.unloadOfficerId,
               tl.createdAt,
               dcc.companyId AS dccCompanyId,
               dcc.centerId AS dccCenterId
@@ -586,6 +591,14 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
 
                     try {
                         const loadDetails = await exports.getTransportLoadDetails(load.id, "unloaded");
+                        if (load.unloadTime || (loadDetails && loadDetails.isUnloaded)) {
+                            return resolve({
+                                success: false,
+                                code: "ALREADY_UNLOADED",
+                                message: "This product has already been unloaded.",
+                                data: loadDetails,
+                            });
+                        }
                         return resolve({
                             success: true,
                             data: loadDetails,
@@ -598,6 +611,14 @@ exports.verifyLoadQR = (qrData, officerId = null) => {
             } else {
                 exports.getTransportLoadDetails(load.id, "unloaded")
                     .then((loadDetails) => {
+                        if (load.unloadTime || (loadDetails && loadDetails.isUnloaded)) {
+                            return resolve({
+                                success: false,
+                                code: "ALREADY_UNLOADED",
+                                message: "This product has already been unloaded.",
+                                data: loadDetails,
+                            });
+                        }
                         resolve({
                             success: true,
                             data: loadDetails,
