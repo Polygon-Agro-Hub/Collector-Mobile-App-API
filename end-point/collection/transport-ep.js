@@ -238,6 +238,14 @@ exports.verifyLoadQR = async (req, res) => {
                     message: result.message || "This load's journey has not ended yet.",
                 });
             }
+            if (result.code === "ALREADY_UNLOADED") {
+                return res.status(409).json({
+                    success: false,
+                    code: result.code,
+                    message: result.message || "This product has already been unloaded.",
+                    data: result.data,
+                });
+            }
             return res.status(400).json({
                 success: false,
                 code: result.code || "INVALID_QR",
