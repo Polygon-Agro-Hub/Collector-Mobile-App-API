@@ -335,10 +335,10 @@ exports.getRowLiveMonitor = (rowId) => {
 
             const addSql = `
               SELECT COUNT(*) AS cnt FROM orderadditionalitems 
-              WHERE orderId = ?
+              WHERE proOrderId = ? OR (proOrderId IS NULL AND orderId = ?)
             `;
             const addRes = await new Promise((res) => {
-              db.collectionofficer.query(addSql, [mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
+              db.collectionofficer.query(addSql, [pOrderId, mOrderId], (e, r) => res(e ? [{ cnt: 0 }] : r));
             });
             const hasAlacarte = addRes.length > 0 && addRes[0].cnt > 0;
 
@@ -491,8 +491,8 @@ exports.getWebOrderDetails = (processOrderId) => {
         po.id AS processOrderId,
         po.orderId AS masterOrderId,
         po.invNo AS invoiceNumber,
-        o.fullTotal,
-        o.total
+        COALESCE(po.fullTotal, o.fullTotal) AS fullTotal,
+        COALESCE(po.total, o.total) AS total
       FROM processorders po
       JOIN orders o ON po.orderId = o.id
       WHERE po.id = ?
@@ -583,11 +583,11 @@ exports.getWebOrderDetails = (processOrderId) => {
             mi.displayName
           FROM orderadditionalitems oai
           JOIN marketplaceitems mi ON oai.productId = mi.id
-          WHERE oai.orderId = ?
+          WHERE oai.proOrderId = ? OR (oai.proOrderId IS NULL AND oai.orderId = ?)
         `;
 
         const additionalItems = await new Promise((res) => {
-          db.collectionofficer.query(addSql, [orderData.masterOrderId], (e, r) => res(e ? [] : r));
+          db.collectionofficer.query(addSql, [processOrderId, orderData.masterOrderId], (e, r) => res(e ? [] : r));
         });
 
         resolve({
