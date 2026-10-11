@@ -283,13 +283,13 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
               });
             });
 
-            // Query additional items linked to proOrderId (or master orderId during migration)
+            // Query additional items linked to proOrderId
             const getAdditionalSql = `
               SELECT id FROM orderadditionalitems 
-              WHERE proOrderId = ? OR (proOrderId IS NULL AND orderId = ?)
+              WHERE proOrderId = ?
             `;
             additionalItems = await new Promise((res, rej) => {
-              connection.query(getAdditionalSql, [orderId, masterOrderId], (err, results) => {
+              connection.query(getAdditionalSql, [orderId], (err, results) => {
                 if (err) return rej(err);
                 res(results);
               });

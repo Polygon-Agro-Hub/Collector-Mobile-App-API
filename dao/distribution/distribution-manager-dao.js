@@ -136,13 +136,12 @@ exports.getDCenterTarget = (irmId = null) => {
       LEFT JOIN (
           SELECT 
               proOrderId,
-              orderId,
               COUNT(*) as total_items,
               SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
               SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
           FROM orderadditionalitems
-          GROUP BY proOrderId, orderId
-      ) additional_item_counts ON (po.id = additional_item_counts.proOrderId OR (additional_item_counts.proOrderId IS NULL AND o.id = additional_item_counts.orderId))
+          GROUP BY proOrderId
+      ) additional_item_counts ON po.id = additional_item_counts.proOrderId
       LEFT JOIN (
           SELECT 
               op.orderId,
@@ -1003,12 +1002,12 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
           oai.price,
           oai.discount AS itemDiscount
       FROM orderadditionalitems oai
-      WHERE (oai.proOrderId = ? OR (oai.proOrderId IS NULL AND oai.orderId = ?))
+      WHERE oai.proOrderId = ?
     `;
 
     const [additionalItemsResults] = await connection.execute(
       additionalItemsSql,
-      [targetProcessOrderId || processOrderId || orderId, orderId],
+      [targetProcessOrderId || processOrderId],
     );
 
     const additionalItems = additionalItemsResults
@@ -1183,16 +1182,16 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
       scheduleDate: scheduleDate, // now from processorders
       scheduleTime: order.sheduleTime,
       createdAt: order.createdAt,
-      total: parseFloat(poTotal ?? order.total) || 0,
-      discount: parseFloat(poDiscount ?? order.discount) || 0,
-      fullTotal: parseFloat(poFullTotal ?? order.fullTotal) || 0,
-      deliveryCharge: parseFloat(poDeliveryCharge ?? order.deliveryCharge) || 0,
+      total: parseFloat(poTotal) || 0,
+      discount: parseFloat(poDiscount) || 0,
+      fullTotal: parseFloat(poFullTotal) || 0,
+      deliveryCharge: parseFloat(poDeliveryCharge) || 0,
       isPackage: finalIsPackage,
-      isCoupon: poIsCoupon ?? order.isCoupon,
-      couponType: (poCouponType ?? order.couponType) || null,
+      isCoupon: poIsCoupon ?? 0,
+      couponType: poCouponType || null,
       couponValue:
         order.orderApp === "Marketplace"
-          ? parseFloat(poCouponValue ?? order.couponValue) || 0
+          ? parseFloat(poCouponValue) || 0
           : null,
       delivaryMethod: order.delivaryMethod || "Delivery",
       centerName: centerDetails?.centerName || null,

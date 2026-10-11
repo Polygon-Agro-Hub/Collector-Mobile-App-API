@@ -142,16 +142,14 @@ exports.getTargetForOfficerDao = (officerId) => {
                 -- Additional items subquery
                 SELECT 
                     proOrderId,
-                    orderId,
                     COUNT(*) as total_items,
                     SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
                     SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
                 FROM 
                     orderadditionalitems
                 GROUP BY 
-                    proOrderId,
-                    orderId
-            ) additional_item_counts ON (po.id = additional_item_counts.proOrderId OR (additional_item_counts.proOrderId IS NULL AND o.id = additional_item_counts.orderId))
+                    proOrderId
+            ) additional_item_counts ON po.id = additional_item_counts.proOrderId
             LEFT JOIN (
                 -- Package items subquery - FIXED: Aggregate ALL packages for each processorder + include isLock
                 SELECT 

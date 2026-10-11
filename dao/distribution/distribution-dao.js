@@ -134,7 +134,7 @@ exports.getOrderDataDao = (orderId) => {
                 processorders po ON o.id = po.orderId
             
             LEFT JOIN 
-                orderadditionalitems oai ON (oai.proOrderId = po.id OR (oai.proOrderId IS NULL AND o.id = oai.orderId))
+                orderadditionalitems oai ON oai.proOrderId = po.id
             LEFT JOIN 
                 marketplaceitems mi_additional ON oai.productId = mi_additional.id
 
@@ -432,7 +432,7 @@ exports.debugOrderRelationships = async (orderId) => {
     },
     {
       name: "orderadditionalitems",
-      sql: "SELECT * FROM orderadditionalitems WHERE proOrderId = ? OR orderId = ?",
+      sql: "SELECT * FROM orderadditionalitems WHERE proOrderId = ?",
     },
   ];
 
