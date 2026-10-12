@@ -484,7 +484,7 @@ exports.getQROrdersForOfficer = (officerId) => {
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
           0
         ) AS minPIndex,
-        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
+        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.id), 0) AS packagesCount,
         (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.proOrderId = po.id) AS alacarteCount,
         COALESCE(DATE_FORMAT(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(po.sheduleDate, '%Y/%m/%d')) AS date,
         po.sheduleDate
@@ -522,7 +522,7 @@ exports.getQROrdersForOfficer = (officerId) => {
                   COALESCE((SELECT COUNT(*) FROM packagedetails pd WHERE pd.packageId = op.packageId), 0)
                 ) AS count
               FROM processorders po
-              JOIN orderpackage op ON (op.orderId = po.orderId OR op.orderId = po.id)
+              JOIN orderpackage op ON op.orderId = po.id
               JOIN marketplacepackages mp ON op.packageId = mp.id
               WHERE po.id = ?
             `;
@@ -1017,7 +1017,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!isMainContainer) {
             const getCountsSql = `
               SELECT 
-                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id) AS packagesCount,
                 (SELECT COUNT(*) FROM orderadditionalitems WHERE proOrderId = po.id) AS alacarteCount
               FROM processorders po
               WHERE po.id = ?
@@ -1339,7 +1339,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         try {
           const getCountsSql = `
             SELECT 
-              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
+              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id) AS packagesCount,
               (SELECT COUNT(*) FROM orderadditionalitems WHERE proOrderId = po.id) AS alacarteCount
             FROM processorders po
             WHERE po.id = ?
@@ -2122,7 +2122,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               mp.displayName AS packName,
               'package' AS categoryType
             FROM processorders po
-            JOIN orderpackage op ON (op.orderId = po.id OR op.orderId = po.orderId)
+            JOIN orderpackage op ON op.orderId = po.id
             JOIN marketplacepackages mp ON op.packageId = mp.id
             JOIN orderpackageitems opi ON op.id = opi.orderPackageId
             JOIN marketplaceitems mi ON opi.productId = mi.id
