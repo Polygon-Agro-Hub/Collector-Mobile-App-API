@@ -270,14 +270,16 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
             let orderPackages = [];
             let additionalItems = [];
 
-            // Query packages linked to processorders.id OR master orders.id with packingStatus = 'Dispatch'
+            // Query packages linked to processorders.id with packingStatus = 'Dispatch'
+            // NOTE: orderpackage.orderId stores processorders.id, and we fetch qty to create a row for every physical box
             const getPackagesSql = `
-              SELECT id FROM orderpackage 
-              WHERE (orderId = ? OR orderId = ?) 
+              SELECT id, GREATEST(COALESCE(qty, 1), 1) AS qty
+              FROM orderpackage 
+              WHERE orderId = ? 
                 AND packingStatus = 'Dispatch'
             `;
             orderPackages = await new Promise((res, rej) => {
-              connection.query(getPackagesSql, [orderId, masterOrderId], (err, results) => {
+              connection.query(getPackagesSql, [orderId], (err, results) => {
                 if (err) return rej(err);
                 res(results);
               });
@@ -309,14 +311,17 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
             `;
 
             if (orderPackages && orderPackages.length > 0) {
-              // 1. Insert row for each package (orderpackageId filled)
+              // 1. Insert row for each physical box (repeat according to qty)
               for (const pkg of orderPackages) {
-                await new Promise((res, rej) => {
-                  connection.query(insertPosTrackingSql, [orderId, pkg.id], (err, result) => {
-                    if (err) return rej(err);
-                    res(result);
+                const boxCount = Number(pkg.qty) || 1;
+                for (let b = 0; b < boxCount; b++) {
+                  await new Promise((res, rej) => {
+                    connection.query(insertPosTrackingSql, [orderId, pkg.id], (err, result) => {
+                      if (err) return rej(err);
+                      res(result);
+                    });
                   });
-                });
+                }
               }
               // 2. Insert row for à la carte items if order has additional items (orderpackageId = NULL)
               if (additionalItems && additionalItems.length > 0) {

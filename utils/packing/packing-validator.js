@@ -1,16 +1,22 @@
 const { PACKING_ERROR_CODES } = require("./error-codes");
 
 /**
- * Validates whether Position 1 (pIndex = 1) is currently busy with an active box.
- * Allows re-printing the exact box currently sitting at pIndex = 1,
- * but blocks passing any new or next package box while Position 1 is busy.
+ * Validates whether Position 1 (pIndex = 1) has capacity for a new box.
  *
- * @param {Object} connection MySQL connection object
- * @param {number} orderId Target orderId (processorders.id)
- * @param {number|null} validPackageId Valid orderpackageId if applicable
- * @param {boolean} isMainContainer True if Main Container box
- * @param {number} packageBoxSubIndex Sub-index of box for packages with qty > 1 (0-based)
- * @returns {Promise<Object|null>} Returns occupied error object or null if free
+ * Rules:
+ *  - Counts how many officers are actively assigned to pIndex=1 in this row today (capacity).
+ *  - Counts how many boxes are currently sitting at pIndex=1 in this row (load).
+ *  - If load < capacity → P1 has a free slot, allow print (return null).
+ *  - If load >= capacity → P1 is fully busy, return busy error with occupied invoices.
+ *  - Exception: if the exact same box (same orderId + packageId + isMainContainer) is already
+ *    at pIndex=1, it's a re-print attempt → always allow (return null).
+ *
+ * @param {Object} connection  MySQL connection object
+ * @param {number} orderId     processorders.id
+ * @param {number|null} validPackageId  orderpackageId, or null for alacarte / main container
+ * @param {boolean} isMainContainer
+ * @param {number} packageBoxSubIndex  0-based sub-index for multi-qty packages (unused here, kept for API compat)
+ * @returns {Promise<Object|null>}  null = allowed, error object = blocked
  */
 const validatePosition1Busy = async (
   connection,
@@ -19,72 +25,174 @@ const validatePosition1Busy = async (
   isMainContainer = false,
   packageBoxSubIndex = 0
 ) => {
-  // 1. Query any box currently sitting at pIndex = 1 for the packing row of this order
-  const checkOccupiedSql = `
-    SELECT 
-      pt.id AS trackingId, 
-      pt.orderId, 
-      pt.orderpackageId, 
-      pt.isMainContainer, 
-      pt.pIndex, 
-      po.invNo
-    FROM positiontracking pt
-    JOIN processorders po ON pt.orderId = po.id
-    JOIN distributedtargetitems dti ON dti.orderId = po.id
+  // ── Step 1: Get the rowId for this order ──────────────────────────────────
+  const getRowSql = `
+    SELECT dt.rowId, DATE(dt.createdAt) AS targetDate
+    FROM distributedtargetitems dti
     JOIN distributedtarget dt ON dti.targetId = dt.id
-    WHERE dt.rowId = (
-      SELECT dt2.rowId 
-      FROM distributedtargetitems dti2 
-      JOIN distributedtarget dt2 ON dti2.targetId = dt2.id 
-      WHERE dti2.orderId = ? LIMIT 1
-    ) 
-    AND DATE(dt.createdAt) = (
-      SELECT DATE(dt3.createdAt)
-      FROM distributedtargetitems dti3
-      JOIN distributedtarget dt3 ON dti3.targetId = dt3.id
-      WHERE dti3.orderId = ? LIMIT 1
-    )
-    AND pt.pIndex = 1 
-    AND dti.orderStatus = 'Opened'
+    WHERE dti.orderId = ?
+    LIMIT 1
   `;
-
-  const activeP1Boxes = await new Promise((res, rej) => {
-    connection.query(checkOccupiedSql, [orderId, orderId], (err, results) => {
+  const rowRows = await new Promise((res, rej) => {
+    connection.query(getRowSql, [orderId], (err, results) => {
       if (err) return rej(err);
       res(results || []);
     });
   });
 
-  if (!activeP1Boxes || activeP1Boxes.length === 0) {
-    // Position 1 is completely free!
+  if (!rowRows || rowRows.length === 0) {
+    // Order not yet assigned — let the rest of the flow handle this
     return null;
   }
 
-  // 2. Position 1 has an active box. Is it the SAME box the user is trying to pass?
-  const currentP1 = activeP1Boxes[0];
-  const occupiedInv = currentP1.invNo || "Unknown";
+  const { rowId, targetDate } = rowRows[0];
 
-  const isSameOrder = Number(currentP1.orderId) === Number(orderId);
-  const isSamePackage =
-    validPackageId !== null
-      ? Number(currentP1.orderpackageId) === Number(validPackageId)
-      : currentP1.orderpackageId === null;
-  const isSameMainContainer = Boolean(currentP1.isMainContainer) === Boolean(isMainContainer);
+  // ── Step 2: Count P1 officer capacity for this row today ──────────────────
+  // How many officers are currently assigned (isFinished=1) to pIndex=1 NOR positions in this row?
+  const capacitySql = `
+    SELECT COUNT(DISTINCT tp.officerId) AS capacity
+    FROM targetposition tp
+    JOIN packingpositions pp ON tp.positionId = pp.id
+    WHERE pp.rowId = ?
+      AND pp.pIndex = 1
+      AND pp.pType = 'NOR'
+      AND tp.isFinished = 1
+      AND tp.officerId IS NOT NULL
+      AND DATE(tp.createdAt) = ?
+  `;
+  const capacityRows = await new Promise((res, rej) => {
+    connection.query(capacitySql, [rowId, targetDate], (err, results) => {
+      if (err) return rej(err);
+      res(results || []);
+    });
+  });
+  const capacity = Number(capacityRows[0]?.capacity || 1); // Default 1 if no officer data
 
-  if (isSameOrder && isSamePackage && isSameMainContainer) {
-    // Exact same box re-attempt / reprint allowed
+  // ── Step 3: Count boxes currently at pIndex=1 in this row ─────────────────
+  const loadSql = `
+    SELECT
+      pt.id AS trackingId,
+      pt.orderId,
+      pt.orderpackageId,
+      pt.isMainContainer,
+      pt.pIndex,
+      po.invNo
+    FROM positiontracking pt
+    JOIN processorders po ON pt.orderId = po.id
+    JOIN distributedtargetitems dti ON dti.orderId = po.id
+    JOIN distributedtarget dt ON dti.targetId = dt.id
+    WHERE dt.rowId = ?
+      AND DATE(dt.createdAt) = ?
+      AND pt.pIndex = 1
+      AND dti.orderStatus = 'Opened'
+  `;
+  const activeP1Boxes = await new Promise((res, rej) => {
+    connection.query(loadSql, [rowId, targetDate], (err, results) => {
+      if (err) return rej(err);
+      res(results || []);
+    });
+  });
+
+  // ── Step 4: Check for re-print vs next copy of same package ────────────
+  const samePackageBoxesAtP1 = activeP1Boxes.filter((b) => {
+    const sameOrder = Number(b.orderId) === Number(orderId);
+    const samePkg =
+      validPackageId !== null
+        ? Number(b.orderpackageId) === Number(validPackageId)
+        : b.orderpackageId === null;
+    const sameMain = Boolean(b.isMainContainer) === Boolean(isMainContainer);
+    return sameOrder && samePkg && sameMain;
+  });
+
+  if (samePackageBoxesAtP1.length > 0) {
+    // If a box for this package is sitting right at pIndex = 1:
+    // Check if user is requesting to print the NEXT copy (e.g., box 2 with packageBoxSubIndex > 0)
+    // or if the number of already opened/printed copies indicates this is a next box
+    const subIdx = Number(packageBoxSubIndex) || 0;
+    if (subIdx > 0) {
+      // User is explicitly printing Box 2, 3, etc., but Box 1 is still at Position 1!
+      const currentBox = samePackageBoxesAtP1[0];
+      const occupiedInv = currentBox.invNo || "this order";
+      return {
+        success: false,
+        isOccupied: true,
+        code: PACKING_ERROR_CODES.STATION_OCCUPIED,
+        targetPosition: 1,
+        targetStationName: "Packing Position 1",
+        occupiedInvoice: currentBox.invNo || null,
+        message: `Packing Position 1 is currently busy with Box ${subIdx} of this package (Invoice ${occupiedInv}). Please wait until Position 1 clears before passing the next box.`
+      };
+    }
+
+    // Otherwise, check how many boxes for this package have already reached pIndex >= 1
+    const checkPkgTrackingSql = `
+      SELECT COUNT(*) AS activeCount
+      FROM positiontracking
+      WHERE orderId = ? 
+        AND ${validPackageId !== null ? "orderpackageId = ?" : "orderpackageId IS NULL"}
+        AND isMainContainer = ?
+        AND pIndex >= 1
+    `;
+    const checkParams = validPackageId !== null
+      ? [orderId, validPackageId, isMainContainer ? 1 : 0]
+      : [orderId, isMainContainer ? 1 : 0];
+
+    const [pkgTrackingRes] = await new Promise((res, rej) => {
+      connection.query(checkPkgTrackingSql, checkParams, (err, results) => {
+        if (err) return rej(err);
+        res(results || []);
+      });
+    });
+
+    const activeCountForThisPkg = Number(pkgTrackingRes?.activeCount || 0);
+
+    // If activeCountForThisPkg > samePackageBoxesAtP1.length, or if user is trying to pass another copy
+    // and P1 is still holding one of the copies, don't allow duplicate entry into P1
+    if (activeCountForThisPkg > 1 && subIdx > 0) {
+      const currentBox = samePackageBoxesAtP1[0];
+      const occupiedInv = currentBox.invNo || "this order";
+      return {
+        success: false,
+        isOccupied: true,
+        code: PACKING_ERROR_CODES.STATION_OCCUPIED,
+        targetPosition: 1,
+        targetStationName: "Packing Position 1",
+        occupiedInvoice: currentBox.invNo || null,
+        message: `Packing Position 1 is currently busy with a box of this package (Invoice ${occupiedInv}). Please wait until Position 1 clears before passing the next box.`
+      };
+    }
+
+    // Exact same box re-print (subIdx === 0 and only 1 box active) — allowed
     return null;
   }
 
-  // Position 1 is occupied by a different box/order
+  // ── Step 5: Check capacity vs current load ────────────────────────────────
+  const currentLoad = activeP1Boxes.length;
+
+  if (currentLoad < capacity) {
+    // P1 has a free slot — allow
+    return null;
+  }
+
+  // ── Step 6: P1 is fully busy — return error with details ─────────────────
+  const occupiedInvoices = [...new Set(activeP1Boxes.map((b) => b.invNo).filter(Boolean))];
+  const occupiedInvText = occupiedInvoices.length > 0
+    ? occupiedInvoices.join(", ")
+    : "an active order";
+
+  const slotInfo = capacity > 1
+    ? ` (${currentLoad}/${capacity} slots occupied)`
+    : "";
+
   return {
     success: false,
     isOccupied: true,
     code: PACKING_ERROR_CODES.STATION_OCCUPIED,
     targetPosition: 1,
     targetStationName: "Packing Position 1",
-    occupiedInvoice: occupiedInv,
-    message: `Position 1 is currently busy with Invoice ${occupiedInv}. Please wait until Position 1 clears before passing the next box.`
+    occupiedInvoice: occupiedInvoices[0] || null,
+    occupiedInvoices,
+    message: `Packing Position 1${slotInfo} is currently busy with Invoice ${occupiedInvText}. Please wait until Position 1 clears before passing the next box.`,
   };
 };
 

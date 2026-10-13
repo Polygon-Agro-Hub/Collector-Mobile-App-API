@@ -1316,7 +1316,15 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
     `;
 
     db.collectionofficer.query(getQcPIndexSql, [orderId], async (qcErr, qcRows) => {
-      const qcPIndex = (qcRows && qcRows.length > 0 ? qcRows[0].qcPIndex : null) || 3;
+      if (!qcRows || qcRows.length === 0) {
+        console.error("advancePositionIndex: order not found in distributedtargetitems, cannot determine QC pIndex", { orderId });
+        return resolve({
+          success: false,
+          code: "ORDER_NOT_ASSIGNED",
+          message: "This order has not been assigned to a packing row yet. Cannot advance position."
+        });
+      }
+      const qcPIndex = Number(qcRows[0].qcPIndex) || 2;
       const maxPIndex = qcPIndex + 1; // one step beyond QC = completed
 
       // Determine if current box being advanced is Main Container
@@ -1507,10 +1515,10 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           }
 
           const deleteStaleSql = isMainContainer
-            ? `DELETE FROM positiontracking WHERE orderId = ? AND isMainContainer = 1`
+            ? `DELETE FROM positiontracking WHERE orderId = ? AND isMainContainer = 1 ORDER BY id ASC LIMIT 1`
             : isPackageIdValid
-              ? `DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId = ?`
-              : `DELETE FROM positiontracking WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0`;
+              ? `DELETE FROM positiontracking WHERE orderId = ? AND orderpackageId = ? ORDER BY id ASC LIMIT 1`
+              : `DELETE FROM positiontracking WHERE orderId = ? AND (orderpackageId IS NULL OR orderpackageId = 0) AND isMainContainer = 0 ORDER BY id ASC LIMIT 1`;
           const deleteParams = isPackageIdValid ? [orderId, Number(orderpackageId)] : [orderId];
 
           db.collectionofficer.query(deleteStaleSql, deleteParams, () => {
@@ -1691,36 +1699,31 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
         console.error("Error getting QC pIndex:", qcErr);
         return reject(qcErr);
       }
-      const qcPIndex = (qcRows && qcRows.length > 0 ? qcRows[0].qcPIndex : null) || 3;
+      if (!qcRows || qcRows.length === 0) {
+        console.error("markOrderAsCompleted: order not found in distributedtargetitems, cannot determine QC pIndex", { orderId });
+        return resolve({ success: false, code: "ORDER_NOT_ASSIGNED", message: "This order has not been assigned to a packing row. Cannot mark as completed." });
+      }
+      const qcPIndex = Number(qcRows[0].qcPIndex) || 2;
 
       // Step 2: Calculate expected total physical boxes for this order
-      const getMasterOrderSql = `
-        SELECT orderId AS masterOrderId FROM processorders WHERE id = ?
+      // NOTE: orderpackage.orderId stores processorders.id (not orders.id), so query by orderId only.
+      const pkgSql = `
+        SELECT SUM(GREATEST(COALESCE(qty, 1), 1)) AS totalPkgQty
+        FROM orderpackage
+        WHERE orderId = ?
       `;
-      db.collectionofficer.query(getMasterOrderSql, [orderId], (mErr, mRows) => {
-        if (mErr || !mRows || mRows.length === 0) {
-          console.error("Error fetching master order ID:", mErr);
-          return reject(mErr || new Error("Process order not found"));
+      db.collectionofficer.query(pkgSql, [orderId], (pErr, pRows) => {
+        if (pErr) {
+          console.error("Error fetching package qty:", pErr);
+          return reject(pErr);
         }
-        const masterOrderId = mRows[0].masterOrderId;
+        const pkgQty = Number(pRows[0]?.totalPkgQty || 0);
 
-        const pkgSql = `
-          SELECT SUM(GREATEST(COALESCE(qty, 1), 1)) AS totalPkgQty
-          FROM orderpackage
-          WHERE orderId = ? OR orderId = ?
+        const addSql = `
+          SELECT COUNT(*) AS cnt FROM orderadditionalitems 
+          WHERE proOrderId = ?
         `;
-        db.collectionofficer.query(pkgSql, [orderId, masterOrderId], (pErr, pRows) => {
-          if (pErr) {
-            console.error("Error fetching package qty:", pErr);
-            return reject(pErr);
-          }
-          const pkgQty = Number(pRows[0]?.totalPkgQty || 0);
-
-          const addSql = `
-            SELECT COUNT(*) AS cnt FROM orderadditionalitems 
-            WHERE proOrderId = ?
-          `;
-          db.collectionofficer.query(addSql, [orderId], (aErr, aRows) => {
+        db.collectionofficer.query(addSql, [orderId], (aErr, aRows) => {
             if (aErr) {
               console.error("Error fetching additional items count:", aErr);
               return reject(aErr);
@@ -1872,8 +1875,8 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
         });
       });
     });
-  });
 };
+
 
 /**
  * Get tracking status for a process order
