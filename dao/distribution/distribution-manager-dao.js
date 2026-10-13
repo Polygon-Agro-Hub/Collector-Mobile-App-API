@@ -713,7 +713,8 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
   try {
     connection = await db.collectionofficer.promise().getConnection();
 
-    // NOTE: sheduleDate removed from here — it lives on `processorders`, not `orders`.
+    // NOTE: sheduleDate, total, discount, fullTotal, deliveryCharge, isCoupon, couponValue, couponType
+    // are NOT on `orders` — they live on `processorders` and are fetched below.
     const orderSql = `
       SELECT
           o.id AS orderId,
@@ -722,14 +723,8 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
           o.sheduleType,
           o.sheduleTime,
           o.createdAt,
-          o.total,
           o.buildingType AS orderBuildingType,
-          o.discount,
-          o.fullTotal,
           o.isPackage AS orderIsPackage,
-          o.isCoupon,
-          o.couponValue,
-          o.couponType,
           o.delivaryMethod,
           o.centerId,
           o.title,

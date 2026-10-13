@@ -92,13 +92,7 @@ const checkConnections = async () => {
 };
 
 // Start the connection checks
-checkConnections().then(() => {
-  // Pre-warm rejected officers cache (matching Govi Transport structure)
-  const officerStatusCache = require("./services/officer-status-cache");
-  officerStatusCache.triggerGetRejectOfficers().catch((err) => {
-    console.warn("Could not pre-warm rejected officers cache:", err.message);
-  });
-});
+checkConnections();
 
 // Base path configuration
 const basePathMain = "/agro-api/collection-api";
