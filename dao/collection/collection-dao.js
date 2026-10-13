@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.getTargetForOfficerDao = (officerId) => {
     return new Promise((resolve, reject) => {
@@ -180,10 +180,10 @@ exports.getTargetForOfficerDao = (officerId) => {
                 tp.officerId = ?
                 AND (
                     -- Last 3 days: get all data without filtering
-                    DATE(dt.createdAt) >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+                    DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) >= DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')), INTERVAL 2 DAY)
                     OR 
                     -- Older than 3 days: only incomplete orders
-                    (DATE(dt.createdAt) < DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND (dti.orderStatus IS NULL OR dti.orderStatus != 'Completed'))
+                    (DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) < DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')), INTERVAL 2 DAY) AND (dti.orderStatus IS NULL OR dti.orderStatus != 'Completed'))
                 )
             ORDER BY 
                 pr.companyCenterId ASC,

@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {
   return new Promise((resolve, reject) => {
@@ -87,7 +87,7 @@ SET ot.complete = CAST(
 )
 WHERE dt.varietyId = ?
 AND ot.officerId = ?
-AND DATE(dt.date) = CURDATE()
+AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
 
         `;
 
@@ -125,7 +125,7 @@ SET dt.complete = CAST(
 )
 WHERE dt.varietyId = ?
 AND cc.centerId = ? 
-AND DATE(dt.date) = CURDATE()
+AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
 AND EXISTS (
   SELECT 1 FROM officertarget ot 
   WHERE ot.dailyTargetId = dt.id
@@ -516,7 +516,7 @@ exports.createCollectionRequest = (
     const sequenceSql = `
       SELECT COUNT(*) as count 
       FROM collection_officer.collectionrequest
-      WHERE DATE(createdAt) = CURDATE()
+      WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
     `;
 
     db.plantcare.query(sequenceSql, [], (err, countResults) => {

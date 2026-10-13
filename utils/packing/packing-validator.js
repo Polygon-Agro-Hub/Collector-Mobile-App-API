@@ -1,4 +1,4 @@
-const { PACKING_ERROR_CODES } = require("./error-codes");
+﻿const { PACKING_ERROR_CODES } = require("./error-codes");
 
 /**
  * Validates whether Position 1 (pIndex = 1) has capacity for a new box.
@@ -58,7 +58,7 @@ const validatePosition1Busy = async (
       AND pp.pType = 'NOR'
       AND tp.isFinished = 1
       AND tp.officerId IS NOT NULL
-      AND DATE(tp.createdAt) = ?
+      AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = ?
   `;
   const capacityRows = await new Promise((res, rej) => {
     connection.query(capacitySql, [rowId, targetDate], (err, results) => {
@@ -82,7 +82,7 @@ const validatePosition1Busy = async (
     JOIN distributedtargetitems dti ON dti.orderId = po.id
     JOIN distributedtarget dt ON dti.targetId = dt.id
     WHERE dt.rowId = ?
-      AND DATE(dt.createdAt) = ?
+      AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = ?
       AND pt.pIndex = 1
       AND dti.orderStatus = 'Opened'
   `;

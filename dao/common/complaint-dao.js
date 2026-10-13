@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.createComplaint = (
   complain,
@@ -374,7 +374,7 @@ exports.countComplaintsByDate = async (date) => {
   const formattedDate = date.toISOString().split("T")[0];
 
   return new Promise((resolve, reject) => {
-    const query = `SELECT COUNT(*) AS count FROM farmercomplains WHERE DATE(createdAt) = ?`;
+    const query = `SELECT COUNT(*) AS count FROM farmercomplains WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = ?`;
     db.collectionofficer.query(query, [formattedDate], (error, results) => {
       if (error) {
         console.error("Error fetching complaints:", error);
@@ -395,9 +395,9 @@ exports.countOfiicerComplaintsByDate = async (date, officerRole) => {
       officerRole === "Distribution Centre Manager" ||
       officerRole === "Distribution Officer"
     ) {
-      query = `SELECT COUNT(*) AS count FROM distributedcomplains WHERE DATE(createdAt) = ?`;
+      query = `SELECT COUNT(*) AS count FROM distributedcomplains WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = ?`;
     } else {
-      query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(createdAt) = ?`;
+      query = `SELECT COUNT(*) AS count FROM officercomplains WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = ?`;
     }
 
     db.collectionofficer.query(query, [formattedDate], (error, results) => {
@@ -418,7 +418,7 @@ exports.countOfficerComplaintsByDateAndOfficer = async (date, officerId) => {
     const query = `
             SELECT COUNT(*) AS count 
             FROM officercomplains 
-            WHERE DATE(createdAt) = ? AND officerId = ?
+            WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = ? AND officerId = ?
         `;
 
     db.collectionofficer.query(
@@ -446,7 +446,7 @@ exports.countDistributedComplaintsByDateAndOfficer = async (
     const query = `
             SELECT COUNT(*) AS count 
             FROM distributedcomplains 
-            WHERE DATE(createdAt) = ? AND officerId = ?
+            WHERE DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = ? AND officerId = ?
         `;
 
     db.collectionofficer.query(

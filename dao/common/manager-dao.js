@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.getDailyReport = (collectionOfficerId, fromDate, toDate) => {
   return new Promise((resolve, reject) => {
@@ -309,7 +309,7 @@ exports.getFarmerListByCollectionOfficerAndDate = (
           INNER JOIN plant_care.users U ON RFP.userId = U.id
           INNER JOIN collectionofficer CO ON RFP.collectionOfficerId = CO.id
           WHERE RFP.collectionOfficerId = ? 
-            AND DATE(RFP.createdAt) = ?
+            AND DATE(CONVERT_TZ(RFP.createdAt, '+00:00', '+05:30')) = ?
           ORDER BY RFP.id
       `;
 
@@ -463,7 +463,7 @@ exports.GetFarmerReportDetailsDao = async (
     WHERE
       rfp.userId = ? 
       AND fpc.registerFarmerId = ?
-      AND DATE(fpc.createdAt) = ?
+      AND DATE(CONVERT_TZ(fpc.createdAt, '+00:00', '+05:30')) = ?
     ORDER BY
       fpc.createdAt DESC
   `;
@@ -585,7 +585,7 @@ exports.getCollectionOfficersReciever = async (
       AND co.status = 'Approved'
       AND dt.varietyId = ?
       AND dt.grade = ?
-      AND DATE(dt.date) = CURDATE()
+      AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       AND ot.target IS NOT NULL
       AND ot.target > 0
       AND ot.target > ot.complete

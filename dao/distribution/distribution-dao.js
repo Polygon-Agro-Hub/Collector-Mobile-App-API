@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 
 exports.getOrderData = async (req, res) => {
@@ -1105,14 +1105,14 @@ exports.getDistributionTargets = async (officerId) => {
         INNER JOIN packingpositions pp
             ON pp.rowId = dt.rowId
         INNER JOIN targetposition tp
-            ON tp.positionId = pp.id AND DATE(tp.createdAt) = CURDATE()
+            ON tp.positionId = pp.id AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
 
         WHERE
             tp.officerId = ?
             -- Step 1: only targets created in last 3 days
-            AND DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
+            AND DATE(dt.createdAt) BETWEEN DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')), INTERVAL 2 DAY) AND DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             -- Step 2: only orders scheduled for TODAY
-            AND DATE(po.sheduleDate) = CURDATE()
+            AND DATE(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
 
         GROUP BY tp.officerId`,
         [officerId],
