@@ -243,13 +243,15 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
       SELECT orderId FROM processorders 
       WHERE id = ? LIMIT 1
     `;
+    let targetProcessOrderId = null;
     const [poRows] = await db.collectionofficer.promise().query(resolveMasterOrderSql, [orderIdInput]);
     if (poRows && poRows.length > 0 && poRows[0].orderId) {
       masterOrderId = poRows[0].orderId;
+      targetProcessOrderId = orderIdInput;
     }
-    console.log(`${tag} Resolved masterOrderId=${masterOrderId}`);
+    console.log(`${tag} Resolved masterOrderId=${masterOrderId}, targetProcessOrderId=${targetProcessOrderId}`);
 
-    const order = await targetDDao.getOrderById(masterOrderId);
+    const order = await targetDDao.getOrderById(masterOrderId, targetProcessOrderId);
     if (!order || order.message) {
       console.warn(`${tag} Order not found for masterOrderId=${masterOrderId}. Skipping email.`);
       return { success: false, message: "Order not found" };

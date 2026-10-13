@@ -134,7 +134,7 @@ exports.getOrderDataDao = (orderId) => {
                 processorders po ON o.id = po.orderId
             
             LEFT JOIN 
-                orderadditionalitems oai ON o.id = oai.orderId
+                orderadditionalitems oai ON oai.proOrderId = po.id
             LEFT JOIN 
                 marketplaceitems mi_additional ON oai.productId = mi_additional.id
 
@@ -381,8 +381,9 @@ exports.validateOrderStructure = async (orderId) => {
 
     if (order.isPackage === 1 && !order.processOrderId) {
       const createProcessOrderSql = `
-                INSERT INTO processorders (orderId, createdAt)
-                VALUES (?, NOW())
+                INSERT INTO processorders (orderId, total, fullTotal, discount, deliveryCharge, isCoupon, couponValue, couponType, createdAt)
+                SELECT id, total, fullTotal, discount, deliveryCharge, isCoupon, couponValue, couponType, NOW()
+                FROM orders WHERE id = ?
             `;
 
       await new Promise((resolve, reject) => {
@@ -431,7 +432,7 @@ exports.debugOrderRelationships = async (orderId) => {
     },
     {
       name: "orderadditionalitems",
-      sql: "SELECT * FROM orderadditionalitems WHERE orderId = ?",
+      sql: "SELECT * FROM orderadditionalitems WHERE proOrderId = ?",
     },
   ];
 

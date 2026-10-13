@@ -14,8 +14,8 @@ exports.getPickupOrders = (officerId) => {
                 o.orderApp,
                 o.createdAt,
                 o.delivaryMethod,
-                o.fullTotal,
-                o.total,
+                po.fullTotal AS fullTotal,
+                po.total AS total,
                 o.buildingType,
               
                 o.sheduleTime,
@@ -54,12 +54,12 @@ exports.getPickupOrders = (officerId) => {
                 co.firstNameEnglish AS officerFirstName,
                 co.lastNameEnglish AS officerLastName,
 
-                -- Remaining cash to collect after any credit payment
-                (o.fullTotal - COALESCE(po.creditPaid, 0)) AS remainingAmount,
+                -- Remaining cash to collect after any credit payment (from processorders)
+                (COALESCE(po.fullTotal, 0) - COALESCE(po.creditPaid, 0)) AS remainingAmount,
 
                 -- True "fully paid" flag: only when nothing remains owed
                 CASE 
-                    WHEN (o.fullTotal - COALESCE(po.creditPaid, 0)) <= 0 THEN 1
+                    WHEN (COALESCE(po.fullTotal, 0) - COALESCE(po.creditPaid, 0)) <= 0 THEN 1
                     ELSE 0
                 END AS isFullyPaid
                 
@@ -122,7 +122,7 @@ exports.updatePickupDetails = async (
         await connection.beginTransaction();
 
         const getProcessOrderQuery = `
-            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid, invNo, status
+            SELECT id, paymentMethod, orderId, amount, isPaid, creditPaid, invNo, status, fullTotal
             FROM processorders 
             WHERE invNo = ?
             FOR UPDATE
@@ -164,21 +164,7 @@ exports.updatePickupDetails = async (
         let fullTotalAmount = null;
 
         if (paymentMethod === "Cash") {
-            const getOrderAmountQuery = `
-                SELECT fullTotal 
-                FROM orders 
-                WHERE id = ?
-            `;
-
-            const [orderResult] = await connection.query(getOrderAmountQuery, [
-                processOrder.orderId,
-            ]);
-
-            if (!orderResult || orderResult.length === 0) {
-                throw new Error("Order details not found");
-            }
-
-            fullTotalAmount = Number(orderResult[0].fullTotal) || 0;
+            fullTotalAmount = Number(processOrder.fullTotal) || 0;
 
             moneyPaidAmount =
                 creditPaid > 0 ? fullTotalAmount - creditPaid : fullTotalAmount;
@@ -330,7 +316,7 @@ exports.getReceivedOrders = (officerId) => {
                 o.userId,
                 o.orderApp,
                 o.delivaryMethod,
-                o.fullTotal,
+                pr.fullTotal AS fullTotal,
                 o.createdAt AS orderCreatedAt
                 
             FROM collection_officer.pickuporders po
@@ -379,7 +365,7 @@ exports.getReceivedOrders = (officerId) => {
                 o.userId,
                 o.orderApp,
                 o.delivaryMethod,
-                o.fullTotal,
+                pr.fullTotal AS fullTotal,
                 o.createdAt AS orderCreatedAt
                 
             FROM collection_officer.driverorders do
@@ -439,7 +425,7 @@ exports.getReceivedOrders = (officerId) => {
                             o.userId,
                             o.orderApp,
                             o.delivaryMethod,
-                            o.fullTotal,
+                            pr.fullTotal AS fullTotal,
                             o.createdAt AS orderCreatedAt
                             
                         FROM collection_officer.pickuporders po
@@ -507,7 +493,7 @@ exports.getReceivedOrderOfficer = (officerId) => {
                 o.userId,
                 o.orderApp,
                 o.delivaryMethod,
-                o.fullTotal,
+                pr.fullTotal AS fullTotal,
                 o.createdAt AS orderCreatedAt
                 
             FROM collection_officer.pickuporders po
