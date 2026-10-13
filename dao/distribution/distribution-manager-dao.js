@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.getDCenterTarget = (irmId = null) => {
   return new Promise((resolve, reject) => {
@@ -181,7 +181,7 @@ exports.getDCenterTarget = (irmId = null) => {
       ) package_item_counts ON po.id = package_item_counts.orderId
 
       WHERE
-          DATE(dt.createdAt) BETWEEN DATE_SUB(CURDATE(), INTERVAL 2 DAY) AND CURDATE()
+          DATE(dt.createdAt) BETWEEN DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')), INTERVAL 2 DAY) AND DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
           ${irmId ? "AND (co.irmId = ? OR tp.officerId = ?)" : ""}
 
       ORDER BY 
@@ -413,7 +413,7 @@ exports.targetPass = async (params) => {
       SELECT id, userId, target, complete, createdAt
       FROM collection_officer.distributedtarget
       WHERE userId = ?
-      AND DATE(createdAt) = CURDATE()
+      AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       ORDER BY id DESC
       LIMIT 1
     `;
@@ -679,7 +679,7 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
         ON o.id = po.orderId
       WHERE
         tp.officerId = ?
-        AND DATE(tp.createdAt) = CURDATE()
+        AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
     `;
 
     const [results] = await db.collectionofficer
