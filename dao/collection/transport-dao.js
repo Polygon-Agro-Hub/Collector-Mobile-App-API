@@ -1,4 +1,4 @@
-const { plantcare, collectionofficer } = require("../../startup/database");
+﻿const { plantcare, collectionofficer } = require("../../startup/database");
 
 exports.getSentProductsToday = (officerId) => {
     return new Promise((resolve, reject) => {
@@ -38,7 +38,7 @@ exports.getSentProductsToday = (officerId) => {
       LEFT JOIN loadeditems li ON li.transportId = tl.id
       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
       WHERE co.id = ?
-        AND DATE(tl.createdAt) = CURDATE()
+        AND DATE(CONVERT_TZ(tl.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       GROUP BY tl.id, tl.conformDriverId, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, dc.centerName
       ORDER BY tl.createdAt ASC
     `;
@@ -118,7 +118,7 @@ exports.getReceivedProductsToday = (officerId) => {
       LEFT JOIN collectionofficer driver ON driver.id = COALESCE(tl.conformDriverId, tl.driverId)
       LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
       WHERE tl.unloadOfficerId = ?
-        AND DATE(tl.unloadTime) = CURDATE()
+        AND DATE(tl.unloadTime) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       GROUP BY tl.id, tl.unloadTime, tl.createdAt, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, clc.centerName
       ORDER BY tl.unloadTime DESC
     `;

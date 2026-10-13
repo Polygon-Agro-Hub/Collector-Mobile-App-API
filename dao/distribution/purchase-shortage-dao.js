@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 exports.getShortagesForOfficer = async (officerId) => {
   const sql = `
@@ -37,7 +37,7 @@ exports.getShortagesForOfficer = async (officerId) => {
     WHERE sa.status = 'Finalize'
       AND sa.assignOfficerId = ?
       AND sa.assignOfficerId IS NOT NULL
-      AND DATE(sa.finalizeAt) = CURDATE()
+      AND DATE(sa.finalizeAt) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
     ORDER BY sa.id DESC;
   `;
 

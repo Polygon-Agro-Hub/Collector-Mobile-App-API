@@ -1,4 +1,4 @@
-const {
+﻿const {
     plantcare,
     collectionofficer,
 } = require("../../startup/database");
@@ -281,7 +281,7 @@ exports.getTargetForOfficerDao = (officerId) => {
                 plant_care.cropvariety cv ON dt.centerCropId = cv.id
             WHERE
                 ot.officerId = ?
-                AND dt.date = CURDATE()
+                AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         `;
         collectionofficer.query(sql, [officerId], (err, results) => {
             if (err) {
