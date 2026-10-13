@@ -51,7 +51,7 @@ exports.getSentProductsToday = (officerId) => {
 
             const formatted = results.map((row) => ({
                 id: String(row.id),
-                transferCode: row.transferCode || "",
+                transferCode: (row.transferCode || "").toUpperCase(),
                 vehicleNo: row.vehicleNo || "N/A",
                 driverEmpId: row.driverEmpId || "",
                 driverName: (row.driverName || "").trim(),
@@ -131,7 +131,7 @@ exports.getReceivedProductsToday = (officerId) => {
 
             const formatted = results.map((row) => ({
                 id: String(row.id),
-                transferCode: row.transferCode || "",
+                transferCode: (row.transferCode || "").toUpperCase(),
                 vehicleNo: row.vehicleNo || "N/A",
                 driverEmpId: row.driverEmpId || "",
                 driverName: (row.driverName || "").trim(),
@@ -363,7 +363,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
 
                     resolve({
                         transportId: String(loadHeader.id),
-                        transferCode: loadHeader.transferCode || "",
+                        transferCode: (loadHeader.transferCode || "").toUpperCase(),
                         vehicleNo: loadHeader.vehicleNo || "N/A",
                         driverEmpId: loadHeader.driverEmpId || "",
                         driverName: (loadHeader.driverName || "").trim(),
@@ -1098,26 +1098,27 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                         [driverId]
                     );
                     if (driverRows.length > 0 && driverRows[0].empId) {
-                        driverEmpId = driverRows[0].empId;
+                        driverEmpId = String(driverRows[0].empId).trim().toUpperCase();
                     }
                 }
+                driverEmpId = driverEmpId.toUpperCase();
 
                 const now = new Date();
                 const yy = String(now.getFullYear()).slice(-2);
                 const mm = String(now.getMonth() + 1).padStart(2, "0");
                 const dd = String(now.getDate()).padStart(2, "0");
                 const yymmdd = `${yy}${mm}${dd}`;
-                const prefix = `L-${driverEmpId}${yymmdd}`;
+                const prefix = `L-${driverEmpId}${yymmdd}`.toUpperCase();
 
                 // Find highest existing sequence for this prefix
                 const [existingCodeRows] = await connection.promise().query(
-                    "SELECT transferCode FROM transportload WHERE transferCode LIKE ? ORDER BY transferCode DESC LIMIT 1",
+                    "SELECT transferCode FROM transportload WHERE UPPER(transferCode) LIKE ? ORDER BY transferCode DESC LIMIT 1",
                     [`${prefix}%`]
                 );
 
                 let nextSeq = 1;
                 if (existingCodeRows.length > 0 && existingCodeRows[0].transferCode) {
-                    const lastCode = existingCodeRows[0].transferCode;
+                    const lastCode = existingCodeRows[0].transferCode.toUpperCase();
                     const lastSeqStr = lastCode.slice(prefix.length);
                     const parsedSeq = parseInt(lastSeqStr, 10);
                     if (!isNaN(parsedSeq)) {
@@ -1125,7 +1126,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                     }
                 }
                 const seqStr = String(nextSeq).padStart(3, "0");
-                const transferCode = `${prefix}${seqStr}`;
+                const transferCode = `${prefix}${seqStr}`.toUpperCase();
 
                 // 4. Insert into transportload
                 const insertLoadQuery = `

@@ -135,13 +135,13 @@ exports.getDCenterTarget = (irmId = null) => {
           orders o ON po.orderId = o.id
       LEFT JOIN (
           SELECT 
-              orderId,
+              proOrderId,
               COUNT(*) as total_items,
               SUM(CASE WHEN isPacked = 1 THEN 1 ELSE 0 END) as packed_items,
               SUM(CASE WHEN isPacked = 0 THEN 1 ELSE 0 END) as pending_items
           FROM orderadditionalitems
-          GROUP BY orderId
-      ) additional_item_counts ON o.id = additional_item_counts.orderId
+          GROUP BY proOrderId
+      ) additional_item_counts ON po.id = additional_item_counts.proOrderId
       LEFT JOIN (
           SELECT 
               op.orderId,
@@ -707,7 +707,7 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
   }
 };
 
-exports.getOrderById = async (orderId) => {
+exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
   let connection;
 
   try {
@@ -762,6 +762,13 @@ exports.getOrderById = async (orderId) => {
     let isPaid = null;
     let creditPaid = null;
     let scheduleDate = null; // now sourced from processorders
+    let poTotal = null;
+    let poFullTotal = null;
+    let poDiscount = null;
+    let poDeliveryCharge = null;
+    let poIsCoupon = null;
+    let poCouponValue = null;
+    let poCouponType = null;
 
     if (order.orderApp === "Marketplace") {
       finalIsPackage = order.orderIsPackage || 0;
@@ -775,12 +782,22 @@ exports.getOrderById = async (orderId) => {
             reportStatus,
             isPaid,
             creditPaid,
-            sheduleDate
+            sheduleDate,
+            total,
+            fullTotal,
+            discount,
+            deliveryCharge,
+            isCoupon,
+            couponValue,
+            couponType
         FROM processorders 
-        WHERE orderId = ?
+        WHERE (? IS NOT NULL AND id = ?) OR (? IS NULL AND orderId = ?)
       `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
+        targetProcessOrderId,
+        targetProcessOrderId,
+        targetProcessOrderId,
         orderId,
       ]);
 
@@ -794,6 +811,13 @@ exports.getOrderById = async (orderId) => {
         isPaid = processOrder.isPaid;
         creditPaid = processOrder.creditPaid;
         scheduleDate = processOrder.sheduleDate;
+        poTotal = processOrder.total;
+        poFullTotal = processOrder.fullTotal;
+        poDiscount = processOrder.discount;
+        poDeliveryCharge = processOrder.deliveryCharge;
+        poIsCoupon = processOrder.isCoupon;
+        poCouponValue = processOrder.couponValue;
+        poCouponType = processOrder.couponType;
       }
     } else if (order.orderApp === "Dash") {
       const processOrderSql = `
@@ -805,12 +829,22 @@ exports.getOrderById = async (orderId) => {
             reportStatus,
             isPaid,
             creditPaid,
-            sheduleDate
+            sheduleDate,
+            total,
+            fullTotal,
+            discount,
+            deliveryCharge,
+            isCoupon,
+            couponValue,
+            couponType
         FROM processorders 
-        WHERE orderId = ?
+        WHERE (? IS NOT NULL AND id = ?) OR (? IS NULL AND orderId = ?)
       `;
 
       const [processOrderResults] = await connection.execute(processOrderSql, [
+        targetProcessOrderId,
+        targetProcessOrderId,
+        targetProcessOrderId,
         orderId,
       ]);
 
@@ -824,6 +858,13 @@ exports.getOrderById = async (orderId) => {
         isPaid = processOrder.isPaid;
         creditPaid = processOrder.creditPaid;
         scheduleDate = processOrder.sheduleDate;
+        poTotal = processOrder.total;
+        poFullTotal = processOrder.fullTotal;
+        poDiscount = processOrder.discount;
+        poDeliveryCharge = processOrder.deliveryCharge;
+        poIsCoupon = processOrder.isCoupon;
+        poCouponValue = processOrder.couponValue;
+        poCouponType = processOrder.couponType;
 
         const packageCheckSql = `
           SELECT COUNT(*) as packageCount
@@ -961,12 +1002,12 @@ exports.getOrderById = async (orderId) => {
           oai.price,
           oai.discount AS itemDiscount
       FROM orderadditionalitems oai
-      WHERE oai.orderId = ?
+      WHERE oai.proOrderId = ?
     `;
 
     const [additionalItemsResults] = await connection.execute(
       additionalItemsSql,
-      [orderId],
+      [targetProcessOrderId || processOrderId],
     );
 
     const additionalItems = additionalItemsResults
@@ -1141,15 +1182,16 @@ exports.getOrderById = async (orderId) => {
       scheduleDate: scheduleDate, // now from processorders
       scheduleTime: order.sheduleTime,
       createdAt: order.createdAt,
-      total: parseFloat(order.total) || 0,
-      discount: parseFloat(order.discount) || 0,
-      fullTotal: parseFloat(order.fullTotal) || 0,
+      total: parseFloat(poTotal) || 0,
+      discount: parseFloat(poDiscount) || 0,
+      fullTotal: parseFloat(poFullTotal) || 0,
+      deliveryCharge: parseFloat(poDeliveryCharge) || 0,
       isPackage: finalIsPackage,
-      isCoupon: order.isCoupon,
-      couponType: order.couponType || null,
+      isCoupon: poIsCoupon ?? 0,
+      couponType: poCouponType || null,
       couponValue:
         order.orderApp === "Marketplace"
-          ? parseFloat(order.couponValue) || 0
+          ? parseFloat(poCouponValue) || 0
           : null,
       delivaryMethod: order.delivaryMethod || "Delivery",
       centerName: centerDetails?.centerName || null,

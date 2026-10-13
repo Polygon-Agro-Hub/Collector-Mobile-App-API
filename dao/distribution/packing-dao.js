@@ -484,8 +484,8 @@ exports.getQROrdersForOfficer = (officerId) => {
           (SELECT MIN(pt_qr.pIndex) FROM positiontracking pt_qr WHERE pt_qr.orderId = po.id), 
           0
         ) AS minPIndex,
-        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.orderId OR op.orderId = po.id), 0) AS packagesCount,
-        (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.orderId = po.orderId) AS alacarteCount,
+        COALESCE((SELECT SUM(COALESCE(op.qty, 1)) FROM orderpackage op WHERE op.orderId = po.id), 0) AS packagesCount,
+        (SELECT COUNT(DISTINCT oai.productId) FROM orderadditionalitems oai WHERE oai.proOrderId = po.id) AS alacarteCount,
         COALESCE(DATE_FORMAT(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30'), '%Y/%m/%d'), DATE_FORMAT(po.sheduleDate, '%Y/%m/%d')) AS date,
         po.sheduleDate
       FROM targetposition tp
@@ -522,7 +522,7 @@ exports.getQROrdersForOfficer = (officerId) => {
                   COALESCE((SELECT COUNT(*) FROM packagedetails pd WHERE pd.packageId = op.packageId), 0)
                 ) AS count
               FROM processorders po
-              JOIN orderpackage op ON (op.orderId = po.orderId OR op.orderId = po.id)
+              JOIN orderpackage op ON op.orderId = po.id
               JOIN marketplacepackages mp ON op.packageId = mp.id
               WHERE po.id = ?
             `;
@@ -835,12 +835,11 @@ exports.getOrderDetails = (orderId) => {
             co.empId AS packedByEmpId,
             COALESCE(cv.image, '') AS image
           FROM orderadditionalitems oai
-          JOIN processorders po ON oai.orderId = po.orderId
           LEFT JOIN marketplaceitems mi ON oai.productId = mi.id
           LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
           LEFT JOIN targetposition tp ON oai.packId = tp.id
           LEFT JOIN collectionofficer co ON tp.officerId = co.id
-          WHERE po.id = ?
+          WHERE oai.proOrderId = ?
           ORDER BY mi.displayName ASC, oai.id ASC
         `;
         const rawAlacarteItems = await new Promise((res) => {
@@ -1018,8 +1017,8 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
           if (!isMainContainer) {
             const getCountsSql = `
               SELECT 
-                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
-                (SELECT COUNT(*) FROM orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
+                (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id) AS packagesCount,
+                (SELECT COUNT(*) FROM orderadditionalitems WHERE proOrderId = po.id) AS alacarteCount
               FROM processorders po
               WHERE po.id = ?
               LIMIT 1
@@ -1340,8 +1339,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
         try {
           const getCountsSql = `
             SELECT 
-              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id OR orderId = po.orderId) AS packagesCount,
-              (SELECT COUNT(*) FROM orderadditionalitems WHERE orderId = po.orderId) AS alacarteCount
+              (SELECT COALESCE(SUM(COALESCE(qty, 1)), 0) FROM orderpackage WHERE orderId = po.id) AS packagesCount,
+              (SELECT COUNT(*) FROM orderadditionalitems WHERE proOrderId = po.id) AS alacarteCount
             FROM processorders po
             WHERE po.id = ?
             LIMIT 1
@@ -1639,9 +1638,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             await new Promise((res) => {
               db.collectionofficer.query(
                 `UPDATE orderadditionalitems oai
-                 JOIN processorders po ON oai.orderId = po.orderId
                  SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
-                 WHERE po.id = ? AND oai.productId IN (?)`,
+                 WHERE oai.proOrderId = ? AND oai.productId IN (?)`,
                 [targetPositionId, orderId, assignedMpiIds],
                 (e, r) => res(r)
               );
@@ -1650,9 +1648,8 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             await new Promise((res) => {
               db.collectionofficer.query(
                 `UPDATE orderadditionalitems oai
-                 JOIN processorders po ON oai.orderId = po.orderId
                  SET oai.packId = ?, oai.packingTime = NOW(), oai.isPacked = 1
-                 WHERE po.id = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
+                 WHERE oai.proOrderId = ? AND (oai.packId IS NULL OR oai.packId = 0)`,
                 [targetPositionId, orderId],
                 (e, r) => res(r)
               );
@@ -1721,9 +1718,9 @@ exports.markOrderAsCompleted = (orderId, officerId = null) => {
 
           const addSql = `
             SELECT COUNT(*) AS cnt FROM orderadditionalitems 
-            WHERE orderId = ?
+            WHERE proOrderId = ?
           `;
-          db.collectionofficer.query(addSql, [masterOrderId], (aErr, aRows) => {
+          db.collectionofficer.query(addSql, [orderId], (aErr, aRows) => {
             if (aErr) {
               console.error("Error fetching additional items count:", aErr);
               return reject(aErr);
@@ -2036,10 +2033,10 @@ exports.getOfficerActiveOrder = (officerId) => {
         const alacarteSql = `
           SELECT COUNT(*) AS count
           FROM orderadditionalitems
-          WHERE orderId = ?
+          WHERE proOrderId = ?
         `;
         const alacarteRes = await new Promise((res) => {
-          db.collectionofficer.query(alacarteSql, [activeOrder.orderId], (e, r) => res(r || []));
+          db.collectionofficer.query(alacarteSql, [activeOrder.processOrderId], (e, r) => res(r || []));
         });
         const alacarteCount = alacarteRes.length > 0 ? alacarteRes[0].count : 0;
 
@@ -2106,7 +2103,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               'À la carte' AS packName,
               'alacarte' AS categoryType
             FROM processorders po
-            JOIN orderadditionalitems oai ON po.orderId = oai.orderId
+            JOIN orderadditionalitems oai ON oai.proOrderId = po.id
             JOIN marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ? AND mi.id IS NOT NULL
@@ -2125,7 +2122,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               mp.displayName AS packName,
               'package' AS categoryType
             FROM processorders po
-            JOIN orderpackage op ON (op.orderId = po.id OR op.orderId = po.orderId)
+            JOIN orderpackage op ON op.orderId = po.id
             JOIN marketplacepackages mp ON op.packageId = mp.id
             JOIN orderpackageitems opi ON op.id = opi.orderPackageId
             JOIN marketplaceitems mi ON opi.productId = mi.id
@@ -2145,7 +2142,7 @@ exports.getOfficerActiveOrder = (officerId) => {
               'À la carte' AS packName,
               'alacarte' AS categoryType
             FROM processorders po
-            JOIN orderadditionalitems oai ON po.orderId = oai.orderId
+            JOIN orderadditionalitems oai ON oai.proOrderId = po.id
             JOIN marketplaceitems mi ON oai.productId = mi.id
             LEFT JOIN plant_care.cropvariety cv ON mi.varietyId = cv.id
             WHERE po.id = ?
