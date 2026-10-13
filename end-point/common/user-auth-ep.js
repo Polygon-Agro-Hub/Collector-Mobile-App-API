@@ -363,45 +363,7 @@ exports.notifyStatusChanged = async (req, res) => {
       });
     }
 
-    const officerStatusCache = require("../../services/officer-status-cache");
-    let resolvedUserId = userId ? Number(userId) : null;
-    let resolvedEmpId = empId || null;
-
-    let targetStatus = status || null;
-
-    // Auto-resolve missing empId, userId, and status from database
-    if (resolvedUserId) {
-      try {
-        const db = require("../../startup/database");
-        const [rows] = await db.collectionofficer.promise().query(
-          "SELECT empId, status FROM collectionofficer WHERE id = ?",
-          [resolvedUserId]
-        );
-        if (rows.length > 0) {
-          if (!resolvedEmpId) resolvedEmpId = rows[0].empId;
-          if (!targetStatus) targetStatus = rows[0].status;
-        }
-      } catch (_) {}
-    } else if (resolvedEmpId) {
-      try {
-        const db = require("../../startup/database");
-        const [rows] = await db.collectionofficer.promise().query(
-          "SELECT id, status FROM collectionofficer WHERE empId = ?",
-          [resolvedEmpId]
-        );
-        if (rows.length > 0) {
-          if (!resolvedUserId) resolvedUserId = rows[0].id;
-          if (!targetStatus) targetStatus = rows[0].status;
-        }
-      } catch (_) {}
-    }
-
     targetStatus = targetStatus || "Rejected";
-
-    // Update in-memory cache without expiration (stdTTL: 0)
-    if (resolvedUserId) {
-      officerStatusCache.setOfficerStatus(resolvedUserId, targetStatus);
-    }
 
     const payload = {
       userId: resolvedUserId,
