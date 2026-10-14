@@ -1,4 +1,4 @@
-﻿const { PACKING_ERROR_CODES } = require("./error-codes");
+const { PACKING_ERROR_CODES } = require("./error-codes");
 
 /**
  * Validates whether Position 1 (pIndex = 1) has capacity for a new box.
@@ -219,8 +219,8 @@ const validateNextPositionBusy = async (dbInstance, orderId, nextStep, targetSta
       JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
       WHERE dti_sub.orderId = ? LIMIT 1
     )
-    AND DATE(dt.createdAt) = (
-      SELECT DATE(dt_sub2.createdAt)
+    AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = (
+      SELECT DATE(CONVERT_TZ(dt_sub2.createdAt, '+00:00', '+05:30'))
       FROM distributedtargetitems dti_sub2
       JOIN distributedtarget dt_sub2 ON dti_sub2.targetId = dt_sub2.id
       WHERE dti_sub2.orderId = ? LIMIT 1

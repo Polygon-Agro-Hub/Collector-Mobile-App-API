@@ -116,7 +116,7 @@ const sendEmail = async (
   const htmlContent = template(templateData);
 
   const mailOptions = {
-    from: `"Polygon Agro" <${process.env.EMAIL_USER}>`,
+    from: `"Polygon" <${process.env.EMAIL_USER}>`,
     to,
     subject,
     html: htmlContent,
