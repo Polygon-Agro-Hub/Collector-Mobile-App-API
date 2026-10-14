@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -84,13 +84,13 @@ exports.getAvailableRows = (companyCenterId = null, includeInactive = false) => 
           SELECT COUNT(DISTINCT tp.officerId) 
           FROM targetposition tp 
           JOIN packingpositions pp ON tp.positionId = pp.id 
-          WHERE pp.rowId = pr.id AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+          WHERE pp.rowId = pr.id AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND tp.isFinished = 1
         ) AS staffCount,
         (
           SELECT COUNT(DISTINCT dti.orderId) 
           FROM distributedtarget dt 
           JOIN distributedtargetitems dti ON dt.id = dti.targetId 
-          WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = pr.id AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         ) AS totalOrders
       FROM packingrows pr
       WHERE 1=1
@@ -187,7 +187,7 @@ exports.getRowLiveMonitor = (rowId) => {
         JOIN packingpositions pp ON tp.positionId = pp.id
         JOIN collectionofficer u ON tp.officerId = u.id
         WHERE pp.rowId = ? 
-          AND (DATE(tp.createdAt) = CURDATE() OR DATE(tp.createdAt) = (SELECT DATE(MAX(createdAt)) FROM targetposition WHERE positionId = pp.id))
+          AND (DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) OR DATE(tp.createdAt) = (SELECT DATE(MAX(createdAt)) FROM targetposition WHERE positionId = pp.id))
           AND tp.isFinished = 1
         ORDER BY pp.pIndex ASC
       `;
@@ -257,7 +257,7 @@ exports.getRowLiveMonitor = (rowId) => {
           JOIN orders o ON po.orderId = o.id
           LEFT JOIN marketplaceusers u ON o.userId = u.id
           WHERE dt.rowId = ? 
-            AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = (SELECT DATE(MAX(createdAt)) FROM distributedtarget WHERE rowId = ?))
+            AND (DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) OR DATE(dt.createdAt) = (SELECT DATE(MAX(createdAt)) FROM distributedtarget WHERE rowId = ?))
           ORDER BY po.id ASC
         `;
 
@@ -619,7 +619,7 @@ exports.togglePositionOccupancy = (positionId, isFinished = 0) => {
   return new Promise((resolve, reject) => {
     const findSql = `
       SELECT id, isFinished FROM targetposition 
-      WHERE positionId = ? AND DATE(createdAt) = CURDATE()
+      WHERE positionId = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       ORDER BY id DESC LIMIT 1
     `;
     db.collectionofficer.query(findSql, [positionId], (err, results) => {

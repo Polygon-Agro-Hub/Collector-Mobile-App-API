@@ -1,4 +1,4 @@
-const { collectionofficer } = require("../../startup/database");
+﻿const { collectionofficer } = require("../../startup/database");
 
 exports.getOfficerDailyTargets = (officerId) => {
   return new Promise((resolve, reject) => {
@@ -29,7 +29,7 @@ exports.getOfficerDailyTargets = (officerId) => {
               plant_care.cropvariety cv ON dt.varietyId = cv.id
           WHERE
               ot.officerId = ?
-              AND DATE(dt.date) = CURDATE()
+              AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
                AND NOT (ot.target = 0 AND COALESCE(ot.complete, 0) = 0)
           ORDER BY
               dt.date DESC, dt.id DESC
@@ -84,7 +84,7 @@ exports.getCenterTarget = (centerId) => {
               companycenter cc ON dt.companyCenterId = cc.id 
           WHERE 
               cc.centerId= ?
-              AND DATE(dt.date) = CURDATE()
+              AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
                AND NOT (dt.target = 0 AND COALESCE(dt.complete, 0) = 0)
           ORDER BY
               dt.varietyId, dt.grade
@@ -335,7 +335,7 @@ exports.receiveTargetDAO = (
           FROM dailytarget dt
           WHERE dt.varietyId = ? 
           AND dt.grade = ?
-          AND DATE(dt.date) = CURDATE()
+          AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
           LIMIT 1;
       `;
 
@@ -483,7 +483,7 @@ exports.getDailyTargetByOfficerAndVariety = (officerId, varietyId, grade) => {
               ot.officerId = ? 
               AND dt.varietyId = ? 
               AND dt.grade = ?
-              AND DATE(dt.date) = CURDATE();
+              AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'));
       `;
 
     collectionofficer.query(
@@ -537,7 +537,7 @@ exports.getOfficerSummaryDao = async (officerId) => {
               dailytarget dt ON ot.dailyTargetId = dt.id
           WHERE 
               ot.officerId = ?
-              AND DATE(dt.date) = CURDATE();
+              AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'));
       `;
     collectionofficer.query(query, [officerId], (error, results) => {
       if (error) {
@@ -583,7 +583,7 @@ exports.getOfficerSummaryDaoManager = async (collectionOfficerId) => {
           dailytarget dt ON ot.dailyTargetId = dt.id
       WHERE 
           ot.officerId = ?
-          AND DATE(dt.date) = CURDATE();
+          AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'));
     `;
 
     collectionofficer.query(query, [collectionOfficerId], (error, results) => {

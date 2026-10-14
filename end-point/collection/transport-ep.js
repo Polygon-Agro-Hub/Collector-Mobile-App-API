@@ -5,6 +5,7 @@ const { DRIVER_STATUS } = require("../../constants/driver-status");
 exports.getSentProductsToday = async (req, res) => {
     try {
         const officerId = req.user.id;
+        const date = req.query.date || null;
 
         if (!officerId) {
             return res.status(400).json({
@@ -13,7 +14,7 @@ exports.getSentProductsToday = async (req, res) => {
             });
         }
 
-        const sentProducts = await TransportDAO.getSentProductsToday(officerId);
+        const sentProducts = await TransportDAO.getSentProductsToday(officerId, date);
 
         res.status(200).json({
             success: true,
@@ -31,6 +32,7 @@ exports.getSentProductsToday = async (req, res) => {
 exports.getReceivedProductsToday = async (req, res) => {
     try {
         const officerId = req.user.id;
+        const date = req.query.date || null;
 
         if (!officerId) {
             return res.status(400).json({
@@ -39,7 +41,7 @@ exports.getReceivedProductsToday = async (req, res) => {
             });
         }
 
-        const receivedProducts = await TransportDAO.getReceivedProductsToday(officerId);
+        const receivedProducts = await TransportDAO.getReceivedProductsToday(officerId, date);
 
         res.status(200).json({
             success: true,

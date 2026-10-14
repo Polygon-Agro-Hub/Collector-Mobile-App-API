@@ -58,7 +58,7 @@ const validatePosition1Busy = async (
       AND pp.pType = 'NOR'
       AND tp.isFinished = 1
       AND tp.officerId IS NOT NULL
-      AND DATE(tp.createdAt) = ?
+      AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = ?
   `;
   const capacityRows = await new Promise((res, rej) => {
     connection.query(capacitySql, [rowId, targetDate], (err, results) => {
@@ -82,7 +82,7 @@ const validatePosition1Busy = async (
     JOIN distributedtargetitems dti ON dti.orderId = po.id
     JOIN distributedtarget dt ON dti.targetId = dt.id
     WHERE dt.rowId = ?
-      AND DATE(dt.createdAt) = ?
+      AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = ?
       AND pt.pIndex = 1
       AND dti.orderStatus = 'Opened'
   `;
@@ -219,8 +219,8 @@ const validateNextPositionBusy = async (dbInstance, orderId, nextStep, targetSta
       JOIN distributedtarget dt_sub ON dti_sub.targetId = dt_sub.id
       WHERE dti_sub.orderId = ? LIMIT 1
     )
-    AND DATE(dt.createdAt) = (
-      SELECT DATE(dt_sub2.createdAt)
+    AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = (
+      SELECT DATE(CONVERT_TZ(dt_sub2.createdAt, '+00:00', '+05:30'))
       FROM distributedtargetitems dti_sub2
       JOIN distributedtarget dt_sub2 ON dti_sub2.targetId = dt_sub2.id
       WHERE dti_sub2.orderId = ? LIMIT 1

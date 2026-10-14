@@ -1,10 +1,14 @@
 const { plantcare, collectionofficer } = require("../../startup/database");
 
-exports.getSentProductsToday = (officerId) => {
+exports.getSentProductsToday = (officerId, targetDate = null) => {
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is required"));
         }
+
+        const dateCondition = targetDate
+          ? "DATE(CONVERT_TZ(tl.createdAt, '+00:00', '+05:30')) = DATE(?)"
+          : "DATE(CONVERT_TZ(tl.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))";
 
         const sql = `
       SELECT
@@ -38,12 +42,14 @@ exports.getSentProductsToday = (officerId) => {
       LEFT JOIN loadeditems li ON li.transportId = tl.id
       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
       WHERE co.id = ?
-        AND DATE(tl.createdAt) = CURDATE()
+        AND ${dateCondition}
       GROUP BY tl.id, tl.conformDriverId, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, dc.centerName
       ORDER BY tl.createdAt ASC
     `;
 
-        collectionofficer.query(sql, [officerId], (err, results) => {
+        const params = targetDate ? [officerId, targetDate] : [officerId];
+
+        collectionofficer.query(sql, params, (err, results) => {
             if (err) {
                 console.error("Database error:", err);
                 return reject(err);
@@ -77,11 +83,15 @@ exports.getSentProductsToday = (officerId) => {
     });
 };
 
-exports.getReceivedProductsToday = (officerId) => {
+exports.getReceivedProductsToday = (officerId, targetDate = null) => {
     return new Promise((resolve, reject) => {
         if (!officerId) {
             return reject(new Error("Officer ID is required"));
         }
+
+        const dateCondition = targetDate
+          ? "DATE(CONVERT_TZ(tl.unloadTime, '+00:00', '+05:30')) = DATE(?)"
+          : "DATE(CONVERT_TZ(tl.unloadTime, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))";
 
         const sql = `
       SELECT
@@ -118,12 +128,14 @@ exports.getReceivedProductsToday = (officerId) => {
       LEFT JOIN collectionofficer driver ON driver.id = COALESCE(tl.conformDriverId, tl.driverId)
       LEFT JOIN vehicleregistration vr ON vr.coId = driver.id
       WHERE tl.unloadOfficerId = ?
-        AND DATE(tl.unloadTime) = CURDATE()
+        AND ${dateCondition}
       GROUP BY tl.id, tl.unloadTime, tl.createdAt, vr.vRegNo, driver.empId, driver.firstNameEnglish, driver.lastNameEnglish, driver.firstNameSinhala, driver.lastNameSinhala, driver.firstNameTamil, driver.lastNameTamil, clc.centerName
       ORDER BY tl.unloadTime DESC
     `;
 
-        collectionofficer.query(sql, [officerId], (err, results) => {
+        const params = targetDate ? [officerId, targetDate] : [officerId];
+
+        collectionofficer.query(sql, params, (err, results) => {
             if (err) {
                 console.error("Database error in getReceivedProductsToday:", err);
                 return reject(err);

@@ -1,4 +1,4 @@
-const db = require("../../startup/database");
+﻿const db = require("../../startup/database");
 
 /**
  * Get timeslot group counts for today scoped to a specific distribution company centre
@@ -18,7 +18,7 @@ exports.getGroupTimeslotCounts = (companyCenterId) => {
       JOIN distributedcompanycenter dcen ON (o.centerId = dcen.centerId OR o.assignCoMCenId = dcen.id)
       LEFT JOIN marketplaceusers mu ON o.userId = mu.id
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(po.sheduleDate) = CURDATE()
+      WHERE DATE(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         AND dcen.id = ?
         AND (
           COALESCE(o.isPackage, 0) != 1
@@ -65,7 +65,7 @@ exports.getUnassignedOrdersForGroup = (sheduleTime, buyerType, companyCenterId) 
       LEFT JOIN orderhouse oh ON o.id = oh.orderId
       LEFT JOIN orderapartment oa ON o.id = oa.orderId
       LEFT JOIN distributedtargetitems dti ON po.id = dti.orderId
-      WHERE DATE(po.sheduleDate) = CURDATE()
+      WHERE DATE(CONVERT_TZ(po.sheduleDate, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         AND dti.id IS NULL
         AND (po.isTargetAssigned IS NULL OR po.isTargetAssigned = 0)
         AND COALESCE(mu.buyerType, 'Retail') = ?
@@ -109,7 +109,7 @@ exports.getRowAllocationCounts = (companyCenterId) => {
           WHERE pp.rowId = pr.id AND pp.pType = 'NOR'
         ) AS crops
       FROM packingrows pr
-      LEFT JOIN distributedtarget dt ON pr.id = dt.rowId AND DATE(dt.createdAt) = CURDATE()
+      LEFT JOIN distributedtarget dt ON pr.id = dt.rowId AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
       WHERE pr.isEnabled = 1 AND pr.companyCenterId = ?
         AND (
@@ -198,7 +198,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
           // 1. Get or create distributedtarget record
           const checkTargetSql = `
             SELECT id FROM distributedtarget 
-            WHERE rowId = ? AND timeSlot = ? AND DATE(createdAt) = CURDATE()
+            WHERE rowId = ? AND timeSlot = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             LIMIT 1
           `;
           let targetId = await new Promise((res, rej) => {
@@ -227,7 +227,7 @@ exports.assignOrdersToRow = (rowId, timeSlotCode, orderIds, companyCenterId = nu
             UPDATE targetposition tp
             JOIN packingpositions pp ON tp.positionId = pp.id
             SET tp.targetId = ?
-            WHERE pp.rowId = ? AND DATE(tp.createdAt) = CURDATE()
+            WHERE pp.rowId = ? AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
           `;
           await new Promise((res, rej) => {
             connection.query(updateOfficerTargetSql, [targetId, actualRowId], (err, result) => {

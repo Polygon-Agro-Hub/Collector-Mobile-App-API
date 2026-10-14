@@ -59,7 +59,7 @@ exports.getOfficerActiveAssignment = (officerId) => {
       JOIN packingpositions pp ON tp.positionId = pp.id
       JOIN packingrows pr ON pp.rowId = pr.id
       LEFT JOIN distributedtarget dt ON tp.targetId = dt.id
-      WHERE tp.officerId = ? AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+      WHERE tp.officerId = ? AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND tp.isFinished = 1
       ORDER BY tp.id DESC
       LIMIT 1
     `;
@@ -103,16 +103,16 @@ exports.getPackingRowsForCenter = (companyCenterId) => {
           SELECT COUNT(dti.id)
           FROM distributedtarget dt
           JOIN distributedtargetitems dti ON dt.id = dti.targetId
-          WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = pr.id AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         ) AS ordersCount,
         (
           SELECT COUNT(dt.id)
           FROM distributedtarget dt
-          WHERE dt.rowId = pr.id AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = pr.id AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         ) AS targetCount
       FROM packingrows pr
       LEFT JOIN packingpositions pp ON pr.id = pp.rowId
-      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND tp.isFinished = 1
       WHERE pr.companyCenterId = ? AND pr.isEnabled = 1
         AND (
           SELECT COUNT(*) 
@@ -167,12 +167,12 @@ exports.checkRowHasAssignedOrders = (rowId) => {
           SELECT COUNT(dti.id)
           FROM distributedtarget dt
           JOIN distributedtargetitems dti ON dt.id = dti.targetId
-          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = ? AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         ) AS ordersCount,
         (
           SELECT COUNT(dt.id)
           FROM distributedtarget dt
-          WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE()
+          WHERE dt.rowId = ? AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         ) AS targetCount
     `;
     db.collectionofficer.query(sql, [rowId, rowId], (err, results) => {
@@ -218,7 +218,7 @@ exports.getPositionsForRow = (rowId) => {
           ELSE LPAD(pp.pIndex, 2, '0')
         END AS leftLabel
       FROM packingpositions pp
-      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(tp.createdAt) = CURDATE() AND tp.isFinished = 1
+      LEFT JOIN targetposition tp ON pp.id = tp.positionId AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND tp.isFinished = 1
       WHERE pp.rowId = ?
       ORDER BY 
         CASE WHEN pp.pType = 'QR' THEN 1 WHEN pp.pType = 'NOR' THEN 2 ELSE 3 END,
@@ -290,7 +290,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           // 2. Find or create distributedtarget record for today
           const getTargetSql = `
             SELECT id FROM distributedtarget 
-            WHERE rowId = ? AND timeSlot = ? AND DATE(createdAt) = CURDATE()
+            WHERE rowId = ? AND timeSlot = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             ORDER BY id DESC LIMIT 1
           `;
           let targetId = await new Promise((res, rej) => {
@@ -336,7 +336,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           // 4. Check if position is occupied by another officer today
           const checkPosSql = `
             SELECT id, officerId FROM targetposition 
-            WHERE positionId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
+            WHERE positionId = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND isFinished = 1
             LIMIT 1
           `;
           const posOccupant = await new Promise((res, rej) => {
@@ -362,7 +362,7 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
           // 5. Upsert targetposition
           const checkOfficerSql = `
             SELECT id FROM targetposition 
-            WHERE officerId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
+            WHERE officerId = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND isFinished = 1
             LIMIT 1
           `;
           const existingAssignment = await new Promise((res, rej) => {
@@ -490,7 +490,7 @@ exports.getQROrdersForOfficer = (officerId) => {
         po.sheduleDate
       FROM targetposition tp
       JOIN packingpositions pp ON tp.positionId = pp.id
-      JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(dt.createdAt) = CURDATE() OR DATE(dt.createdAt) = DATE(tp.createdAt))
+      JOIN distributedtarget dt ON pp.rowId = dt.rowId AND (DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) OR DATE(dt.createdAt) = DATE(tp.createdAt))
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN processorders po ON dti.orderId = po.id
       JOIN orders o ON po.orderId = o.id
@@ -630,7 +630,7 @@ exports.getCenterTargetOrders = (companyCenterId = null) => {
       LEFT JOIN orderhouse oh ON (oh.orderId = o.id OR oh.orderId = po.orderId)
       LEFT JOIN orderapartment oa ON (oa.orderId = o.id OR oa.orderId = po.orderId)
       LEFT JOIN marketplaceusers u ON o.userId = u.id
-      WHERE DATE(dt.createdAt) = CURDATE()
+      WHERE DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
         AND (? IS NULL OR dcen.id = ?)
       ORDER BY dt.timeSlot ASC, po.id ASC
     `;
@@ -988,6 +988,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             AND (pp.pIndex = 1 OR pp.pType = 'NOR')
             AND tp.officerId IS NOT NULL
             AND tp.isFinished = 1
+            AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             ORDER BY tp.id DESC
             LIMIT 1
           `;
@@ -1410,6 +1411,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           )
             AND tp.isFinished = 1
             AND tp.officerId IS NOT NULL
+            AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             AND (
               (${nextStep} = ${qcPIndex} AND pp.pType = 'QC') OR
               (pp.pType = 'NOR' AND pp.pIndex = ${nextStep})
@@ -1566,7 +1568,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           const officerTpSql = `
             SELECT id AS targetPositionId
             FROM targetposition
-            WHERE officerId = ? AND DATE(createdAt) = CURDATE()
+            WHERE officerId = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             ORDER BY id DESC LIMIT 1
           `;
           const officerTpRows = await new Promise((res) => {
@@ -1588,7 +1590,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
             WHERE pp.rowId = dt.rowId
               AND pp.pType = 'NOR'
               AND pp.pIndex = ?
-              AND DATE(tp.createdAt) = CURDATE()
+              AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             ORDER BY tp.id DESC LIMIT 1
           `;
           const tpRows = await new Promise((res) => {
@@ -1984,7 +1986,7 @@ exports.getOfficerActiveOrder = (officerId) => {
       LEFT JOIN distributedtarget dt_tp ON tp.targetId = dt_tp.id
       JOIN distributedtarget dt ON (
         dt.id = tp.targetId 
-        OR (pp.rowId = dt.rowId AND DATE(dt.createdAt) = COALESCE(DATE(dt_tp.createdAt), CURDATE()))
+        OR (pp.rowId = dt.rowId AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = COALESCE(DATE(CONVERT_TZ(dt_tp.createdAt, '+00:00', '+05:30')), DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))))
       )
       JOIN distributedtargetitems dti ON dt.id = dti.targetId
       JOIN processorders po ON dti.orderId = po.id
@@ -1993,7 +1995,7 @@ exports.getOfficerActiveOrder = (officerId) => {
       WHERE tp.id = (
         SELECT MAX(tp_sub.id) 
         FROM targetposition tp_sub 
-        WHERE tp_sub.officerId = ? AND DATE(tp_sub.createdAt) = CURDATE()
+        WHERE tp_sub.officerId = ? AND DATE(CONVERT_TZ(tp_sub.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       )
       AND dti.orderStatus = 'Opened'
       AND EXISTS (
@@ -2206,7 +2208,7 @@ exports.getRowStatusForOfficer = (officerId) => {
       WHERE tp.id = (
         SELECT MAX(tp_sub.id)
         FROM targetposition tp_sub
-        WHERE tp_sub.officerId = ? AND DATE(tp_sub.createdAt) = CURDATE()
+        WHERE tp_sub.officerId = ? AND DATE(CONVERT_TZ(tp_sub.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
       )
     `;
     db.collectionofficer.query(sql, [officerId], (err, rows) => {
@@ -2218,7 +2220,7 @@ exports.getRowStatusForOfficer = (officerId) => {
         SELECT COUNT(*) AS activeCount
         FROM distributedtarget dt
         JOIN distributedtargetitems dti ON dt.id = dti.targetId
-        WHERE dt.rowId = ? AND DATE(dt.createdAt) = CURDATE() AND dti.orderStatus IN ('Pending', 'Opened')
+        WHERE dt.rowId = ? AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND dti.orderStatus IN ('Pending', 'Opened')
       `;
       db.collectionofficer.query(countSql, [rowId], (err2, countRows) => {
         const activeCount = countRows && countRows.length > 0 ? countRows[0].activeCount : 0;
@@ -2271,7 +2273,7 @@ exports.releaseOfficerPosition = (officerId) => {
   return new Promise((resolve, reject) => {
     const findSql = `
       SELECT id, positionId FROM targetposition 
-      WHERE officerId = ? AND DATE(createdAt) = CURDATE() AND isFinished = 1
+      WHERE officerId = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')) AND isFinished = 1
       ORDER BY id DESC LIMIT 1
     `;
     db.collectionofficer.query(findSql, [officerId], (err, results) => {
