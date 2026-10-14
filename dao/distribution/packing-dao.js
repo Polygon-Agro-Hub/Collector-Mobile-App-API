@@ -988,6 +988,7 @@ exports.markOrderAsOpened = (orderId, orderpackageId = null, isPackage = null, p
             AND (pp.pIndex = 1 OR pp.pType = 'NOR')
             AND tp.officerId IS NOT NULL
             AND tp.isFinished = 1
+            AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             ORDER BY tp.id DESC
             LIMIT 1
           `;
@@ -1410,6 +1411,7 @@ exports.advancePositionIndex = (orderId, orderpackageId = null, currentPIndex = 
           )
             AND tp.isFinished = 1
             AND tp.officerId IS NOT NULL
+            AND DATE(CONVERT_TZ(tp.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
             AND (
               (${nextStep} = ${qcPIndex} AND pp.pType = 'QC') OR
               (pp.pType = 'NOR' AND pp.pIndex = ${nextStep})
