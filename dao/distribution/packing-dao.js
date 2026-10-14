@@ -278,41 +278,21 @@ exports.assignOfficerToPosition = (officerId, packingPositionId) => {
             return;
           }
 
-          // Determine current timeSlot enum based on hour: '8-12', '12-4', or '4-9'
-          const currentHour = new Date().getHours();
-          let timeSlot = "8-12";
-          if (currentHour >= 12 && currentHour < 16) {
-            timeSlot = "12-4";
-          } else if (currentHour >= 16 && currentHour < 21) {
-            timeSlot = "4-9";
-          }
-
-          // 2. Find or create distributedtarget record for today
+          // 2. Find existing distributedtarget record for this row today (prioritizing target with assigned orders)
           const getTargetSql = `
-            SELECT id FROM distributedtarget 
-            WHERE rowId = ? AND timeSlot = ? AND DATE(CONVERT_TZ(createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
-            ORDER BY id DESC LIMIT 1
+            SELECT dt.id FROM distributedtarget dt
+            LEFT JOIN distributedtargetitems dti ON dt.id = dti.targetId
+            WHERE dt.rowId = ? AND DATE(CONVERT_TZ(dt.createdAt, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
+            GROUP BY dt.id
+            ORDER BY COUNT(dti.id) DESC, dt.id DESC
+            LIMIT 1
           `;
           let targetId = await new Promise((res, rej) => {
-            connection.query(getTargetSql, [posInfo.rowId, timeSlot], (err, results) => {
+            connection.query(getTargetSql, [posInfo.rowId], (err, results) => {
               if (err) return rej(err);
               res(results.length > 0 ? results[0].id : null);
             });
           });
-
-          if (!targetId) {
-            const insertTargetSql = `
-              INSERT INTO distributedtarget (rowId, timeSlot, createdAt)
-              VALUES (?, ?, NOW())
-            `;
-            const insertTargetRes = await new Promise((res, rej) => {
-              connection.query(insertTargetSql, [posInfo.rowId, timeSlot], (err, result) => {
-                if (err) return rej(err);
-                res(result);
-              });
-            });
-            targetId = insertTargetRes.insertId;
-          }
 
           // 3. Ensure a record exists in positionscrops for this packingPositionId
           const getPosCropSql = `SELECT id FROM positionscrops WHERE posId = ? LIMIT 1`;
