@@ -327,3 +327,10 @@ exports.getPassword = (id) => {
     });
   });
 };
+
+exports.getOfficerStatusById = async (id) => {
+  const sql =
+    "SELECT id, status, jobRole, empId FROM collectionofficer WHERE id = ? LIMIT 1";
+  const [rows] = await db.collectionofficer.promise().query(sql, [id]);
+  return rows?.[0] || null;
+};

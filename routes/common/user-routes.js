@@ -10,7 +10,7 @@ router.post("/online-status", userAuthEp.updateOnlineStatus);
 router.get("/check-status", authenticate, (req, res) => {
     res.status(200).json({
         status: "success",
-        accountStatus: "Approved",
+        accountStatus: req.user.status || "Approved",
         message: "Account is active and approved.",
     });
 });
