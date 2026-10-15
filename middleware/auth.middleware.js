@@ -1,6 +1,4 @@
 const jwt = require("jsonwebtoken");
-const db = require("../startup/database");
-const { OFFICER_STATUS } = require("../constants/officer-status");
 
 const auth = (req, res, next) => {
   const token = req.headers["authorization"]?.split(" ")[1];
@@ -28,55 +26,33 @@ const auth = (req, res, next) => {
       });
     }
 
-    const officerId = decoded.id;
+    // Check account status directly from token payload
+    const rawStatus = (decoded.accountStatus || decoded.status || "").trim();
+    const normalizedStatus = rawStatus.toLowerCase();
 
-    // Check account status directly from database on every request (no cache)
-    db.collectionofficer.query(
-      "SELECT status FROM collectionofficer WHERE id = ?",
-      [officerId],
-      (dbErr, results) => {
-        if (dbErr) {
-          console.error("Database query error in auth middleware:", dbErr);
-          return res.status(500).json({
-            status: "error",
-            message: "Database error during authentication check",
-          });
-        }
+    if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
+      return res.status(403).json({
+        status: "error",
+        message: "This EMP ID is Rejected",
+        accountStatus: "Rejected",
+        statusType: "rejected",
+      });
+    }
 
-        if (results.length === 0) {
-          return res.status(401).json({
-            status: "error",
-            message: "User not found",
-          });
-        }
+    if (normalizedStatus && normalizedStatus !== "approved") {
+      return res.status(403).json({
+        status: "error",
+        message: `This account is ${rawStatus || "not approved"}.`,
+        accountStatus: rawStatus || "not approved",
+        statusType: "not_approved",
+      });
+    }
 
-        const rawStatus = (results[0].status || "").trim();
-        const normalizedStatus = rawStatus.toLowerCase();
-
-        if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
-          return res.status(403).json({
-            status: "error",
-            message: "This EMP ID is Rejected",
-            accountStatus: "Rejected",
-            statusType: "rejected",
-          });
-        }
-
-        if (normalizedStatus !== "approved") {
-          return res.status(403).json({
-            status: "error",
-            message: `This account is ${rawStatus || "not approved"}.`,
-            accountStatus: rawStatus || "not approved",
-            statusType: "not_approved",
-          });
-        }
-
-        req.user = decoded;
-        next();
-      }
-    );
+    req.user = decoded;
+    next();
   });
 };
 
 module.exports = auth;
+
 

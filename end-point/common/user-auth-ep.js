@@ -113,10 +113,11 @@ exports.loginUser = async (req, res) => {
       role: officer.jobRole,
       companycenterId: officer.companycenterId,
       accountStatus: accountStatus,
+      status: accountStatus,
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET || "T1", {
-      expiresIn: "10h",
+      expiresIn: "12h",
     });
 
     const passwordUpdateRequired = !officer.passwordUpdated;
@@ -363,7 +364,9 @@ exports.notifyStatusChanged = async (req, res) => {
       });
     }
 
-    targetStatus = targetStatus || "Rejected";
+    const resolvedUserId = userId || null;
+    const resolvedEmpId = empId || null;
+    const targetStatus = status || "Rejected";
 
     const payload = {
       userId: resolvedUserId,
@@ -406,7 +409,7 @@ exports.notifyStatusChanged = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Status change notification dispatched, cache updated, and socket managed successfully.",
+      message: "Status change notification dispatched successfully.",
       data: payload,
     });
   } catch (error) {
