@@ -52,12 +52,12 @@ exports.loginUser = async (req, res) => {
       });
     }
 
-    if (accountStatus !== "Approved") {
+    if ((accountStatus || "").toLowerCase() !== "approved") {
       return res.status(403).json({
         status: "error",
         reason: "not_approved",
         message: "This EMP ID is not approved.",
-        accountStatus: accountStatus,
+        accountStatus: accountStatus || "Unknown",
         jobRole: jobRole,
       });
     }

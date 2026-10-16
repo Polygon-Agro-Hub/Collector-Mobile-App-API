@@ -328,9 +328,18 @@ exports.getPassword = (id) => {
   });
 };
 
-exports.getOfficerStatusById = async (id) => {
-  const sql =
-    "SELECT id, status, jobRole, empId FROM collectionofficer WHERE id = ? LIMIT 1";
-  const [rows] = await db.collectionofficer.promise().query(sql, [id]);
-  return rows?.[0] || null;
+
+exports.getOfficerStatusById = (id) => {
+  return new Promise((resolve, reject) => {
+    const sql =
+      "SELECT id, status, jobRole, empId FROM collectionofficer WHERE id = ? LIMIT 1";
+
+    db.collectionofficer.query(sql, [id], (err, results) => {
+      if (err) {
+        console.error("[DAO] getOfficerStatusById error:", err.message);
+        return reject(new Error("Database query failed"));
+      }
+      resolve(results?.[0] || null);
+    });
+  });
 };

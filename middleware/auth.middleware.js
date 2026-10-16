@@ -1,6 +1,16 @@
 const jwt = require("jsonwebtoken");
 const userAuthDao = require("../dao/common/user-auth-dao");
 
+/**
+ * auth — JWT verification + live account status check.
+ *
+ * Flow:
+ *  1. Extract & verify JWT signature.
+ *  2. Query DB for the officer's current status (live — not from token).
+ *  3. Reject if rejected / banned / not approved / not found.
+ *  4. Only allow through if status is explicitly "approved".
+ *  5. On any DB error → fail closed (503). Never fall back to token status.
+ */
 const auth = (req, res, next) => {
   const token = req.headers["authorization"]?.split(" ")[1];
 
@@ -13,93 +23,73 @@ const auth = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET || "T1", async (err, decoded) => {
     if (err) {
-      console.error("Token verification error:", err);
       return res.status(401).json({
         status: "error",
-        message: "Invalid token",
+        message: "Invalid or expired token",
       });
     }
 
-    if (!decoded.id) {
+    if (!decoded?.id) {
       return res.status(401).json({
         status: "error",
-        message: "Collection officer ID is missing in the token",
+        message: "Token is missing officer ID",
       });
     }
 
+    // ── Live DB status check ──────────────────────────────────────────────
+    let officer;
     try {
-      // Live database status check via DAO layer
-      const officer = await userAuthDao.getOfficerStatusById(decoded.id);
-
-      if (!officer) {
-        return res.status(401).json({
-          status: "error",
-          message: "User account no longer exists",
-          statusType: "not_found",
-        });
-      }
-
-      const rawStatus = (officer.status || "").trim();
-      const normalizedStatus = rawStatus.toLowerCase();
-
-      if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
-        return res.status(403).json({
-          status: "error",
-          message: "This EMP ID is Rejected",
-          accountStatus: "Rejected",
-          statusType: "rejected",
-        });
-      }
-
-      if (normalizedStatus && normalizedStatus !== "approved") {
-        return res.status(403).json({
-          status: "error",
-          message: `This account is ${rawStatus || "not approved"}.`,
-          accountStatus: rawStatus || "Not Approved",
-          statusType: "not_approved",
-        });
-      }
-
-      // Populate req.user with latest database status & role
-      req.user = {
-        ...decoded,
-        status: officer.status,
-        accountStatus: officer.status,
-        jobRole: officer.jobRole || decoded.jobRole || decoded.role,
-        role: officer.jobRole || decoded.role,
-      };
-
-      next();
+      officer = await userAuthDao.getOfficerStatusById(decoded.id);
     } catch (dbError) {
-      console.error("Auth middleware live status check error:", dbError?.message || dbError);
-      // Fallback: If DB query fails temporarily, fall back to decoded token status
-      const rawStatus = (decoded.accountStatus || decoded.status || "").trim();
-      const normalizedStatus = rawStatus.toLowerCase();
-
-      if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
-        return res.status(403).json({
-          status: "error",
-          message: "This EMP ID is Rejected",
-          accountStatus: "Rejected",
-          statusType: "rejected",
-        });
-      }
-
-      if (normalizedStatus && normalizedStatus !== "approved") {
-        return res.status(403).json({
-          status: "error",
-          message: `This account is ${rawStatus || "not approved"}.`,
-          accountStatus: rawStatus || "Not Approved",
-          statusType: "not_approved",
-        });
-      }
-
-      req.user = decoded;
-      next();
+      // Fail closed — never let a DB error silently pass a user through.
+      console.error("[Auth] DB status check failed:", dbError?.message || dbError);
+      return res.status(503).json({
+        status: "error",
+        message: "Service temporarily unavailable. Please try again.",
+      });
     }
+
+    if (!officer) {
+      return res.status(401).json({
+        status: "error",
+        message: "Account not found",
+        statusType: "not_found",
+      });
+    }
+
+    const normalizedStatus = (officer.status || "").trim().toLowerCase();
+
+    // ── Rejected / Banned ─────────────────────────────────────────────────
+    if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
+      return res.status(403).json({
+        status: "error",
+        message: "This account has been rejected.",
+        accountStatus: "Rejected",
+        statusType: "rejected",
+      });
+    }
+
+    // ── Not Approved (any status that is not exactly "approved") ──────────
+    if (normalizedStatus !== "approved") {
+      return res.status(403).json({
+        status: "error",
+        message: `This account is not approved (status: ${officer.status || "unknown"}).`,
+        accountStatus: officer.status || "Not Approved",
+        statusType: "not_approved",
+      });
+    }
+
+    // ── Approved — populate req.user with fresh DB values ─────────────────
+    req.user = {
+      ...decoded,
+      status: officer.status,
+      accountStatus: officer.status,
+      jobRole: officer.jobRole || decoded.jobRole || decoded.role,
+      role: officer.jobRole || decoded.role,
+    };
+
+    next();
   });
 };
 
 module.exports = auth;
-
-
