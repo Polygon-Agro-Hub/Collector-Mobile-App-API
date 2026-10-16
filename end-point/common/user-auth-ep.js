@@ -3,6 +3,7 @@ const userAuthDao = require("../../dao/common/user-auth-dao");
 const bcrypt = require("bcrypt");
 const { loginSchema } = require("../../validation/auth-validation");
 const { ROLES } = require("../../constants/user-roles");
+const authMiddleware = require("../../middleware/auth.middleware");
 
 exports.loginUser = async (req, res) => {
   try {
@@ -367,6 +368,11 @@ exports.notifyStatusChanged = async (req, res) => {
     const resolvedUserId = userId || null;
     const resolvedEmpId = empId || null;
     const targetStatus = status || "Rejected";
+
+    // Invalidate in-memory status cache so next request queries fresh DB status immediately
+    if (resolvedUserId && authMiddleware.clearCache) {
+      authMiddleware.clearCache(resolvedUserId);
+    }
 
     const payload = {
       userId: resolvedUserId,
