@@ -327,3 +327,19 @@ exports.getPassword = (id) => {
     });
   });
 };
+
+
+exports.getOfficerStatusById = (id) => {
+  return new Promise((resolve, reject) => {
+    const sql =
+      "SELECT id, status, jobRole, empId FROM collectionofficer WHERE id = ? LIMIT 1";
+
+    db.collectionofficer.query(sql, [id], (err, results) => {
+      if (err) {
+        console.error("[DAO] getOfficerStatusById error:", err.message);
+        return reject(new Error("Database query failed"));
+      }
+      resolve(results?.[0] || null);
+    });
+  });
+};
