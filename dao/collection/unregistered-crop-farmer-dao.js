@@ -1,4 +1,4 @@
-﻿const db = require("../../startup/database");
+const db = require("../../startup/database");
 
 exports.insertFarmerPayment = (farmerId, userId, invoiceNumber) => {
   return new Promise((resolve, reject) => {
@@ -309,14 +309,17 @@ exports.getAllCropNames = (officerId, startDate = null, endDate = null) => {
 
     const params = [officerId];
 
-    if (startDate) {
-      cropQuery += ` AND DATE(dt.date) >= ?`;
+    if (startDate && endDate) {
+      cropQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) BETWEEN ? AND ?`;
+      params.push(startDate, endDate);
+    } else if (startDate) {
+      cropQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) >= ?`;
       params.push(startDate);
-    }
-
-    if (endDate) {
-      cropQuery += ` AND DATE(dt.date) <= ?`;
+    } else if (endDate) {
+      cropQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) <= ?`;
       params.push(endDate);
+    } else {
+      cropQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))`;
     }
 
     cropQuery += `
@@ -366,14 +369,17 @@ exports.getVarietiesByCropId = (
 
     const params = [officerId, cropId];
 
-    if (startDate) {
-      varietyQuery += ` AND DATE(dt.date) >= ?`;
+    if (startDate && endDate) {
+      varietyQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) BETWEEN ? AND ?`;
+      params.push(startDate, endDate);
+    } else if (startDate) {
+      varietyQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) >= ?`;
       params.push(startDate);
-    }
-
-    if (endDate) {
-      varietyQuery += ` AND DATE(dt.date) <= ?`;
+    } else if (endDate) {
+      varietyQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) <= ?`;
       params.push(endDate);
+    } else {
+      varietyQuery += ` AND DATE(CONVERT_TZ(dt.date, '+00:00', '+05:30')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))`;
     }
 
     varietyQuery += `

@@ -151,11 +151,8 @@ exports.getCropDetailsByUserId = async (req, res) => {
 exports.getAllCropNames = async (req, res) => {
   try {
     const officerId = req.user.id;
-
-    const today = new Date().toISOString().split("T")[0];
-
-    const startDate = req.query.startDate || today;
-    const endDate = req.query.endDate || today;
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
 
     const cropNames = await cropDetailsDao.getAllCropNames(
       officerId,
@@ -169,15 +166,12 @@ exports.getAllCropNames = async (req, res) => {
   }
 };
 
-
-
 exports.getVarietiesByCropId = async (req, res) => {
   const cropId = req.params.id;
   const officerId = req.user.id;
 
-  const today = new Date().toISOString().split("T")[0];
-  const startDate = req.query.startDate || today;
-  const endDate = req.query.endDate || today;
+  const startDate = req.query.startDate || null;
+  const endDate = req.query.endDate || null;
 
   try {
     const varieties = await cropDetailsDao.getVarietiesByCropId(
