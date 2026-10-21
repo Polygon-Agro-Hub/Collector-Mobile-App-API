@@ -678,7 +678,8 @@ exports.getOrderDetails = (orderId) => {
       }
 
       const orderInfo = orderResults[0];
-      const statusLabel = `(${orderInfo.rowName}) Out`;
+      const isOut = orderInfo.orderStatus === "Completed";
+      const statusLabel = `(${orderInfo.rowName}) ${isOut ? "Out" : orderInfo.orderStatus === "Opened" ? "Opened" : "Pending"}`;
       const timeSlotLabel = formatTimeSlot(orderInfo.timeSlot);
 
       try {
