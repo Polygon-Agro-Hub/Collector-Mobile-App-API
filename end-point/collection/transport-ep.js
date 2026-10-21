@@ -60,6 +60,7 @@ exports.getTransportLoadDetails = async (req, res) => {
     try {
         const { transportId } = req.params;
         const requestedType = req.query?.type || null;
+        const sortBy = req.query?.sortBy || null;
 
         if (!transportId) {
             return res.status(400).json({
@@ -68,7 +69,7 @@ exports.getTransportLoadDetails = async (req, res) => {
             });
         }
 
-        const loadDetails = await TransportDAO.getTransportLoadDetails(transportId, requestedType);
+        const loadDetails = await TransportDAO.getTransportLoadDetails(transportId, requestedType, sortBy);
 
         if (!loadDetails) {
             return res.status(404).json({

@@ -167,7 +167,7 @@ exports.getReceivedProductsToday = (officerId, targetDate = null) => {
     });
 };
 
-exports.getTransportLoadDetails = (transportId, requestedType = null) => {
+exports.getTransportLoadDetails = (transportId, requestedType = null, sortBy = null) => {
     return new Promise((resolve, reject) => {
         if (!transportId) {
             return reject(new Error("Transport ID is required"));
@@ -276,7 +276,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       INNER JOIN unloadedcrates uc ON uc.loadId = li.id
                       WHERE li.transportId = ?
-                      ORDER BY li.id ASC, uc.grade ASC, uc.crateIndex ASC
+                      ORDER BY COALESCE(NULLIF(TRIM(mi.displayName), ''), NULLIF(TRIM(cv.varietyNameEnglish), ''), NULLIF(TRIM(cg.cropNameEnglish), ''), '') ASC, li.id ASC, uc.grade ASC, uc.crateIndex ASC
                     `
                     : `
                       SELECT 
@@ -312,7 +312,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
                       WHERE li.transportId = ?
-                      ORDER BY li.id ASC, lc.grade ASC, lc.crateIndex ASC
+                      ORDER BY COALESCE(NULLIF(TRIM(cv.varietyNameEnglish), ''), NULLIF(TRIM(cg.cropNameEnglish), ''), '') ASC, li.id ASC, lc.grade ASC, lc.crateIndex ASC
                     `;
 
                 collectionofficer.query(itemsSql, [loadHeader.id], (err2, itemRows) => {
@@ -332,7 +332,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 loadedItemId: row.loadedItemId,
                                 varietyId: row.varietyId ? String(row.varietyId) : undefined,
                                 displayName: row.displayName || null,
-                                varietyLabel: row.displayName || row.varietyNameEnglish || "",
+                                varietyLabel: row.varietyNameEnglish || row.displayName || "",
                                 varietyNameEnglish: row.varietyNameEnglish || "",
                                 varietyNameSinhala: row.varietyNameSinhala || "",
                                 varietyNameTamil: row.varietyNameTamil || "",
@@ -372,6 +372,21 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                     });
 
                     const formattedItems = Array.from(itemsMap.values());
+
+                    const effectiveSort = sortBy || (requestedType === "unloaded" ? "display" : "variety");
+                    if (effectiveSort === "display") {
+                        formattedItems.sort((a, b) => {
+                            const nameA = (a.displayName || a.varietyNameEnglish || a.cropName || "").trim().toLowerCase();
+                            const nameB = (b.displayName || b.varietyNameEnglish || b.cropName || "").trim().toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    } else {
+                        formattedItems.sort((a, b) => {
+                            const nameA = (a.varietyNameEnglish || a.varietyLabel || a.cropName || "").trim().toLowerCase();
+                            const nameB = (b.varietyNameEnglish || b.varietyLabel || b.cropName || "").trim().toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    }
 
                     resolve({
                         transportId: String(loadHeader.id),
