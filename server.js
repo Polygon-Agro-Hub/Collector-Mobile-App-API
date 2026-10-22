@@ -1,9 +1,11 @@
+require("./config/env");
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const compression = require("compression");
 const cron = require("node-cron");
 const bodyParser = require("body-parser");
 const http = require("http");
-require("dotenv").config();
 
 // Database connections
 const {
@@ -46,13 +48,26 @@ const server = http.createServer(mainApp);
 const io = initSocket(server);
 mainApp.set("io", io);
 
-// CORS and body parser configuration
+// Security, CORS, compression, and body parser configuration
 [mainApp].forEach((app) => {
+  app.disable("x-powered-by");
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: false,
+    })
+  );
   app.use(
     cors({
-      origin: "*",
+      origin: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
+    })
+  );
+  app.use(
+    compression({
+      threshold: 1024,
+      level: 6,
     })
   );
   app.use(bodyParser.json({ limit: "10mb" }));

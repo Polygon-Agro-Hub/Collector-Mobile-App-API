@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../../middleware/auth.middleware");
+const { authLimiter } = require("../../middleware/rateLimiter");
 const userAuthEp = require("../../end-point/common/user-auth-ep");
 
-router.post("/login", userAuthEp.loginUser);
+router.post("/login", authLimiter, userAuthEp.loginUser);
 
 router.post("/online-status", userAuthEp.updateOnlineStatus);
 
@@ -15,7 +16,7 @@ router.get("/check-status", authenticate, (req, res) => {
     });
 });
 
-router.post("/change-password", authenticate, userAuthEp.updatePassword);
+router.post("/change-password", authenticate, authLimiter, userAuthEp.updatePassword);
 
 router.get("/user-profile", authenticate, userAuthEp.getProfile);
 

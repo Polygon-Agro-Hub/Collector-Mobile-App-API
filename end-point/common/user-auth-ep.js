@@ -117,7 +117,7 @@ exports.loginUser = async (req, res) => {
       status: accountStatus,
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET || "T1", {
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: "12h",
     });
 
