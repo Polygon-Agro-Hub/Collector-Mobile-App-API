@@ -9,11 +9,11 @@ const admin = mysql.createPool({
   port: process.env.DB_PORT,
   charset: 'utf8mb4',
   waitForConnections: true,
-  connectionLimit: 10,
-  maxIdle: 5, 
+  connectionLimit: 1,
+  maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
+  keepAliveInitialDelay: 0,
 });
 
 const plantcare = mysql.createPool({
@@ -24,11 +24,11 @@ const plantcare = mysql.createPool({
   port: process.env.DB_PORT,
   charset: 'utf8mb4',
   waitForConnections: true,
-  connectionLimit: 15,
-  maxIdle: 8, 
+  connectionLimit: 4,
+  maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
+  keepAliveInitialDelay: 0,
 });
 
 const collectionofficer = mysql.createPool({
@@ -39,11 +39,11 @@ const collectionofficer = mysql.createPool({
   port: process.env.DB_PORT,
   charset: 'utf8mb4',
   waitForConnections: true,
-  connectionLimit: 30,
-  maxIdle: 15, 
+  connectionLimit: 5,
+  maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
+  keepAliveInitialDelay: 0,
 });
 
 module.exports = {
