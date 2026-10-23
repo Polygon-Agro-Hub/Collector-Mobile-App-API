@@ -13,7 +13,7 @@ const admin = mysql.createPool({
   maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay : 0,
+  keepAliveInitialDelay: 0,
 });
 
 const plantcare = mysql.createPool({
@@ -28,7 +28,7 @@ const plantcare = mysql.createPool({
   maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay : 0,
+  keepAliveInitialDelay: 0,
 });
 
 const collectionofficer = mysql.createPool({
@@ -43,7 +43,7 @@ const collectionofficer = mysql.createPool({
   maxIdle: 6, 
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay : 0,
+  keepAliveInitialDelay: 0,
 });
 
 module.exports = {

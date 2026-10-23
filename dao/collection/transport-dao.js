@@ -745,6 +745,7 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 [targetLoadId]
                             );
 
+                            const crateRows = [];
                             for (const g of item.grades) {
                                 const rawGrade = (g.grade || g.gradeKey || "A").trim().toUpperCase();
                                 const cleanGrade = rawGrade.replace(/^GRADE\s*/i, "");
@@ -755,9 +756,20 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 const qty = parseFloat(g.qty ?? g.weightKg ?? g.weight) || 0;
                                 const crateWeight = parseFloat(g.crateWeight || g.containerTypeWeight) || 0;
 
+                                crateRows.push([
+                                    targetLoadId,
+                                    validGrade,
+                                    crateCount,
+                                    crateIndex,
+                                    crateWeight,
+                                    qty,
+                                ]);
+                            }
+
+                            if (crateRows.length > 0) {
                                 await connection.promise().query(
-                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES (?, ?, ?, ?, ?, ?)",
-                                    [targetLoadId, validGrade, crateCount, crateIndex, crateWeight, qty]
+                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES ?",
+                                    [crateRows]
                                 );
                             }
                         }
@@ -1193,6 +1205,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                         const loadId = itemResult.insertId;
 
                         if (Array.isArray(item.gradeSets) && item.gradeSets.length > 0) {
+                            const crateRows = [];
                             for (const gs of item.gradeSets) {
                                 const grade = gs.gradeKey || (gs.grade ? gs.grade.replace(/Grade\s*/i, "").trim() : "A");
                                 const crateCount = parseInt(gs.crates, 10) || 0;
@@ -1200,11 +1213,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                 const qty = parseFloat(gs.weightKg ?? gs.weight) || 0;
                                 const crateWeight = parseFloat(gs.crateWeight || gs.containerTypeWeight) || 0;
 
-                                const insertCrateQuery = `
-                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
-                                  VALUES (?, ?, ?, ?, ?, ?)
-                                `;
-                                await connection.promise().query(insertCrateQuery, [
+                                crateRows.push([
                                     loadId,
                                     grade,
                                     crateCount,
@@ -1212,6 +1221,14 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                     crateWeight,
                                     qty,
                                 ]);
+                            }
+
+                            if (crateRows.length > 0) {
+                                const insertCrateQuery = `
+                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
+                                  VALUES ?
+                                `;
+                                await connection.promise().query(insertCrateQuery, [crateRows]);
                             }
                         }
                     }
