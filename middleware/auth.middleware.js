@@ -61,7 +61,7 @@ const auth = (req, res, next) => {
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || "T1", async (err, decoded) => {
+  jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
       return res.status(401).json({
         status: "error",
