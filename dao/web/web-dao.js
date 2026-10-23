@@ -1,4 +1,4 @@
-﻿const db = require("../../startup/database");
+const db = require("../../startup/database");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -47,7 +47,7 @@ exports.dcmLogin = (username, password) => {
 
       const token = jwt.sign(
         { id: user.id, empId: user.empId, role: user.jobRole || "DCM", companyCenterId: companyCenterId },
-        process.env.JWT_SECRET || "antigravity_secret_key",
+        process.env.JWT_SECRET,
         { expiresIn: "24h" }
       );
 

@@ -2067,7 +2067,8 @@ exports.getOfficerActiveOrder = (officerId) => {
               mi.id AS mpiId,
               opi.productType AS productTypeId,
               mp.displayName AS packName,
-              'package' AS categoryType
+              'package' AS categoryType,
+              CASE WHEN opi.packId IS NOT NULL AND opi.packId > 0 AND opi.isPacked = 1 THEN 1 ELSE 0 END AS isPackedByPacker
             FROM orderpackage op
             JOIN marketplacepackages mp ON op.packageId = mp.id
             JOIN orderpackageitems opi ON op.id = opi.orderPackageId
@@ -2087,7 +2088,8 @@ exports.getOfficerActiveOrder = (officerId) => {
               mi.id AS mpiId,
               NULL AS productTypeId,
               'À la carte' AS packName,
-              'alacarte' AS categoryType
+              'alacarte' AS categoryType,
+              MAX(CASE WHEN oai.packId IS NOT NULL AND oai.packId > 0 AND oai.isPacked = 1 THEN 1 ELSE 0 END) AS isPackedByPacker
             FROM processorders po
             JOIN orderadditionalitems oai ON oai.proOrderId = po.id
             JOIN marketplaceitems mi ON oai.productId = mi.id
@@ -2106,7 +2108,8 @@ exports.getOfficerActiveOrder = (officerId) => {
               mi.id AS mpiId,
               opi.productType AS productTypeId,
               mp.displayName AS packName,
-              'package' AS categoryType
+              'package' AS categoryType,
+              MAX(CASE WHEN opi.packId IS NOT NULL AND opi.packId > 0 AND opi.isPacked = 1 THEN 1 ELSE 0 END) AS isPackedByPacker
             FROM processorders po
             JOIN orderpackage op ON op.orderId = po.id
             JOIN marketplacepackages mp ON op.packageId = mp.id
@@ -2126,7 +2129,8 @@ exports.getOfficerActiveOrder = (officerId) => {
               mi.id AS mpiId,
               NULL AS productTypeId,
               'À la carte' AS packName,
-              'alacarte' AS categoryType
+              'alacarte' AS categoryType,
+              MAX(CASE WHEN oai.packId IS NOT NULL AND oai.packId > 0 AND oai.isPacked = 1 THEN 1 ELSE 0 END) AS isPackedByPacker
             FROM processorders po
             JOIN orderadditionalitems oai ON oai.proOrderId = po.id
             JOIN marketplaceitems mi ON oai.productId = mi.id
@@ -2162,6 +2166,17 @@ exports.getOfficerActiveOrder = (officerId) => {
         } else {
           activeOrder.orderItems = orderItems;
         }
+
+        activeOrder.orderItems = (activeOrder.orderItems || []).map((item) => ({
+          ...item,
+          isPackedByPacker: Boolean(Number(item.isPackedByPacker) === 1),
+        }));
+
+        const unallocatedItems = activeOrder.orderItems.filter(
+          (item) => !item.isPackedByPacker
+        );
+        activeOrder.hasMissingPackerItems = unallocatedItems.length > 0;
+        activeOrder.missingPackerCount = unallocatedItems.length;
 
         // Sort items A to Z (ascending alphabetical order by item name)
         activeOrder.orderItems.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
