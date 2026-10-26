@@ -1,10 +1,10 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const { logoBase64 } = require("./logoBase64");
 
 const calculatePackageTotal = (pkg) => {
-  const productPrice = parseFloat(pkg.productPrice || 0);
-  const packingFee = parseFloat(pkg.packingFee || 0);
-  const serviceFee = parseFloat(pkg.serviceFee || 0);
+  const productPrice = parseFloat(pkg.packagePrice || pkg.productPrice || 0);
+  const packingFee = parseFloat(pkg.packagePackingFee || pkg.packingFee || 0);
+  const serviceFee = parseFloat(pkg.packageServiceFee || pkg.serviceFee || 0);
   return productPrice + packingFee + serviceFee;
 };
 
@@ -20,22 +20,37 @@ const formatNumber = (amount) => {
 
 const formatItemCount = (count) => String(count).padStart(2, "0");
 
-function formatPaymentMethod(paymentMethod) {
-  if (!paymentMethod) return "N/A";
-  const map = { Cash: "Cash on Delivery", Card: "Debit / Credit Card" };
-  return map[paymentMethod] || paymentMethod;
+// Returns "Item" for a count of exactly 1, otherwise "Items".
+const pluralizeItemWord = (count) => (Number(count) === 1 ? "Item" : "Items");
+
+function detectPaymentType(payType, deliveryMethod, creditPaid, grandTotal) {
+  const isPickup = (deliveryMethod || "").toLowerCase().includes("pickup");
+  const hasCredit = creditPaid > 0;
+  const fullyCoveredByCredit = hasCredit && creditPaid >= grandTotal - 0.01;
+
+  if (fullyCoveredByCredit) {
+    return "Credit Balance";
+  }
+
+  if (payType === "Card") {
+    return hasCredit ? "Online Transfer + Credit Balance" : "Online Transfer";
+  }
+
+  const base = isPickup ? "Cash on Pickup" : "Cash on Delivery";
+  return hasCredit ? `${base} + Credit Balance` : base;
 }
 
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
-    return new Date(dateString)
-      .toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-      .replace(/ /g, "-");
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "N/A";
+    return d.toLocaleDateString("en-US", {
+      timeZone: "Asia/Colombo",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    }).replace(/,/g, "");
   } catch (e) {
     return "N/A";
   }
@@ -68,6 +83,13 @@ const generateInvoiceHTML = (
   let totaldiscount = parseFloat(order.discount || 0);
   let couponDiscount = parseFloat(order.couponValue || 0);
 
+  // Whether this order has an actual package section.
+  // When it doesn't, the "additional items" are really the only items on
+  // the order, so they get relabeled as "Selected Items" instead of
+  // "Additional Items" / "Custom Items".
+  const isPackageOrder = order.isPackage === 1;
+  const additionalItemsLabel = isPackageOrder ? "Additional Items" : "Selected Items";
+
   if (
     order.isPackage === 1 &&
     order.packages &&
@@ -76,8 +98,8 @@ const generateInvoiceHTML = (
   ) {
     order.packages.forEach((pkg) => {
       totalPackagePrice += calculatePackageTotal(pkg);
-      totalPackingFee += parseFloat(pkg.packingFee || 0);
-      totalServiceFee += parseFloat(pkg.serviceFee || 0);
+      totalPackingFee += parseFloat(pkg.packagePackingFee || pkg.packingFee || 0);
+      totalServiceFee += parseFloat(pkg.packageServiceFee || pkg.serviceFee || 0);
     });
   } else if (order.isPackage === 1) {
     console.warn(
@@ -149,6 +171,8 @@ const generateInvoiceHTML = (
       return "";
     }
 
+    const totalPkgCount = order.packages.length;
+
     return order.packages
       .map((pkg, packageIndex) => {
         const packageTotal = calculatePackageTotal(pkg);
@@ -164,6 +188,7 @@ const generateInvoiceHTML = (
               const itemTotal = parseFloat(item.price || 0);
               const itemQty = parseFloat(item.qty || 0);
               const itemUnitPrice = itemQty > 0 ? itemTotal / itemQty : 0;
+              const unitStr = item.unit ? `\u00A0${item.unit}` : "\u00A0Kg";
 
               return `
               <tr>
@@ -171,17 +196,20 @@ const generateInvoiceHTML = (
                 <td class="tabledata">${item.productTypeName || item.category || "N/A"}</td>
                 <td class="tabledata">${item.productDisplayName || "N/A"}</td>
                 <td class="tabledata">${formatNumber(itemUnitPrice)}</td>
-                <td class="tabledata">${itemQty}${item.unit || ""}</td>
+                <td class="tabledata">${itemQty}${unitStr}</td>
                 <td class="tabledata">${formatNumber(itemTotal)}</td>
               </tr>`;
             })
             .join("");
         }
 
+        const baseTitle = pkg.displayName || `Package ${packageIndex + 1}`;
+        const titleWithSubIndex = baseTitle;
+
         return `
         <div class="section4">
           <div style="display:flex;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
-            <div class="bold">${pkg.displayName || `Package ${packageIndex + 1}`} (${formatItemCount(packageItemsCount)} Items)</div>
+            <div class="bold">${titleWithSubIndex} (${formatItemCount(packageItemsCount)} ${pluralizeItemWord(packageItemsCount)})</div>
             <div style="font-weight:550;font-size:16px">${formatCurrency(packageTotal)}</div>
           </div>
           <div style="border:1px solid #ddd;border-radius:10px">
@@ -212,7 +240,7 @@ const generateInvoiceHTML = (
         const price = parseFloat(item.price?.toString() || "0");
         const discount = parseFloat(item.discount?.toString() || "0");
         const qty = parseFloat(item.qty?.toString() || "0");
-        const unit = (item.unit || "kg").toLowerCase().trim();
+        const unit = item.unit ? `\u00A0${item.unit}` : "";
         const actualAmount = price + discount;
         const unitPrice = parseFloat(item.normalPrice?.toString() || "0");
 
@@ -239,8 +267,14 @@ const generateInvoiceHTML = (
     customerData?.email ||
     "No email provided";
 
-  const isPickup = order.delivaryMethod === "Pickup";
+  const isPickup = (order.delivaryMethod || "").toLowerCase().includes("pickup");
   const deliveryMethodLabel = isPickup ? "Instore Pickup" : "Home Delivery";
+
+  const rawPaymentMethod = orderData.orderStatus?.paymentMethod || order.paymentMethod || "Cash";
+  const creditPaidNum = parseFloat(orderData.orderStatus?.creditPaid || order.creditPaid || 0);
+  const isPaid = Number(orderData.orderStatus?.isPaid || order.isPaid) === 1;
+
+  const paymentTypeLabel = detectPaymentType(rawPaymentMethod, order.delivaryMethod, creditPaidNum, totalAmount);
 
   const buildCentreBlock = () => {
     if (!isPickup) return "";
@@ -282,7 +316,7 @@ const generateInvoiceHTML = (
 
       const linesHtml = addressParts.map((part, index) => {
         const comma = index < addressParts.length - 1 ? "," : "";
-        return `<p class="addr-line" style="margin:2px 0;"><span style="color:#666666;font-weight:550;">${part.label}</span> ${part.value}${comma}</p>`;
+        return `<p class="addr-line" style="margin:2px 0;"><span style="color:#666666;font-weight:555;">${part.label}</span> ${part.value}${comma}</p>`;
       }).join("\n");
 
       return `
@@ -319,6 +353,75 @@ const generateInvoiceHTML = (
       ${linesHtml}
     `;
   };
+
+  // Build payment breakdown rows
+  let paymentRowsHtml = "";
+  let showDeliveryNote = false;
+  const cashLabel = isPickup ? "Cash On Pickup" : "Cash On Delivery";
+
+  if (creditPaidNum > 0) {
+    paymentRowsHtml += `
+      <div style="display:flex;justify-content:space-between;margin-right:20px;color:#16a34a;font-weight:bold;" class="ptext">
+        <p>Credit Balance Used</p><p>${formatCurrency(creditPaidNum)}</p>
+      </div>`;
+
+    const remainingAfterCredit = totalAmount - creditPaidNum;
+    if (remainingAfterCredit > 0.01) {
+      if (isPaid) {
+        if (rawPaymentMethod === "Card") {
+          paymentRowsHtml += `
+            <div style="display:flex;justify-content:space-between;margin-right:20px;color:#16a34a;font-weight:bold;" class="ptext">
+              <p>Online Transferred Amount</p><p>${formatCurrency(remainingAfterCredit)}</p>
+            </div>`;
+        } else {
+          paymentRowsHtml += `
+            <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
+              <p>${cashLabel}</p><p>${formatCurrency(remainingAfterCredit)}</p>
+            </div>`;
+        }
+      } else {
+        paymentRowsHtml += `
+          <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
+            <p>${cashLabel}</p><p>${formatCurrency(remainingAfterCredit)}</p>
+          </div>`;
+        if (!isPickup && !isFreeDelivery) showDeliveryNote = true;
+      }
+    }
+  } else {
+    if (isPaid) {
+      if (rawPaymentMethod === "Card") {
+        paymentRowsHtml += `
+          <div style="display:flex;justify-content:space-between;margin-right:20px;color:#16a34a;font-weight:bold;" class="ptext">
+            <p>Online Transferred Amount</p><p>${formatCurrency(totalAmount)}</p>
+          </div>`;
+      } else {
+        paymentRowsHtml += `
+          <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
+            <p>${cashLabel}</p><p>${formatCurrency(totalAmount)}</p>
+          </div>`;
+      }
+    } else {
+      paymentRowsHtml += `
+        <div style="display:flex;justify-content:space-between;margin-right:20px;color:#d97706;font-weight:bold;" class="ptext">
+          <p>${cashLabel}</p><p>${formatCurrency(totalAmount)}</p>
+        </div>`;
+      if (!isPickup && !isFreeDelivery) showDeliveryNote = true;
+    }
+  }
+
+  const now = new Date();
+  const generatedTimeStr = now.toLocaleTimeString("en-US", {
+    timeZone: "Asia/Colombo",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const generatedDateStr = now.toLocaleDateString("en-US", {
+    timeZone: "Asia/Colombo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return `
 <!DOCTYPE html>
@@ -381,7 +484,7 @@ const generateInvoiceHTML = (
         text-align: left;
       }
       .tabledata { font-size: 14px; font-weight: normal; color: #666666; }
-      .footer { text-align: center; font-size: 12px; margin-top: 60px; color: #8492A3; }
+      .footer { text-align: center; font-size: 12px; margin-top: 50px; color: #8492A3; }
       .remarks-text p { margin: 8px 0; line-height: 1.6; }
       .section { page-break-inside: avoid; }
       .section4 { page-break-inside: avoid; margin-bottom: 20px; }
@@ -401,59 +504,66 @@ const generateInvoiceHTML = (
         <div>
           <p style="margin:0 0 4px 0;"><span style="font-weight:550;font-size:16px">Polygon Holdings (Private) Ltd</span></p>
           <p class="headerp">No. 42/46, Nawam Mawatha, Colombo 02.</p>
-          <p class="headerp">Contact No : +94 770 111 999</p>
+          <p class="headerp">Contact No : 011 431 3433</p>
           <p class="headerp">Email Address : info@polygon.lk</p>
         </div>
         <div>
-          ${logoBase64Val ? `<img src="${logoBase64Val}" alt="GoviMart Logo" class="logo" />` : ""}
+          ${logoBase64Val ? `<img src="${logoBase64Val}" alt="Polygon Logo" class="logo" />` : ""}
         </div>
       </div>
 
       ${isPickup
       ? `
-         <!-- Pickup Layout -->
-  <div style="position:relative; margin-top:30px; min-height:80px;">
-    <div style="display:inline-block; max-width:55%;">
+              <!-- Pickup Layout -->
+  <div style="display:flex;justify-content:space-between;margin-top:30px;">
+    <div style="flex: 1; max-width:55%;">
       <p class="bold">Bill To :</p>
       <p class="headerp">${formatCustomerName(customerInfo)}</p>
       <p class="headerp">${customerEmail}</p>
       <p class="headerp">${customerInfo.phoneCode1 || "+94"} ${customerInfo.phone1 || ""}${customerInfo.phone2 ? ` / ${customerInfo.phoneCode2 || "+94"} ${customerInfo.phone2}` : ""}</p>
     </div>
-    <div style="position:absolute; top:0; right:0; text-align:right; min-width:200px;">
+    <div style="text-align:right; min-width:200px;">
       <p class="bold">Grand Total :</p>
       <p style="font-weight:550;font-size:18px;margin:2px 0 0 0;">${formatCurrency(totalAmount)}</p>
       <div style="margin-top:12px;">
         <p class="bold">Payment Method :</p>
-        <p class="headerp" style="margin-bottom:8px;">${formatPaymentMethod(orderData.orderStatus?.paymentMethod)}</p>
-      </div>
-      <div style="margin-top:8px;">
-        <p class="bold">Ordered Date :</p>
-        <p class="headerp" style="margin-bottom:8px;">${formatDate(order.createdAt)}</p>
-      </div>
-      <div style="margin-top:8px;">
-        <p class="bold">Scheduled Date :</p>
-        <p class="headerp">${formatDate(order.scheduleDate)}</p>
+        <p class="headerp">${paymentTypeLabel}</p>
       </div>
     </div>
   </div>
 
-  <!-- Invoice No, Delivery Method, Centre -->
-  <div style="margin-top:20px;">
-    <p class="bold">Invoice No :</p>
-    <p class="headerp">${invoiceNumber}</p>
+  <!-- Invoice No / Ordered Date row -->
+  <div style="display:flex;justify-content:space-between;margin-top:20px;">
+    <div style="flex: 1;">
+      <p class="bold">Invoice No :</p>
+      <p class="headerp">${invoiceNumber}</p>
+    </div>
+    <div style="text-align:right; min-width:200px;">
+      <p class="bold">Ordered Date :</p>
+      <p class="headerp">${formatDate(order.createdAt)}</p>
+    </div>
   </div>
-          <div style="margin-top:16px;">
-            <p class="bold">Delivery Method :</p>
-            <p class="headerp">${deliveryMethodLabel}</p>
-          </div>
-          ${buildCentreBlock()}
+
+  <!-- Delivery Method / Scheduled Date row -->
+  <div style="display:flex;justify-content:space-between;margin-top:16px;">
+    <div style="flex: 1;">
+      <p class="bold">Delivery Method :</p>
+      <p class="headerp">${deliveryMethodLabel}</p>
+    </div>
+    <div style="text-align:right; min-width:200px;">
+      <p class="bold">Scheduled Date :</p>
+      <p class="headerp">${formatDate(order.scheduleDate)}</p>
+    </div>
+  </div>
+
+  ${buildCentreBlock()}
         `
       : `
-          <!-- Delivery Layout -->
+                   <!-- Delivery Layout -->
           <div style="display:flex;justify-content:space-between;margin-top:30px;">
             <div style="flex: 1;">
               <p class="bold">Bill To :</p>
-             <p class="headerp">${formatCustomerName(customerInfo)}</p>
+              <p class="headerp">${formatCustomerName(customerInfo)}</p>
               <p class="headerp">${customerEmail}</p>
               <p class="headerp">${customerInfo.phoneCode1 || "+94"} ${customerInfo.phone1 || ""}${customerInfo.phone2 ? ` / ${customerInfo.phoneCode2 || "+94"} ${customerInfo.phone2}` : ""}</p>
               <div style="margin-top:16px;">
@@ -465,46 +575,52 @@ const generateInvoiceHTML = (
               <p style="font-weight:550;font-size:18px;margin:2px 0 0 0;">${formatCurrency(totalAmount)}</p>
               <div style="margin-top:12px;">
                 <p class="bold">Payment Method :</p>
-                <p class="headerp" style="margin-bottom:8px;">${formatPaymentMethod(orderData.orderStatus?.paymentMethod)}</p>
-              </div>
-              <div style="margin-top:8px;">
-                <p class="bold">Ordered Date :</p>
-                <p class="headerp" style="margin-bottom:8px;">${formatDate(order.createdAt)}</p>
-              </div>
-              <div style="margin-top:8px;">
-                <p class="bold">Scheduled Date :</p>
-                <p class="headerp">${formatDate(order.scheduleDate)}</p>
+                <p class="headerp">${paymentTypeLabel}</p>
               </div>
             </div>
           </div>
 
-          <!-- Invoice No & Delivery Method -->
-          <div style="margin-top:24px;">
-            <p class="bold">Invoice No :</p>
-            <p class="headerp">${invoiceNumber}</p>
+          <!-- Invoice No / Ordered Date row -->
+          <div style="display:flex;justify-content:space-between;margin-top:24px;">
+            <div style="flex: 1;">
+              <p class="bold">Invoice No :</p>
+              <p class="headerp">${invoiceNumber}</p>
+            </div>
+            <div style="text-align: right; min-width: 200px;">
+              <p class="bold">Ordered Date :</p>
+              <p class="headerp">${formatDate(order.createdAt)}</p>
+            </div>
           </div>
-          <div style="margin-top:16px;">
-            <p class="bold">Delivery Method :</p>
-            <p class="headerp">${deliveryMethodLabel}</p>
+
+          <!-- Delivery Method / Scheduled Date row -->
+          <div style="display:flex;justify-content:space-between;margin-top:16px;">
+            <div style="flex: 1;">
+              <p class="bold">Delivery Method :</p>
+              <p class="headerp">${deliveryMethodLabel}</p>
+            </div>
+            <div style="text-align: right; min-width: 200px;">
+              <p class="bold">Scheduled Date :</p>
+              <p class="headerp">${formatDate(order.scheduleDate)}</p>
+            </div>
           </div>
         `
     }
 
       ${generatePackageSections()}
 
-      ${order.additionalItems &&
+           ${order.additionalItems &&
       Array.isArray(order.additionalItems) &&
       order.additionalItems.length > 0
       ? `<div class="section4">
             <div style="display:flex;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
-              <div class="bold">Additional Items (${order.additionalItems.length} Items)</div>
+              <div class="bold">${additionalItemsLabel} (${order.additionalItems.length} ${pluralizeItemWord(order.additionalItems.length)})</div>
               <div style="font-weight:550;font-size:16px">${formatCurrency(additionalItemsTotal)}</div>
             </div>
             <div style="border:1px solid #ddd;border-radius:10px;overflow-x:auto;">
               <table style="width:100%;border-collapse:collapse;" class="table">
                 <thead>
                   <tr>
-                    <th style="text-align:left;padding:12px 8px;background-color:#f8f8f8;border-bottom:1px solid #ddd;">#</th>
+                    <th style="text-align:left;padding:12px 8px;background-color:#f8f8f8;border-bottom:1px solid #ddd;">Index</th>
                     <th style="text-align:left;padding:12px 8px;background-color:#f8f8f8;border-bottom:1px solid #ddd;">Item Description</th>
                     <th style="text-align:left;padding:12px 8px;background-color:#f8f8f8;border-bottom:1px solid #ddd;">Unit Price (Rs.)</th>
                     <th style="text-align:left;padding:12px 8px;background-color:#f8f8f8;border-bottom:1px solid #ddd;">QTY</th>
@@ -532,11 +648,11 @@ const generateInvoiceHTML = (
             </div>`
       : ""
     }
-        ${order.additionalItems &&
+              ${order.additionalItems &&
       Array.isArray(order.additionalItems) &&
       order.additionalItems.length > 0
       ? `<div style="display:flex;justify-content:space-between;margin-right:20px;" class="ptext">
-              <p>${order?.isPackage === 1 ? "Additional Items" : "Custom Items"}</p>
+              <p>${additionalItemsLabel}</p>
               <p>Rs. ${additionalItemsTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
             </div>`
       : ""
@@ -575,64 +691,211 @@ const generateInvoiceHTML = (
         <p>${formatCurrency(totalAmount)}</p>
       </div>
 
+      ${paymentRowsHtml}
+
+      ${showDeliveryNote
+      ? `<div style="margin-top:12px;display:flex;align-items:center;color:#555;font-size:12px;">
+          <span style="display:inline-block;background:#333;color:#fff;border-radius:50%;width:16px;height:16px;text-align:center;line-height:16px;font-size:10px;font-weight:bold;margin-right:6px;">i</span>
+          <span>The delivery charges might be different on the day of delivery. Your Grand Total might be changed then.</span>
+        </div>`
+      : ""
+    }
+
       <!-- Remarks Section -->
       <div class="section">
-        <p style="margin-top:50px;font-size:14px;font-weight:600;margin-bottom:12px;">Remarks :</p>
+        <p style="margin-top:40px;font-size:14px;font-weight:600;margin-bottom:12px;">Remarks :</p>
         <div class="remarks-text" style="color:#666666;font-size:12px;">
-          <p style="margin-bottom:12px;">Kindly inspect all goods at the time of delivery to ensure accuracy and condition.</p>
-          <p style="margin-bottom:12px;">Polygon does not accept returns under any circumstances.</p>
-          <p style="margin-bottom:12px;">Please report any issues or discrepancies within 24 hours of delivery to ensure prompt attention.</p>
-          <p style="margin-bottom:12px;">For any assistance, feel free to contact our customer service team.</p>
+          <p style="margin-bottom:10px;">Kindly inspect all goods at the time of delivery to ensure accuracy and condition.</p>
+          <p style="margin-bottom:10px;">Polygon does not accept returns under any circumstances.</p>
+          <p style="margin-bottom:10px;">Please report any issues or discrepancies within 24 hours of delivery to ensure prompt attention.</p>
+          <p style="margin-bottom:10px;">For any assistance, feel free to contact our customer service team.</p>
         </div>
       </div>
 
       <!-- Footer -->
       <div class="footer">
-        <p style="margin-top:50px;font-size:16px;font-weight:600;color:#000;font-style:italic">Thank you for shopping with us!</p>
+        <p style="margin-top:40px;font-size:16px;font-weight:600;color:#000;font-style:italic">Thank you for shopping with us!</p>
         <p style="margin-top:6px;font-size:14px;font-weight:500;color:#4B4B4B;font-style:italic">WE WILL SEND YOU MORE OFFERS, LOWEST PRICED VEGGIES FROM US.</p>
-        <p style="margin-top:50px;font-style:italic">- THIS IS A COMPUTER GENERATED INVOICE, THUS NO SIGNATURE REQUIRED -</p>
+        <p style="margin-top:40px;font-style:italic;color:#808080;font-size:11px;">- THIS IS A COMPUTER GENERATED INVOICE, THUS NO SIGNATURE REQUIRED -</p>
+        <p style="margin-top:6px;font-style:italic;color:#808080;font-size:11px;">- GENERATED AT : ${generatedTimeStr}, ${generatedDateStr} -</p>
       </div>
     </div>
   </body>
 </html>`;
 };
 
-const generateOrderPDF = async (orderData, deliveryFee = 0) => {
-  let browser;
-  try {
-    const htmlContent = generateInvoiceHTML(
-      orderData,
-      null,
-      deliveryFee,
-      logoBase64,
-    );
 
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+
+const fs = require("fs");
+
+const getLocalChromePath = () => {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.env.CHROME_BIN) {
+    return process.env.CHROME_BIN;
+  }
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
+
+  const possiblePaths = [
+    // Windows
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    // Linux
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    // macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+};
+
+// ─── Persistent Browser Singleton ─────────────────────────────────────────────
+// Instead of launching & killing Chrome per-request (3-10s each),
+// we keep one browser alive for the server's lifetime and reuse it.
+// Auto-reconnects if the browser process crashes.
+
+let _browser = null;
+let _launchArgs = null;
+let _browserInitializing = false;
+let _browserReadyWaiters = [];
+
+async function buildLaunchArgs() {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--no-first-run",
+    "--mute-audio",
+  ];
+
+  const localChrome = getLocalChromePath();
+  if (localChrome) {
+    return { args, executablePath: localChrome, headless: "new", defaultViewport: null };
+  }
+
+  try {
+    const chromium = (await import("@sparticuz/chromium")).default;
+    return {
+      args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      defaultViewport: chromium.defaultViewport,
+    };
+  } catch (e) {
+    console.warn("[PDF] Could not load @sparticuz/chromium:", e.message);
+    return { args, headless: "new", defaultViewport: null };
+  }
+}
+
+async function getBrowser() {
+  // Return healthy browser if available
+  if (_browser) {
+    try {
+      const pages = await _browser.pages();
+      if (pages !== undefined) return _browser; // still alive
+    } catch (_) {
+      console.warn("[PDF] Browser appears crashed — relaunching...");
+      _browser = null;
+    }
+  }
+
+  // If another call is already launching, wait for it
+  if (_browserInitializing) {
+    return new Promise((resolve, reject) => {
+      _browserReadyWaiters.push({ resolve, reject });
+    });
+  }
+
+  _browserInitializing = true;
+  try {
+    if (!_launchArgs) {
+      _launchArgs = await buildLaunchArgs();
+    }
+    console.log("[PDF] Launching persistent Chromium browser...");
+    _browser = await puppeteer.launch(_launchArgs);
+
+    // Auto-cleanup on crash so next call re-launches
+    _browser.on("disconnected", () => {
+      console.warn("[PDF] Browser disconnected — will relaunch on next PDF request");
+      _browser = null;
     });
 
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    console.log("[PDF] Persistent Chromium browser ready ✅");
+
+    // Notify any callers that were waiting
+    const waiters = _browserReadyWaiters.splice(0);
+    waiters.forEach((w) => w.resolve(_browser));
+
+    return _browser;
+  } catch (err) {
+    _browser = null;
+    const waiters = _browserReadyWaiters.splice(0);
+    waiters.forEach((w) => w.reject(err));
+    throw err;
+  } finally {
+    _browserInitializing = false;
+  }
+}
+
+// Warm up the browser at module load time so first email is instant
+getBrowser().catch((err) =>
+  console.error("[PDF] Failed to pre-warm browser:", err.message)
+);
+
+const generateOrderPDF = async (orderData, deliveryFee = 0) => {
+  let page;
+  try {
+    const htmlContent = generateInvoiceHTML(orderData, null, deliveryFee, logoBase64);
+
+    const browser = await getBrowser();
+    page = await browser.newPage();
+
+    // domcontentloaded is much faster than networkidle0 (no external requests anyway)
+    await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
 
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: {
-        top: "20px",
-        right: "20px",
-        bottom: "20px",
-        left: "20px",
-      },
+      margin: { top: "20px", right: "20px", bottom: "20px", left: "20px" },
     });
 
-    await browser.close();
+    await page.close();
     return pdfBuffer;
   } catch (error) {
-    if (browser) await browser.close();
-    console.error("PDF generation error:", error);
+    if (page) {
+      try { await page.close(); } catch (_) { }
+    }
+    // If browser died mid-generation, clear it so next call relaunches
+    if (error.message?.includes("Target closed") || error.message?.includes("Session closed")) {
+      console.warn("[PDF] Browser session closed mid-generation — clearing for relaunch");
+      _browser = null;
+    }
+    console.error("[PDF] PDF generation error:", error.message);
     throw error;
   }
 };
 
-module.exports = { generateOrderPDF };
+module.exports = { generateOrderPDF, generateInvoiceHTML };

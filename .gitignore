@@ -53,3 +53,7 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Firebase & Cloud Service Account Credentials
+*firebase*adminsdk*.json
+*firebase-service-account*.json
+config/firebase-service-account.json

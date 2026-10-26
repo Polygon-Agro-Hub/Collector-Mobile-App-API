@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const handlebars = require("handlebars");
 const fs = require("fs");
 const path = require("path");
@@ -28,6 +28,32 @@ handlebars.registerHelper("isEqual", function (a, b) {
   return a === b;
 });
 
+const getLocalChromePath = () => {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
+  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+
+  const possiblePaths = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+};
+
 const generateInvoicePDF = async (orderData) => {
   let browser;
   try {
@@ -40,10 +66,28 @@ const generateInvoicePDF = async (orderData) => {
     const template = handlebars.compile(templateContent);
     const htmlContent = template(orderData);
 
-    browser = await puppeteer.launch({
+    let launchArgs = {
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      defaultViewport: null,
       headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    };
+
+    const localChrome = getLocalChromePath();
+    if (localChrome) {
+      launchArgs.executablePath = localChrome;
+    } else {
+      try {
+        const chromium = (await import("@sparticuz/chromium")).default;
+        launchArgs.args = [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"];
+        launchArgs.defaultViewport = chromium.defaultViewport;
+        launchArgs.executablePath = await chromium.executablePath();
+        launchArgs.headless = chromium.headless;
+      } catch (e) {
+        console.warn("Could not load @sparticuz/chromium fallback:", e.message);
+      }
+    }
+
+    browser = await puppeteer.launch(launchArgs);
 
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });

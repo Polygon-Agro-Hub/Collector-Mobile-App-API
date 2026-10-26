@@ -1,53 +1,73 @@
+require("./config/env");
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const compression = require("compression");
 const cron = require("node-cron");
 const bodyParser = require("body-parser");
-require("dotenv").config();
+const http = require("http");
 
 // Database connections
 const {
   plantcare,
   collectionofficer,
-  marketPlace,
   admin,
 } = require("./startup/database");
 
 // Route import
-const addCropDetails = require("./routes/unregistered-crop-farmer-routes");
-const farmerRoutes = require("./routes/farmer-routes");
-const getUserdata = require("./routes/qr-routes");
-const complainRoutes = require("./routes/complains-routes");
-const priceUpdatesRoutes = require("./routes/price-routes");
-const managerRoutes = require("./routes/manager-routes");
-const collectionrequest = require("./routes/collection-routes");
-const heathRoutes = require("./routes/heath-routes");
-const distribution = require("./routes/distribution-routes");
-const distributionManager = require("./routes/distibution-manager-routes");
-const pickupRoute = require("./routes/pickup-routes");
-const pensionRoute = require("./routes/pension-routes");
-const collectionOfficerRoutes = require("./routes/user-routes");
-const searchRoutes = require("./routes/search-routes");
-const targetRoutes = require("./routes/target-routes");
-const emailRoutes = require("./routes/email-routes");
-const farmerEp = require("./end-point/farmer-ep");
+const addCropDetails = require("./routes/collection/unregistered-crop-farmer-routes");
+const farmerRoutes = require("./routes/collection/farmer-routes");
+const complainRoutes = require("./routes/common/complains-routes");
+const priceUpdatesRoutes = require("./routes/collection/price-routes");
+const managerRoutes = require("./routes/common/manager-routes");
+const healthRoutes = require("./routes/common/health-routes");
+const distribution = require("./routes/distribution/distribution-routes");
+const distributionManager = require("./routes/distribution/distibution-manager-routes");
+const pickupRoute = require("./routes/common/pickup-routes");
+const pensionRoute = require("./routes/collection/pension-routes");
+const collectionOfficerRoutes = require("./routes/common/user-routes");
+const searchRoutes = require("./routes/common/search-routes");
+const targetRoutes = require("./routes/collection/target-routes");
+const transportRoute = require("./routes/collection/transport-routes");
+const emailRoutes = require("./routes/common/email-routes");
+const packingRoute = require("./routes/distribution/packing-route");
+const purchaseShortageRoute = require("./routes/distribution/purchase-shortage-route");
+const webRoute = require("./routes/web/web-route");
+const appVersionRoutes = require("./routes/common/app-version.routes");
+const farmerEp = require("./end-point/collection/farmer-ep");
+const userAuthEp = require("./end-point/common/user-auth-ep");
+const dmanagerEp = require("./end-point/distribution/distribution-manger-ep");
 
+const { initSocket } = require("./socket/socket");
+
+// Initialize Express app and HTTP server with Socket.IO
 const mainApp = express();
+const server = http.createServer(mainApp);
 
-// CORS and body parser configuration
+// Initialize Socket.IO (matching Govi Transport pattern)
+const io = initSocket(server);
+mainApp.set("io", io);
+
+// Security, CORS, compression, and body parser configuration
 [mainApp].forEach((app) => {
+  app.disable("x-powered-by");
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: false,
+    })
+  );
   app.use(
     cors({
-      origin: "http://localhost:8081",
+      origin: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
     })
   );
-  app.options(
-    "*",
-    cors({
-      origin: "http://localhost:8081",
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      credentials: true,
+  app.use(
+    compression({
+      threshold: 1024,
+      level: 6,
     })
   );
   app.use(bodyParser.json({ limit: "10mb" }));
@@ -79,7 +99,6 @@ const checkConnections = async () => {
   try {
     await testConnection(plantcare, "PlantCare");
     await testConnection(collectionofficer, "CollectionOfficer");
-    await testConnection(marketPlace, "MarketPlace");
     await testConnection(admin, "Admin");
     console.log("\n🎉 All databases connected successfully!\n");
   } catch (error) {
@@ -94,22 +113,29 @@ checkConnections();
 const basePathMain = "/agro-api/collection-api";
 
 // Route registrations
-mainApp.use(`${basePathMain}`, heathRoutes);
+mainApp.use("", healthRoutes);
+mainApp.use(`${basePathMain}`, healthRoutes);
 mainApp.use(`${basePathMain}/api/collection-officer`, collectionOfficerRoutes);
 mainApp.use(`${basePathMain}/api/farmer`, farmerRoutes);
 mainApp.use(`${basePathMain}/api/unregisteredfarmercrop`, addCropDetails);
-mainApp.use(`${basePathMain}/api/getUserData`, getUserdata);
 mainApp.use(`${basePathMain}/api/auth`, searchRoutes);
 mainApp.use(`${basePathMain}/api/complain`, complainRoutes);
 mainApp.use(`${basePathMain}/api/auth`, priceUpdatesRoutes);
 mainApp.use(`${basePathMain}/api/collection-manager`, managerRoutes);
 mainApp.use(`${basePathMain}/api/target`, targetRoutes);
-mainApp.use(`${basePathMain}/api/collectionrequest`, collectionrequest);
 mainApp.use(`${basePathMain}/api/distribution`, distribution);
 mainApp.use(`${basePathMain}/api/distribution-manager`, distributionManager);
 mainApp.use(`${basePathMain}/api/pickup`, pickupRoute);
 mainApp.use(`${basePathMain}/api/pension`, pensionRoute);
 mainApp.use(`${basePathMain}/api/email`, emailRoutes);
+mainApp.use(`${basePathMain}/api/packing`, packingRoute);
+mainApp.use(`${basePathMain}/api/purchase-shortage`, purchaseShortageRoute);
+mainApp.use(`${basePathMain}/api/web`, webRoute);
+mainApp.use(`${basePathMain}/api/transport`, transportRoute);
+mainApp.use(`${basePathMain}/api/app-version`, appVersionRoutes);
+mainApp.use("/api/app-version", appVersionRoutes);
+mainApp.post(`${basePathMain}/api/auth/notify-status-changed`, userAuthEp.notifyStatusChanged);
+mainApp.post(`${basePathMain}/api/distribution-manager/notify-return-otp`, dmanagerEp.notifyReturnOtp);
 
 // Cron job for SMS sending
 cron.schedule(
@@ -125,12 +151,18 @@ cron.schedule(
   }
 );
 
-// Server startup
-const PORT = process.env.PORT || 3000;
-mainApp.listen(PORT, () =>
-  console.log(
-    `Main API server running on port ${PORT} with base path ${basePathMain}`
-  )
-);
+// Attach io and mainApp to server instance
+server.io = io;
+server.mainApp = mainApp;
 
-module.exports = mainApp;
+// Only listen locally, Vercel will export the handler and call listen internally
+const PORT = process.env.PORT || 3000;
+if (!process.env.VERCEL) {
+  server.listen(PORT, () =>
+    console.log(
+      `🚀 Main API server running with Socket.IO on port ${PORT} with base path ${basePathMain}`
+    )
+  );
+}
+
+module.exports = server;
