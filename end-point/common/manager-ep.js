@@ -6,8 +6,11 @@ const createCollectionOfficerSchema = require("../../validation/manager-validati
 const QRCode = require("qrcode");
 
 exports.createCollectionOfficer = async (req, res) => {
+  let conn = null;
+  let lockName = null;
+
   try {
-    const { error, value } =
+    const { error } =
       createCollectionOfficerSchema.createCollectionOfficerSchema.validate(
         req.body,
         {
@@ -46,10 +49,6 @@ exports.createCollectionOfficer = async (req, res) => {
       return res.status(400).json({ error: "Email already exists." });
     }
 
-    const generatedEmpId = await collectionofficerDao.generateEmpId(
-      req.body.jobRole,
-    );
-
     const convertBase64ToBuffer = (base64String) => {
       try {
         const base64Data = base64String.includes(";base64,")
@@ -75,6 +74,7 @@ exports.createCollectionOfficer = async (req, res) => {
       return `${timestamp}-${randomStr}.${fileExt}`;
     };
 
+    // Profile image upload is done BEFORE the lock (does not need empId)
     let profileImageUrl = null;
     if (req.body.profileImage) {
       try {
@@ -93,6 +93,26 @@ exports.createCollectionOfficer = async (req, res) => {
           .json({ error: "Invalid image format or upload failed" });
       }
     }
+
+    // ───── Critical section: lock → generate empId → QR → insert ─────
+    conn = await collectionofficerDao.getConnection();
+
+    try {
+      lockName = await collectionofficerDao.acquireEmpIdLock(
+        conn,
+        req.body.jobRole,
+      );
+    } catch (lockError) {
+      console.error("Lock error:", lockError);
+      return res
+        .status(503)
+        .json({ error: "Server is busy, please try again." });
+    }
+
+    const generatedEmpId = await collectionofficerDao.generateEmpId(
+      req.body.jobRole,
+      conn,
+    );
 
     let qrCodeUrl = null;
     try {
@@ -133,6 +153,7 @@ exports.createCollectionOfficer = async (req, res) => {
       qrCodeUrl,
     };
 
+    // Same connection → row is committed (autocommit) before lock is released
     const resultsPersonal =
       await collectionofficerDao.createCollectionOfficerPersonal(
         officerData,
@@ -140,6 +161,7 @@ exports.createCollectionOfficer = async (req, res) => {
         companyId,
         irmId,
         jobRole,
+        conn,
       );
 
     return res.status(201).json({
@@ -154,6 +176,13 @@ exports.createCollectionOfficer = async (req, res) => {
     return res.status(500).json({
       error: "An error occurred while creating the collection officer",
     });
+  } finally {
+    if (conn) {
+      if (lockName) {
+        await collectionofficerDao.releaseEmpIdLock(conn, lockName);
+      }
+      conn.release();
+    }
   }
 };
 
