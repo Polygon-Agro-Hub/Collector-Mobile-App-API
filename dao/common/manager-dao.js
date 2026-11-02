@@ -71,25 +71,59 @@ exports.checkEmailExist = (email) => {
   });
 };
 
-exports.generateEmpId = (jobRole) => {
+const getEmpPrefix = (jobRole) => {
+  if (jobRole === "Collection Officer") return "COO";
+  if (
+    jobRole === "Distribution Officer" ||
+    jobRole === "Distribution Centre Manager"
+  )
+    return "DIO";
+  return "EMP";
+};
+
+const queryAsync = (runner, sql, params = []) =>
+  new Promise((resolve, reject) => {
+    runner.query(sql, params, (err, results) =>
+      err ? reject(err) : resolve(results),
+    );
+  });
+
+// Get a dedicated connection from the pool
+exports.getConnection = () =>
+  new Promise((resolve, reject) => {
+    db.collectionofficer.getConnection((err, conn) =>
+      err ? reject(err) : resolve(conn),
+    );
+  });
+
+// Acquire a named lock (waits up to timeoutSec)
+exports.acquireEmpIdLock = async (conn, jobRole, timeoutSec = 20) => {
+  const lockName = `empid_lock_${getEmpPrefix(jobRole)}`;
+  const rows = await queryAsync(conn, "SELECT GET_LOCK(?, ?) AS got", [
+    lockName,
+    timeoutSec,
+  ]);
+  if (!rows || rows[0].got !== 1) {
+    throw new Error("Could not acquire empId lock");
+  }
+  return lockName;
+};
+
+exports.releaseEmpIdLock = async (conn, lockName) => {
+  try {
+    await queryAsync(conn, "SELECT RELEASE_LOCK(?)", [lockName]);
+  } catch (err) {
+    console.error("Error releasing empId lock:", err);
+  }
+};
+
+// Pass `conn` when calling inside the lock. Without it, it uses the pool.
+exports.generateEmpId = (jobRole, conn = null) => {
   return new Promise((resolve, reject) => {
     try {
-      let prefix = "";
-      let searchPattern = "";
-
-      if (jobRole === "Collection Officer") {
-        prefix = "COO";
-        searchPattern = "COO%";
-      } else if (
-        jobRole === "Distribution Officer" ||
-        jobRole === "Distribution Centre Manager"
-      ) {
-        prefix = "DIO";
-        searchPattern = "DIO%";
-      } else {
-        prefix = "EMP";
-        searchPattern = "EMP%";
-      }
+      const prefix = getEmpPrefix(jobRole);
+      const searchPattern = `${prefix}%`;
+      const runner = conn || db.collectionofficer;
 
       const sql = `
         SELECT empId 
@@ -99,7 +133,7 @@ exports.generateEmpId = (jobRole) => {
         LIMIT 1
       `;
 
-      db.collectionofficer.query(sql, [searchPattern], (err, results) => {
+      runner.query(sql, [searchPattern], (err, results) => {
         if (err) {
           console.error("Database query error in generateEmpId:", err);
           return reject(new Error("Failed to generate empId"));
@@ -108,20 +142,13 @@ exports.generateEmpId = (jobRole) => {
         let nextNumber = 1;
 
         if (results && results.length > 0) {
-          const lastEmpId = results[0].empId;
-
-          const numericPart = lastEmpId.substring(3);
-          const lastNumber = parseInt(numericPart, 10);
-
+          const lastNumber = parseInt(results[0].empId.substring(3), 10);
           if (!isNaN(lastNumber)) {
             nextNumber = lastNumber + 1;
           }
         }
 
-        const formattedNumber = nextNumber.toString().padStart(5, "0");
-        const newEmpId = `${prefix}${formattedNumber}`;
-
-        resolve(newEmpId);
+        resolve(`${prefix}${nextNumber.toString().padStart(5, "0")}`);
       });
     } catch (error) {
       console.error("Unexpected error in generateEmpId:", error);
@@ -136,6 +163,7 @@ exports.createCollectionOfficerPersonal = (
   companyId,
   irmId,
   jobRole,
+  conn = null,
 ) => {
   return new Promise((resolve, reject) => {
     try {
@@ -144,6 +172,7 @@ exports.createCollectionOfficerPersonal = (
         jobRole === "Distribution Officer";
 
       const centerColumn = isDistribution ? "distributedCenterId" : "centerId";
+      const runner = conn || db.collectionofficer;
 
       const sql = `
         INSERT INTO collectionofficer (
@@ -207,7 +236,7 @@ exports.createCollectionOfficerPersonal = (
         officerData.qrCodeUrl || null,
       ];
 
-      db.collectionofficer.query(sql, values, (err, results) => {
+      runner.query(sql, values, (err, results) => {
         if (err) {
           console.error("Database query error:", err);
           return reject(
@@ -225,6 +254,8 @@ exports.createCollectionOfficerPersonal = (
     }
   });
 };
+
+
 
 exports.getIrmDetails = async (irmId, jobRole) => {
   return new Promise((resolve, reject) => {

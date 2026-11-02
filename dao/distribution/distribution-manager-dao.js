@@ -1250,7 +1250,7 @@ exports.getAllCity = async () => {
   });
 };
 
-exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
+exports.getClaimOfficer = (empID, jobRoles, OfficercompanyId) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT 
@@ -1266,7 +1266,7 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
         c.companyId = comp.id 
       WHERE 
         c.empId = ? 
-        AND c.jobRole = ? 
+        AND c.jobRole IN (?) 
         AND c.centerId IS NULL 
         AND c.claimStatus = 0
         AND c.companyId = ?
@@ -1274,12 +1274,9 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
 
     db.collectionofficer.query(
       sql,
-      [empID, jobRole, OfficercompanyId],
+      [empID, jobRoles, OfficercompanyId],
       (err, results) => {
-        if (err) {
-          return reject(err);
-        }
-
+        if (err) return reject(err);
         resolve(results);
       },
     );
