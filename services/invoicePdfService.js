@@ -526,7 +526,7 @@ const generateInvoiceHTML = (
       <!-- Company Header -->
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:10px;">
         <div>
-          <p style="margin:0 0 4px 0;"><span style="font-weight:550;font-size:16px">Polygon Holdings (Private) Ltd</span></p>
+          <p style="margin:0 0 4px 0;"><span style="font-weight:550;font-size:16px">Polygon Holdings (Private) Limited</span></p>
           <p class="headerp">No. 42/46, Nawam Mawatha, Colombo 02.</p>
           <p class="headerp">Contact No : 011 431 3433</p>
           <p class="headerp">Email Address : info@polygon.lk</p>
