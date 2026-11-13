@@ -66,13 +66,17 @@ exports.getAllDistributionOfficer = async (req, res) => {
 
 
 exports.getClaimOfficer = async (req, res) => {
-  const { empID, jobRole } = req.body;
+  const { empID, jobRoles } = req.body;
   const OfficercompanyId = req.user.companyId;
+
+  if (!empID || !Array.isArray(jobRoles) || jobRoles.length === 0) {
+    return res.status(400).json({ result: [], status: false, message: "empID and jobRoles are required" });
+  }
 
   try {
     const results = await distributionofficerDao.getClaimOfficer(
       empID,
-      jobRole,
+      jobRoles,
       OfficercompanyId,
     );
     res.status(200).json({ result: results, status: true });

@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const { authLimiter } = require("../../middleware/rateLimiter");
 const webEp = require("../../end-point/web/web-ep");
 
 // DCM Web Login
-router.post("/login", webEp.dcmLogin);
+router.post("/login", authLimiter, webEp.dcmLogin);
 
 // Get available rows overview
 router.get("/rows", webEp.getAvailableRows);

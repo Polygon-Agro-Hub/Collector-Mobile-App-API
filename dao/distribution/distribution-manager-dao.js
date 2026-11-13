@@ -994,6 +994,7 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
           oai.qty,
           oai.productId,
           oai.unit,
+          oai.normalPrice,
           oai.price,
           oai.discount AS itemDiscount
       FROM orderadditionalitems oai
@@ -1011,6 +1012,10 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
         productId: item.productId,
         qty: parseFloat(item.qty) || 0,
         unit: item.unit || "",
+        normalPrice:
+          item.normalPrice !== null && item.normalPrice !== undefined
+            ? parseFloat(item.normalPrice)
+            : null,
         price: parseFloat(item.price) || 0,
         discount: parseFloat(item.itemDiscount) || 0,
       }));
@@ -1163,7 +1168,12 @@ exports.getOrderById = async (orderId, targetProcessOrderId = null) => {
             : "Unknown Product",
           varietyId: productDetail ? productDetail.varietyId : null,
           category: productDetail ? productDetail.category : null,
-          normalPrice: productDetail ? productDetail.normalPrice : null,
+          normalPrice:
+            item.normalPrice !== null && item.normalPrice !== undefined
+              ? item.normalPrice
+              : productDetail
+                ? productDetail.normalPrice
+                : null,
           discountedPrice: productDetail ? productDetail.discountedPrice : null,
         };
       });
@@ -1250,7 +1260,7 @@ exports.getAllCity = async () => {
   });
 };
 
-exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
+exports.getClaimOfficer = (empID, jobRoles, OfficercompanyId) => {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT 
@@ -1266,7 +1276,7 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
         c.companyId = comp.id 
       WHERE 
         c.empId = ? 
-        AND c.jobRole = ? 
+        AND c.jobRole IN (?) 
         AND c.centerId IS NULL 
         AND c.claimStatus = 0
         AND c.companyId = ?
@@ -1274,12 +1284,9 @@ exports.getClaimOfficer = (empID, jobRole, OfficercompanyId) => {
 
     db.collectionofficer.query(
       sql,
-      [empID, jobRole, OfficercompanyId],
+      [empID, jobRoles, OfficercompanyId],
       (err, results) => {
-        if (err) {
-          return reject(err);
-        }
-
+        if (err) return reject(err);
         resolve(results);
       },
     );

@@ -167,7 +167,7 @@ exports.getReceivedProductsToday = (officerId, targetDate = null) => {
     });
 };
 
-exports.getTransportLoadDetails = (transportId, requestedType = null) => {
+exports.getTransportLoadDetails = (transportId, requestedType = null, sortBy = null) => {
     return new Promise((resolve, reject) => {
         if (!transportId) {
             return reject(new Error("Transport ID is required"));
@@ -276,7 +276,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       INNER JOIN unloadedcrates uc ON uc.loadId = li.id
                       WHERE li.transportId = ?
-                      ORDER BY li.id ASC, uc.grade ASC, uc.crateIndex ASC
+                      ORDER BY COALESCE(NULLIF(TRIM(mi.displayName), ''), NULLIF(TRIM(cv.varietyNameEnglish), ''), NULLIF(TRIM(cg.cropNameEnglish), ''), '') ASC, li.id ASC, uc.grade ASC, uc.crateIndex ASC
                     `
                     : `
                       SELECT 
@@ -312,7 +312,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                       LEFT JOIN plant_care.cropgroup cg ON cv.cropGroupId = cg.id
                       LEFT JOIN loadedcrates lc ON lc.loadId = li.id
                       WHERE li.transportId = ?
-                      ORDER BY li.id ASC, lc.grade ASC, lc.crateIndex ASC
+                      ORDER BY COALESCE(NULLIF(TRIM(cv.varietyNameEnglish), ''), NULLIF(TRIM(cg.cropNameEnglish), ''), '') ASC, li.id ASC, lc.grade ASC, lc.crateIndex ASC
                     `;
 
                 collectionofficer.query(itemsSql, [loadHeader.id], (err2, itemRows) => {
@@ -332,7 +332,7 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                                 loadedItemId: row.loadedItemId,
                                 varietyId: row.varietyId ? String(row.varietyId) : undefined,
                                 displayName: row.displayName || null,
-                                varietyLabel: row.displayName || row.varietyNameEnglish || "",
+                                varietyLabel: row.varietyNameEnglish || row.displayName || "",
                                 varietyNameEnglish: row.varietyNameEnglish || "",
                                 varietyNameSinhala: row.varietyNameSinhala || "",
                                 varietyNameTamil: row.varietyNameTamil || "",
@@ -372,6 +372,21 @@ exports.getTransportLoadDetails = (transportId, requestedType = null) => {
                     });
 
                     const formattedItems = Array.from(itemsMap.values());
+
+                    const effectiveSort = sortBy || (requestedType === "unloaded" ? "display" : "variety");
+                    if (effectiveSort === "display") {
+                        formattedItems.sort((a, b) => {
+                            const nameA = (a.displayName || a.varietyNameEnglish || a.cropName || "").trim().toLowerCase();
+                            const nameB = (b.displayName || b.varietyNameEnglish || b.cropName || "").trim().toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    } else {
+                        formattedItems.sort((a, b) => {
+                            const nameA = (a.varietyNameEnglish || a.varietyLabel || a.cropName || "").trim().toLowerCase();
+                            const nameB = (b.varietyNameEnglish || b.varietyLabel || b.cropName || "").trim().toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    }
 
                     resolve({
                         transportId: String(loadHeader.id),
@@ -730,6 +745,7 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 [targetLoadId]
                             );
 
+                            const crateRows = [];
                             for (const g of item.grades) {
                                 const rawGrade = (g.grade || g.gradeKey || "A").trim().toUpperCase();
                                 const cleanGrade = rawGrade.replace(/^GRADE\s*/i, "");
@@ -740,9 +756,20 @@ exports.finishUnloading = (transportId, loadCode, officerId, unloadedItems = [])
                                 const qty = parseFloat(g.qty ?? g.weightKg ?? g.weight) || 0;
                                 const crateWeight = parseFloat(g.crateWeight || g.containerTypeWeight) || 0;
 
+                                crateRows.push([
+                                    targetLoadId,
+                                    validGrade,
+                                    crateCount,
+                                    crateIndex,
+                                    crateWeight,
+                                    qty,
+                                ]);
+                            }
+
+                            if (crateRows.length > 0) {
                                 await connection.promise().query(
-                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES (?, ?, ?, ?, ?, ?)",
-                                    [targetLoadId, validGrade, crateCount, crateIndex, crateWeight, qty]
+                                    "INSERT INTO unloadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty) VALUES ?",
+                                    [crateRows]
                                 );
                             }
                         }
@@ -1178,6 +1205,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                         const loadId = itemResult.insertId;
 
                         if (Array.isArray(item.gradeSets) && item.gradeSets.length > 0) {
+                            const crateRows = [];
                             for (const gs of item.gradeSets) {
                                 const grade = gs.gradeKey || (gs.grade ? gs.grade.replace(/Grade\s*/i, "").trim() : "A");
                                 const crateCount = parseInt(gs.crates, 10) || 0;
@@ -1185,11 +1213,7 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                 const qty = parseFloat(gs.weightKg ?? gs.weight) || 0;
                                 const crateWeight = parseFloat(gs.crateWeight || gs.containerTypeWeight) || 0;
 
-                                const insertCrateQuery = `
-                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
-                                  VALUES (?, ?, ?, ?, ?, ?)
-                                `;
-                                await connection.promise().query(insertCrateQuery, [
+                                crateRows.push([
                                     loadId,
                                     grade,
                                     crateCount,
@@ -1197,6 +1221,14 @@ exports.saveTransportLoad = ({ officerId, driverId, centreId, disComCenId, items
                                     crateWeight,
                                     qty,
                                 ]);
+                            }
+
+                            if (crateRows.length > 0) {
+                                const insertCrateQuery = `
+                                  INSERT INTO loadedcrates (loadId, grade, crateCount, crateIndex, crateWeight, qty)
+                                  VALUES ?
+                                `;
+                                await connection.promise().query(insertCrateQuery, [crateRows]);
                             }
                         }
                     }
