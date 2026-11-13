@@ -141,13 +141,28 @@ exports.processDeliveryInvoices = async (req, res) => {
           calculatedTotal += deliveryFee;
         }
 
-        if (
-          order.orderApp === "Dash" &&
-          order.isPackage === 0 &&
-          !order.couponValue &&
-          !order.serviceFee
-        ) {
-          calculatedTotal += 180;
+        if (order.isPackage === 0) {
+          const sumAdditionalPrice = (order.additionalItems || []).reduce(
+            (sum, item) => sum + (parseFloat(item.price || 0) || 0),
+            0
+          );
+          const poFullTotal = parseFloat(
+            order.fullTotal || order.orderStatus?.fullTotal || 0
+          );
+          const effectiveDeliveryFee =
+            !isFreeDelivery && order.delivaryMethod !== "Pickup"
+              ? deliveryFee
+              : 0;
+          let serviceFee = 0;
+          if (poFullTotal > 0) {
+            serviceFee = Math.max(
+              0,
+              poFullTotal - sumAdditionalPrice - effectiveDeliveryFee
+            );
+          } else if (order.serviceFee !== undefined && order.serviceFee !== null) {
+            serviceFee = parseFloat(order.serviceFee) || 0;
+          }
+          calculatedTotal += serviceFee;
         }
 
         calculatedTotal -= parseFloat(order.discount || 0);
@@ -370,8 +385,25 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
     if (!isFreeDelivery && !isPickup) {
       calculatedTotal += deliveryFee;
     }
-    if (order.orderApp === "Dash" && order.isPackage === 0 && !order.couponValue && !order.serviceFee) {
-      calculatedTotal += 180;
+    if (order.isPackage === 0) {
+      const sumAdditionalPrice = (order.additionalItems || []).reduce(
+        (sum, item) => sum + (parseFloat(item.price || 0) || 0),
+        0
+      );
+      const poFullTotal = parseFloat(
+        order.fullTotal || order.orderStatus?.fullTotal || 0
+      );
+      const effectiveDeliveryFee = !isFreeDelivery && !isPickup ? deliveryFee : 0;
+      let serviceFee = 0;
+      if (poFullTotal > 0) {
+        serviceFee = Math.max(
+          0,
+          poFullTotal - sumAdditionalPrice - effectiveDeliveryFee
+        );
+      } else if (order.serviceFee !== undefined && order.serviceFee !== null) {
+        serviceFee = parseFloat(order.serviceFee) || 0;
+      }
+      calculatedTotal += serviceFee;
     }
     calculatedTotal -= parseFloat(order.discount || 0);
     if (order.orderApp === "Marketplace" && parseFloat(order.couponValue || 0) > 0 && !order.serviceFee) {

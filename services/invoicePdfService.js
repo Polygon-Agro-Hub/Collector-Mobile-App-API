@@ -136,15 +136,30 @@ const generateInvoiceHTML = (
 
   let totalAmount = subtotal + deliveryFeeAmount;
 
-  const shouldAddServiceFee =
-    order.orderApp === "Dash" &&
-    order.isPackage === 0 &&
-    !order.couponValue &&
-    !order.serviceFee;
+  // Determine dynamic service fee for non-package orders:
+  // fulltotal (processorders table fulltotal column) - sum(orderadditionalitems.price) - deliveryFeeAmount
+  const sumAdditionalPrice = (order.additionalItems || []).reduce(
+    (sum, item) => sum + (parseFloat(item.price?.toString() || "0") || 0),
+    0
+  );
 
-  if (shouldAddServiceFee) {
-    totalAmount += 180;
-    totalServiceFee = 180;
+  let isServiceFeeApplicable = false;
+  if (order.isPackage === 0) {
+    isServiceFeeApplicable = true;
+    const poFullTotal = parseFloat(
+      order.fullTotal || order.orderStatus?.fullTotal || 0
+    );
+    if (poFullTotal > 0) {
+      totalServiceFee = Math.max(
+        0,
+        poFullTotal - sumAdditionalPrice - deliveryFeeAmount
+      );
+    } else if (order.serviceFee !== undefined && order.serviceFee !== null) {
+      totalServiceFee = parseFloat(order.serviceFee) || 0;
+    } else {
+      totalServiceFee = 0;
+    }
+    totalAmount += totalServiceFee;
   }
 
   totalAmount -= totaldiscount;
@@ -157,7 +172,7 @@ const generateInvoiceHTML = (
     totalAmount -= couponDiscount;
   }
 
-  const shouldShowServiceFee = () => shouldAddServiceFee;
+  const shouldShowServiceFee = () => isServiceFeeApplicable;
   const shouldShowCouponDiscount = () =>
     order.orderApp === "Marketplace" && couponDiscount > 0 && !order.serviceFee;
 
@@ -240,11 +255,20 @@ const generateInvoiceHTML = (
         const price = parseFloat(item.price?.toString() || "0");
         const discount = parseFloat(item.discount?.toString() || "0");
         const qty = parseFloat(item.qty?.toString() || "0");
-        const unit = item.unit ? `\u00A0${item.unit}` : "";
+        const rawUnit = (item.unit || "").trim().toLowerCase();
+        const formattedUnit = item.unit ? `\u00A0${item.unit}` : "";
         const actualAmount = price + discount;
-        const unitPrice = parseFloat(item.normalPrice?.toString() || "0");
+        const rawNormalPrice = parseFloat(item.normalPrice?.toString() || "0");
 
-        const formattedQty = `${qty}${unit}`;
+        // Calculate unit price for 1 kg:
+        // If unit is 'g' (grams), convert qty to kg (qty / 1000). Otherwise qty is in kg.
+        const qtyInKg = rawUnit === "g" ? qty / 1000 : qty;
+        const unitPrice =
+          qtyInKg > 0 && rawNormalPrice > 0
+            ? rawNormalPrice / qtyInKg
+            : rawNormalPrice;
+
+        const formattedQty = `${qty}${formattedUnit}`;
 
         return `
       <tr>
@@ -502,7 +526,7 @@ const generateInvoiceHTML = (
       <!-- Company Header -->
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:10px;">
         <div>
-          <p style="margin:0 0 4px 0;"><span style="font-weight:550;font-size:16px">Polygon Holdings (Private) Ltd</span></p>
+          <p style="margin:0 0 4px 0;"><span style="font-weight:550;font-size:16px">Polygon Holdings (Private) Limited</span></p>
           <p class="headerp">No. 42/46, Nawam Mawatha, Colombo 02.</p>
           <p class="headerp">Contact No : 011 431 3433</p>
           <p class="headerp">Email Address : info@polygon.lk</p>
@@ -659,7 +683,7 @@ const generateInvoiceHTML = (
     }
         ${shouldShowServiceFee()
       ? `<div style="display:flex;justify-content:space-between;margin-right:20px;" class="ptext">
-              <p>Service Fee</p><p>Rs. 180.00</p>
+              <p>Service Fee</p><p>${formatCurrency(totalServiceFee)}</p>
             </div>`
       : ""
     }
