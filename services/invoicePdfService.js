@@ -1,12 +1,73 @@
 const puppeteer = require("puppeteer-core");
 const { logoBase64 } = require("./logoBase64");
 
-const calculatePackageTotal = (pkg) => {
-  const productPrice = parseFloat(pkg.packagePrice || pkg.productPrice || 0);
-  const packingFee = parseFloat(pkg.packagePackingFee || pkg.packingFee || 0);
-  const serviceFee = parseFloat(pkg.packageServiceFee || pkg.serviceFee || 0);
-  return productPrice + packingFee + serviceFee;
+// ─── Package pricing ──────────────────────────────────────────────────────────
+// reviewValue != 0 / NULL (reviewed):
+//   price shown     = SUM(orderpackageitems.price) + S.F. + P.F.   (no strike-through)
+// reviewValue = 0 / NULL (not reviewed):
+//   bold price      = marketplacepackages.productPrice + P.F. + S.F.
+//   struck-through  = SUM(orderpackageitems.price) + S.F. + P.F.
+
+const getReviewValue = (pkg) =>
+  pkg.reviewValue ??
+  pkg.reviewvalue ??
+  pkg.review_value ??
+  pkg.packageReviewValue ??
+  null;
+
+const isReviewed = (pkg) => {
+  const raw = getReviewValue(pkg);
+  if (raw === null || raw === undefined) {
+    if (!("reviewValue" in pkg)) {
+      console.warn(
+        `[PDF] package "${pkg.displayName}" has no reviewValue field - treated as NOT reviewed. Select orderpackage.reviewValue in the packages query.`,
+      );
+    }
+    return false;
+  }
+  const v = parseFloat(raw);
+  return !isNaN(v) && v !== 0;
 };
+
+const getPackagePricing = (pkg) => {
+  const serviceFee =
+    parseFloat(pkg.packageServiceFee ?? pkg.serviceFee ?? 0) || 0;
+  const packingFee =
+    parseFloat(pkg.packagePackingFee ?? pkg.packingFee ?? 0) || 0;
+
+  // SUM(orderpackageitems.price)
+  const itemsSum = (Array.isArray(pkg.packageItems) ? pkg.packageItems : []).reduce(
+    (sum, item) => sum + (parseFloat(item.price) || 0),
+    0,
+  );
+
+  // marketplacepackages.productPrice (looked up via orderpackage.packageId)
+  const packagePrice =
+    parseFloat(pkg.productPrice ?? pkg.packagePrice ?? 0) || 0;
+
+  const itemsTotal = itemsSum + serviceFee + packingFee;
+
+  if (isReviewed(pkg)) {
+    return { finalTotal: itemsTotal, originalTotal: null, serviceFee, packingFee };
+  }
+
+  // reviewValue = 0 / NULL -> bold = package price + fees,
+  // struck-through = items + fees (hidden when identical)
+  if (packagePrice <= 0) {
+    return { finalTotal: itemsTotal, originalTotal: null, serviceFee, packingFee };
+  }
+
+  const packageTotal = packagePrice + packingFee + serviceFee;
+  return {
+    finalTotal: packageTotal,
+    originalTotal:
+      Math.abs(itemsTotal - packageTotal) > 0.001 ? itemsTotal : null,
+    serviceFee,
+    packingFee,
+  };
+};
+
+const calculatePackageTotal = (pkg) => getPackagePricing(pkg).finalTotal;
 
 const formatCurrency = (amount) => {
   const numAmount = parseFloat(amount) || 0;
@@ -97,9 +158,10 @@ const generateInvoiceHTML = (
     order.packages.length > 0
   ) {
     order.packages.forEach((pkg) => {
+      // calculatePackageTotal already includes S.F. + P.F.
       totalPackagePrice += calculatePackageTotal(pkg);
-      totalPackingFee += parseFloat(pkg.packagePackingFee || pkg.packingFee || 0);
-      totalServiceFee += parseFloat(pkg.packageServiceFee || pkg.serviceFee || 0);
+      totalPackingFee += parseFloat(pkg.packagePackingFee ?? pkg.packingFee ?? 0) || 0;
+      totalServiceFee += parseFloat(pkg.packageServiceFee ?? pkg.serviceFee ?? 0) || 0;
     });
   } else if (order.isPackage === 1) {
     console.warn(
@@ -186,63 +248,127 @@ const generateInvoiceHTML = (
       return "";
     }
 
-    const totalPkgCount = order.packages.length;
-
     return order.packages
       .map((pkg, packageIndex) => {
-        const packageTotal = calculatePackageTotal(pkg);
-        const packageItemsCount =
-          pkg.packageItems && Array.isArray(pkg.packageItems)
-            ? pkg.packageItems.length
-            : 0;
+        const { finalTotal, originalTotal, serviceFee, packingFee } =
+          getPackagePricing(pkg);
+        const packageItemsCount = Array.isArray(pkg.packageItems)
+          ? pkg.packageItems.length
+          : 0;
 
         let packageDetailsRows = "";
-        if (pkg.packageItems && Array.isArray(pkg.packageItems)) {
+        if (Array.isArray(pkg.packageItems)) {
           packageDetailsRows = pkg.packageItems
             .map((item, itemIndex) => {
               const itemTotal = parseFloat(item.price || 0);
               const itemQty = parseFloat(item.qty || 0);
-              const itemUnitPrice = itemQty > 0 ? itemTotal / itemQty : 0;
               const unitStr = item.unit ? `\u00A0${item.unit}` : "\u00A0Kg";
 
               return `
               <tr>
-                <td style="text-align: left" class="tabledata">${itemIndex + 1}</td>
+                <td style="text-align:left" class="tabledata">${itemIndex + 1}</td>
                 <td class="tabledata">${item.productTypeName || item.category || "N/A"}</td>
-                <td class="tabledata">${item.productDisplayName || "N/A"}</td>
-                <td class="tabledata">${formatNumber(itemUnitPrice)}</td>
+                <td class="tabledata" style="color:#000;">${item.productDisplayName || "N/A"}</td>
                 <td class="tabledata">${itemQty}${unitStr}</td>
-                <td class="tabledata">${formatNumber(itemTotal)}</td>
+                <td class="tabledata">${formatCurrency(itemTotal)}</td>
               </tr>`;
             })
             .join("");
         }
 
-        const baseTitle = pkg.displayName || `Package ${packageIndex + 1}`;
-        const titleWithSubIndex = baseTitle;
+        const hasCharges = serviceFee > 0 || packingFee > 0;
+        const chargesBox = hasCharges
+          ? `
+          <div style="margin:12px;padding:16px;background:#f0f5ff;border-radius:10px;display:flex;align-items:center;">
+            <div style="flex:1;">
+              <p class="bold" style="margin:0 0 4px 0;">Additional Charges</p>
+              <p style="font-size:12px;margin:0;">Service Fee &amp; Packing Fee*</p>
+            </div>
+            <div style="border-left:1px solid #999;padding-left:20px;min-width:230px;">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                <span style="font-weight:550;">Service Fee</span><span>${formatCurrency(serviceFee)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                <span style="font-weight:550;">Packing Fee</span><span>${formatCurrency(packingFee)}</span>
+              </div>
+            </div>
+          </div>`
+          : "";
+
+        // reviewValue = 0 / NULL: struck-through price first, bold price after it
+        const priceHtml = `
+          ${originalTotal !== null
+            ? `<span style="text-decoration:line-through;font-size:14px;color:#333;margin-right:8px;">${formatCurrency(originalTotal)}</span>`
+            : ""}
+          <span style="font-weight:550;font-size:16px;">${formatCurrency(finalTotal)}</span>`;
 
         return `
         <div class="section4">
-          <div style="display:flex;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
-            <div class="bold">${titleWithSubIndex} (${formatItemCount(packageItemsCount)} ${pluralizeItemWord(packageItemsCount)})</div>
-            <div style="font-weight:550;font-size:16px">${formatCurrency(packageTotal)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;margin-top:40px;">
+            <div class="bold">${pkg.displayName || `Package ${packageIndex + 1}`} (${formatItemCount(packageItemsCount)} ${pluralizeItemWord(packageItemsCount)})</div>
+            <div>${priceHtml}</div>
           </div>
-          <div style="border:1px solid #ddd;border-radius:10px">
+          <div style="border:1px solid #ddd;border-radius:10px;">
             ${packageDetailsRows
-            ? `<table class="table">
+              ? `<table class="table">
                   <tr>
                     <th style="text-align:left;border-top-left-radius:10px">Index</th>
                     <th style="text-align:left">Category</th>
                     <th style="text-align:left">Item Description</th>
-                    <th style="text-align:left">Unit Price (Rs.)</th>
-                    <th style="text-align:left">QTY (Kg)</th>
+                    <th style="text-align:left">QTY</th>
                     <th style="text-align:left;border-top-right-radius:10px">Amount (Rs.)</th>
                   </tr>
                   ${packageDetailsRows}
-                </table>`
-            : `<div style="padding:20px;text-align:center;color:#666;">Package items not available</div>`
-          }
+                </table>
+                ${chargesBox}`
+              : `<div style="padding:20px;text-align:center;color:#666;">Package items not available</div>`}
           </div>
+        </div>`;
+      })
+      .join("");
+  };
+
+  // Blue info note under a package in the totals section when the customer
+  // changed the package during review:
+  //   reviewValue > 0 -> extra amount charged
+  //   reviewValue < 0 -> amount deducted
+  const buildReviewNote = (pkg) => {
+    const raw = getReviewValue(pkg);
+    const v = parseFloat(raw);
+    if (raw === null || raw === undefined || isNaN(v) || v === 0) return "";
+
+    const text =
+      v > 0
+        ? `An additional ${formatCurrency(Math.abs(v))} has been charged for package modifications requested by the customer during the review process.`
+        : `An amount of ${formatCurrency(Math.abs(v))} has been deducted due to package modifications made by the customer during the review process.`;
+
+    return `
+      <div style="display:flex;align-items:center;color:#1d4ed8;font-size:12px;margin:2px 0 8px 0;">
+        <span style="display:inline-block;background:#1d4ed8;color:#fff;border-radius:50%;width:14px;height:14px;min-width:14px;text-align:center;line-height:14px;font-size:9px;font-weight:bold;margin-right:6px;">i</span>
+        <span>${text}</span>
+      </div>`;
+  };
+
+  // One row per package (name + price), each followed by its review note.
+  const generatePackageTotalsRows = () => {
+    if (
+      order.isPackage !== 1 ||
+      !Array.isArray(order.packages) ||
+      order.packages.length === 0
+    ) {
+      return "";
+    }
+
+    return order.packages
+      .map((pkg, index) => {
+        const { finalTotal } = getPackagePricing(pkg);
+        return `
+        <div style="margin-right:20px;">
+          <div style="display:flex;justify-content:space-between;" class="ptext">
+            <p>${pkg.displayName || `Package ${index + 1}`}</p>
+            <p>${formatCurrency(finalTotal)}</p>
+          </div>
+          ${buildReviewNote(pkg)}
         </div>`;
       })
       .join("");
@@ -665,13 +791,7 @@ const generateInvoiceHTML = (
         <div style="margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:10px;">
           <div class="bold">Grand Total for all items</div>
         </div>
-        ${order.isPackage === 1 && totalPackagePrice > 0
-      ? `<div style="display:flex;justify-content:space-between;margin-right:20px;" class="ptext">
-              <p>${order.packages?.length === 1 ? order.packages[0].displayName || "Package" : "Total Price for Packages"}</p>
-              <p>${formatCurrency(totalPackagePrice)}</p>
-            </div>`
-      : ""
-    }
+        ${generatePackageTotalsRows()}
               ${order.additionalItems &&
       Array.isArray(order.additionalItems) &&
       order.additionalItems.length > 0
@@ -747,8 +867,6 @@ const generateInvoiceHTML = (
   </body>
 </html>`;
 };
-
-
 
 const fs = require("fs");
 
