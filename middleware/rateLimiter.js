@@ -18,6 +18,23 @@ const authLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for token refresh endpoints.
+ * Allows up to 60 refresh requests per 15-minute window per IP.
+ */
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "error",
+    code: "TOO_MANY_REQUESTS",
+    message: "Too many token refresh attempts. Please try again after 15 minutes.",
+  },
+  statusCode: 429,
+});
+
+/**
  * General API rate limiter for standard routes to prevent accidental abuse/flooding.
  * Allows 600 requests per minute per IP.
  */
@@ -36,5 +53,6 @@ const generalLimiter = rateLimit({
 
 module.exports = {
   authLimiter,
+  refreshLimiter,
   generalLimiter,
 };
