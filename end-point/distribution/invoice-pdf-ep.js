@@ -2,6 +2,145 @@ const targetDDao = require("../../dao/distribution/distribution-manager-dao");
 const invoicePdfService = require("../../services/invoicePdfService");
 const emailService = require("../../services/emailService");
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const extractFee = (charge) => {
+  if (charge === null || charge === undefined) return 0;
+  if (typeof charge === "number") return charge;
+  if (typeof charge === "string")
+    return parseFloat(charge.replace(/[^\d.]/g, "")) || 0;
+  return 0;
+};
+
+const isPickupOrder = (order) =>
+  (order.delivaryMethod || "").toLowerCase().includes("pickup");
+
+const isFreeDeliveryOrder = (order) =>
+  order.isCoupon === 1 && order.couponType === "Free Delivery";
+
+// Works out the delivery fee from the city at the end of the address.
+const resolveDeliveryFee = (order, cities) => {
+  if (isFreeDeliveryOrder(order) || isPickupOrder(order)) return 0;
+
+  let cityFromAddress = null;
+  if (order.fullAddress && typeof order.fullAddress === "string") {
+    const addressParts = order.fullAddress.split(",").map((part) => part.trim());
+    if (addressParts.length > 0) {
+      cityFromAddress = addressParts[addressParts.length - 1];
+    }
+  }
+
+  if (!cityFromAddress || cityFromAddress.trim() === "") {
+    cityFromAddress = order.customerInfo?.city || order.city || null;
+  }
+
+  if (!cityFromAddress || cityFromAddress.trim() === "") return 0;
+
+  const searchCityName = cityFromAddress.toLowerCase().trim();
+
+  const exact = cities.find(
+    (c) => c.city && c.city.toLowerCase().trim() === searchCityName,
+  );
+  if (exact) return extractFee(exact.charge);
+
+  const partial = cities.find((c) => {
+    if (!c.city) return false;
+    const dbCityName = c.city.toLowerCase().trim();
+    return (
+      dbCityName.includes(searchCityName) ||
+      searchCityName.includes(dbCityName)
+    );
+  });
+  return partial ? extractFee(partial.charge) : 0;
+};
+
+// Price of one package, matching the invoice PDF:
+//   reviewValue != 0 / NULL -> SUM(orderpackageitems.price) + Packing Fee + Service Fee
+//   reviewValue = 0 / NULL  -> marketplacepackages.productPrice + Packing Fee + Service Fee
+const calculatePackageAmount = (pkg) => {
+  const itemsSum = (Array.isArray(pkg.packageItems) ? pkg.packageItems : []).reduce(
+    (sum, item) => sum + (parseFloat(item.price) || 0),
+    0,
+  );
+  const packingFee = parseFloat(pkg.packingFee ?? pkg.packagePackingFee ?? 0) || 0;
+  const serviceFee = parseFloat(pkg.serviceFee ?? pkg.packageServiceFee ?? 0) || 0;
+  const packagePrice = parseFloat(pkg.productPrice ?? pkg.packagePrice ?? 0) || 0;
+
+  const reviewValue = parseFloat(pkg.reviewValue);
+  const isReviewed = !isNaN(reviewValue) && reviewValue !== 0;
+
+  if (isReviewed || packagePrice <= 0) {
+    return itemsSum + packingFee + serviceFee;
+  }
+  return packagePrice + packingFee + serviceFee;
+};
+
+// Grand total, kept in line with the invoice PDF.
+const calculateInvoiceTotal = (order, deliveryFee) => {
+  const isFreeDelivery = isFreeDeliveryOrder(order);
+  const isPickup = isPickupOrder(order);
+  const effectiveDeliveryFee = !isFreeDelivery && !isPickup ? deliveryFee : 0;
+
+  let total = 0;
+
+  if (order.packages && Array.isArray(order.packages)) {
+    order.packages.forEach((pkg) => {
+      total += calculatePackageAmount(pkg);
+    });
+  }
+
+  if (order.additionalItems && Array.isArray(order.additionalItems)) {
+    order.additionalItems.forEach((item) => {
+      total += parseFloat(item.price || 0) + parseFloat(item.discount || 0);
+    });
+  }
+
+  total += effectiveDeliveryFee;
+
+  // Non-package orders: service fee = fullTotal - additional items - delivery
+  if (order.isPackage === 0) {
+    const sumAdditionalPrice = (order.additionalItems || []).reduce(
+      (sum, item) => sum + (parseFloat(item.price || 0) || 0),
+      0,
+    );
+    const poFullTotal = parseFloat(
+      order.fullTotal || order.orderStatus?.fullTotal || 0,
+    );
+    let serviceFee = 0;
+    if (poFullTotal > 0) {
+      serviceFee = Math.max(
+        0,
+        poFullTotal - sumAdditionalPrice - effectiveDeliveryFee,
+      );
+    } else if (order.serviceFee !== undefined && order.serviceFee !== null) {
+      serviceFee = parseFloat(order.serviceFee) || 0;
+    }
+    total += serviceFee;
+  }
+
+  total -= parseFloat(order.discount || 0);
+
+  if (
+    order.orderApp === "Marketplace" &&
+    parseFloat(order.couponValue || 0) > 0 &&
+    !order.serviceFee
+  ) {
+    total -= parseFloat(order.couponValue || 0);
+  }
+
+  return total;
+};
+
+const splitCustomerName = (customerName) => {
+  const nameParts = customerName.trim().split(" ");
+  const firstName = nameParts[0] || "Valued";
+  const lastName =
+    nameParts.length > 1 ? nameParts.slice(1).join(" ") : "Customer";
+  return { firstName, lastName };
+};
+
+// ─── Bulk: generate + email invoices for a list of orders ─────────────────────
+
 exports.processDeliveryInvoices = async (req, res) => {
   try {
     const { orderIds } = req.body;
@@ -19,15 +158,6 @@ exports.processDeliveryInvoices = async (req, res) => {
     // Fetch delivery city list once to avoid repeated DB calls
     const cities = await targetDDao.getAllCity();
 
-    const extractFee = (charge) => {
-      if (charge === null || charge === undefined) return 0;
-      if (typeof charge === "number") return charge;
-      if (typeof charge === "string")
-        return parseFloat(charge.replace(/[^\d.]/g, "")) || 0;
-      return 0;
-    };
-
-    // Process orders
     for (const orderId of orderIds) {
       try {
         const order = await targetDDao.getOrderById(orderId);
@@ -35,69 +165,25 @@ exports.processDeliveryInvoices = async (req, res) => {
           throw new Error(order?.message || `Order ${orderId} not found`);
         }
 
-        const invoiceNo =
-          order.invoiceNo ||
-          order.invoiceNumber ||
-          order.orderStatus?.invoiceNumber ||
-          order.orderId ||
-          orderId;
-
-        // Calculate delivery fee
-        let deliveryFee = 0;
-        const isFreeDelivery =
-          order.isCoupon === 1 && order.couponType === "Free Delivery";
-
-        if (!isFreeDelivery && order.delivaryMethod !== "Pickup") {
-          let cityFromAddress = null;
-          if (order.fullAddress && typeof order.fullAddress === "string") {
-            const addressParts = order.fullAddress
-              .split(",")
-              .map((part) => part.trim());
-            if (addressParts.length > 0) {
-              cityFromAddress = addressParts[addressParts.length - 1];
-            }
-          }
-
-          if (!cityFromAddress || cityFromAddress.trim() === "") {
-            const customerInfo = order.customerInfo || {};
-            cityFromAddress = customerInfo.city || order.city || null;
-          }
-
-          if (cityFromAddress && cityFromAddress.trim() !== "") {
-            const searchCityName = cityFromAddress.toLowerCase().trim();
-            const cityData = cities.find((c) => {
-              if (!c.city) return false;
-              return c.city.toLowerCase().trim() === searchCityName;
-            });
-
-            if (cityData) {
-              deliveryFee = extractFee(cityData.charge);
-            } else {
-              const partialMatch = cities.find((c) => {
-                if (!c.city) return false;
-                const dbCityName = c.city.toLowerCase().trim();
-                return (
-                  dbCityName.includes(searchCityName) ||
-                  searchCityName.includes(dbCityName)
-                );
-              });
-              deliveryFee = partialMatch ? extractFee(partialMatch.charge) : 0;
-            }
-          }
-        }
+        const deliveryFee = resolveDeliveryFee(order, cities);
 
         // Generate PDF buffer
-        const pdfBuffer = await invoicePdfService.generateOrderPDF(order, deliveryFee);
+        const pdfBuffer = await invoicePdfService.generateOrderPDF(
+          order,
+          deliveryFee,
+        );
 
         // email lives inside customerInfo in getOrderById return shape
-        let emailAddress =
+        const emailAddress =
           order.customerInfo?.email ||
           order.customerEmail ||
           order.email ||
           null;
 
         if (!emailAddress) {
-          console.warn(`[processDeliveryInvoices] No email for orderId=${orderId} — skipping this order`);
+          console.warn(
+            `[processDeliveryInvoices] No email for orderId=${orderId} — skipping this order`,
+          );
           errors.push({ orderId, error: "No customer email found" });
           continue;
         }
@@ -108,57 +194,17 @@ exports.processDeliveryInvoices = async (req, res) => {
           order.customerName ||
           "Valued Customer";
 
-        const nameParts = customerName.trim().split(" ");
-        const firstName = nameParts[0] || "Valued";
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "Customer";
+        const { firstName, lastName } = splitCustomerName(customerName);
 
         // Resolve invoiceNo from the correct nested path
         const resolvedInvoiceNo =
           order.orderStatus?.invoiceNumber ||
-          invoiceNo ||
+          order.invoiceNo ||
+          order.invoiceNumber ||
+          order.orderId ||
           orderId;
 
-        // Calculate totalAmount matching frontend
-        let calculatedTotal = 0;
-
-        if (order.packages && Array.isArray(order.packages)) {
-          order.packages.forEach((pkg) => {
-            calculatedTotal +=
-              parseFloat(pkg.productPrice || 0) +
-              parseFloat(pkg.packingFee || 0) +
-              parseFloat(pkg.serviceFee || 0);
-          });
-        }
-
-        if (order.additionalItems && Array.isArray(order.additionalItems)) {
-          order.additionalItems.forEach((item) => {
-            calculatedTotal +=
-              parseFloat(item.price || 0) + parseFloat(item.discount || 0);
-          });
-        }
-
-        if (!isFreeDelivery && order.delivaryMethod !== "Pickup") {
-          calculatedTotal += deliveryFee;
-        }
-
-        if (
-          order.orderApp === "Dash" &&
-          order.isPackage === 0 &&
-          !order.couponValue &&
-          !order.serviceFee
-        ) {
-          calculatedTotal += 180;
-        }
-
-        calculatedTotal -= parseFloat(order.discount || 0);
-
-        if (
-          order.orderApp === "Marketplace" &&
-          parseFloat(order.couponValue || 0) > 0 &&
-          !order.serviceFee
-        ) {
-          calculatedTotal -= parseFloat(order.couponValue || 0);
-        }
+        const calculatedTotal = calculateInvoiceTotal(order, deliveryFee);
 
         emailsData.push({
           email: emailAddress,
@@ -171,7 +217,6 @@ exports.processDeliveryInvoices = async (req, res) => {
           invoiceNo: resolvedInvoiceNo,
           totalAmount: calculatedTotal,
         });
-
       } catch (err) {
         console.error(`Error processing order ${orderId}:`, err);
         errors.push({ orderId, error: err.message });
@@ -207,8 +252,14 @@ exports.processDeliveryInvoices = async (req, res) => {
         );
         emailsSent++;
       } catch (emailErr) {
-        console.error(`Failed to send email to ${emailItem.email} for order ${emailItem.invoiceNo}:`, emailErr);
-        errors.push({ orderId: emailItem.invoiceNo, error: `Email send failed: ${emailErr.message}` });
+        console.error(
+          `Failed to send email to ${emailItem.email} for order ${emailItem.invoiceNo}:`,
+          emailErr,
+        );
+        errors.push({
+          orderId: emailItem.invoiceNo,
+          error: `Email send failed: ${emailErr.message}`,
+        });
       }
     }
 
@@ -217,7 +268,6 @@ exports.processDeliveryInvoices = async (req, res) => {
       emailsSent,
       errors: errors.length > 0 ? errors : undefined,
     });
-
   } catch (error) {
     console.error("Error in processDeliveryInvoices endpoint:", error);
     res.status(500).json({
@@ -227,6 +277,8 @@ exports.processDeliveryInvoices = async (req, res) => {
     });
   }
 };
+
+// ─── Single: generate + email the post invoice for one order ──────────────────
 
 /**
  * Automatically generates and sends Post Invoice PDF to the customer's registered email
@@ -244,40 +296,52 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
       WHERE id = ? LIMIT 1
     `;
     let targetProcessOrderId = null;
-    const [poRows] = await db.collectionofficer.promise().query(resolveMasterOrderSql, [orderIdInput]);
+    const [poRows] = await db.collectionofficer
+      .promise()
+      .query(resolveMasterOrderSql, [orderIdInput]);
     if (poRows && poRows.length > 0 && poRows[0].orderId) {
       masterOrderId = poRows[0].orderId;
       targetProcessOrderId = orderIdInput;
     }
-    console.log(`${tag} Resolved masterOrderId=${masterOrderId}, targetProcessOrderId=${targetProcessOrderId}`);
+    console.log(
+      `${tag} Resolved masterOrderId=${masterOrderId}, targetProcessOrderId=${targetProcessOrderId}`,
+    );
 
-    const order = await targetDDao.getOrderById(masterOrderId, targetProcessOrderId);
+    const order = await targetDDao.getOrderById(
+      masterOrderId,
+      targetProcessOrderId,
+    );
     if (!order || order.message) {
-      console.warn(`${tag} Order not found for masterOrderId=${masterOrderId}. Skipping email.`);
+      console.warn(
+        `${tag} Order not found for masterOrderId=${masterOrderId}. Skipping email.`,
+      );
       return { success: false, message: "Order not found" };
     }
 
-    // ── 1. Resolve email ──────────────────────────────────────────────────────
+    // ── 1. Resolve email ────────────────────────────────────────────────────
     // email lives inside customerInfo (from getOrderById return shape).
     // Fall back to a direct DB lookup on marketplaceusers if still missing.
     let emailAddress =
-      order.customerInfo?.email ||
-      order.email ||
-      order.customerEmail ||
-      null;
+      order.customerInfo?.email || order.email || order.customerEmail || null;
 
     if (!emailAddress && order.userId) {
       try {
-        const [uRows] = await db.collectionofficer.promise().query(
-          "SELECT email FROM marketplaceusers WHERE id = ? LIMIT 1",
-          [order.userId]
-        );
+        const [uRows] = await db.collectionofficer
+          .promise()
+          .query("SELECT email FROM marketplaceusers WHERE id = ? LIMIT 1", [
+            order.userId,
+          ]);
         if (uRows && uRows.length > 0 && uRows[0].email) {
           emailAddress = uRows[0].email;
-          console.log(`${tag} Resolved email from marketplaceusers: ${emailAddress}`);
+          console.log(
+            `${tag} Resolved email from marketplaceusers: ${emailAddress}`,
+          );
         }
       } catch (uErr) {
-        console.error(`${tag} Error looking up email from marketplaceusers:`, uErr);
+        console.error(
+          `${tag} Error looking up email from marketplaceusers:`,
+          uErr,
+        );
       }
     }
 
@@ -286,7 +350,7 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
       return { success: false, message: "No customer email found" };
     }
 
-    // ── 2. Resolve invoiceNo ──────────────────────────────────────────────────
+    // ── 2. Resolve invoiceNo ────────────────────────────────────────────────
     // invoiceNumber is inside order.orderStatus, not at root level.
     const invoiceNo =
       order.orderStatus?.invoiceNumber ||
@@ -294,92 +358,40 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
       order.invoiceNumber ||
       masterOrderId;
 
-    // ── 3. Resolve customer name ──────────────────────────────────────────────
+    // ── 3. Resolve customer name ────────────────────────────────────────────
     const customerName =
       order.customerInfo?.fullName ||
       order.fullName ||
       order.customerName ||
       "Valued Customer";
 
-    const nameParts = customerName.trim().split(" ");
-    const firstName = nameParts[0] || "Valued";
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "Customer";
+    const { firstName, lastName } = splitCustomerName(customerName);
     const fullName = `${firstName} ${lastName}`.trim();
 
-    // ── 4. Delivery fee ───────────────────────────────────────────────────────
+    // ── 4. Delivery fee ─────────────────────────────────────────────────────
     const cities = await targetDDao.getAllCity();
-    const extractFee = (charge) => {
-      if (charge === null || charge === undefined) return 0;
-      if (typeof charge === "number") return charge;
-      if (typeof charge === "string")
-        return parseFloat(charge.replace(/[^\d.]/g, "")) || 0;
-      return 0;
-    };
+    const deliveryFee = resolveDeliveryFee(order, cities);
+    const isPickup = isPickupOrder(order);
 
-    let deliveryFee = 0;
-    const isFreeDelivery = order.isCoupon === 1 && order.couponType === "Free Delivery";
-    const isPickup = (order.delivaryMethod || "").toLowerCase().includes("pickup");
-
-    if (!isFreeDelivery && !isPickup) {
-      let cityFromAddress = null;
-      if (order.fullAddress && typeof order.fullAddress === "string") {
-        const addressParts = order.fullAddress.split(",").map((part) => part.trim());
-        if (addressParts.length > 0) {
-          cityFromAddress = addressParts[addressParts.length - 1];
-        }
-      }
-      if (!cityFromAddress || cityFromAddress.trim() === "") {
-        cityFromAddress = order.customerInfo?.city || order.city || null;
-      }
-      if (cityFromAddress && cityFromAddress.trim() !== "") {
-        const searchCityName = cityFromAddress.toLowerCase().trim();
-        const cityData = cities.find((c) => c.city && c.city.toLowerCase().trim() === searchCityName);
-        if (cityData) {
-          deliveryFee = extractFee(cityData.charge);
-        } else {
-          const partialMatch = cities.find((c) => c.city && (
-            c.city.toLowerCase().trim().includes(searchCityName) ||
-            searchCityName.includes(c.city.toLowerCase().trim())
-          ));
-          deliveryFee = partialMatch ? extractFee(partialMatch.charge) : 0;
-        }
-      }
-    }
-
-    // ── 5. Generate PDF ───────────────────────────────────────────────────────
+    // ── 5. Generate PDF ─────────────────────────────────────────────────────
     let pdfBuffer;
     try {
       pdfBuffer = await invoicePdfService.generateOrderPDF(order, deliveryFee);
     } catch (pdfErr) {
       console.error(`${tag} Failed to generate PDF:`, pdfErr.message);
-      return { success: false, message: `PDF generation failed: ${pdfErr.message}` };
+      return {
+        success: false,
+        message: `PDF generation failed: ${pdfErr.message}`,
+      };
     }
 
-    // ── 6. Calculate total ────────────────────────────────────────────────────
-    let calculatedTotal = 0;
-    if (order.packages && Array.isArray(order.packages)) {
-      order.packages.forEach((pkg) => {
-        calculatedTotal += parseFloat(pkg.productPrice || 0) + parseFloat(pkg.packingFee || 0) + parseFloat(pkg.serviceFee || 0);
-      });
-    }
-    if (order.additionalItems && Array.isArray(order.additionalItems)) {
-      order.additionalItems.forEach((item) => {
-        calculatedTotal += parseFloat(item.price || 0) + parseFloat(item.discount || 0);
-      });
-    }
-    if (!isFreeDelivery && !isPickup) {
-      calculatedTotal += deliveryFee;
-    }
-    if (order.orderApp === "Dash" && order.isPackage === 0 && !order.couponValue && !order.serviceFee) {
-      calculatedTotal += 180;
-    }
-    calculatedTotal -= parseFloat(order.discount || 0);
-    if (order.orderApp === "Marketplace" && parseFloat(order.couponValue || 0) > 0 && !order.serviceFee) {
-      calculatedTotal -= parseFloat(order.couponValue || 0);
-    }
+    // ── 6. Calculate total ──────────────────────────────────────────────────
+    const calculatedTotal = calculateInvoiceTotal(order, deliveryFee);
 
-    // ── 7. Send email (retry logic is inside emailService.sendEmail) ──────────
-    console.log(`${tag} Sending invoice email to "${emailAddress}" for invoice ${invoiceNo}`);
+    // ── 7. Send email (retry logic is inside emailService.sendEmail) ────────
+    console.log(
+      `${tag} Sending invoice email to "${emailAddress}" for invoice ${invoiceNo}`,
+    );
     await emailService.sendEmail(
       emailAddress,
       `Your Polygon Invoice - ${invoiceNo}`,
@@ -398,10 +410,12 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
           content: pdfBuffer,
           contentType: "application/pdf",
         },
-      ]
+      ],
     );
 
-    console.log(`✅ ${tag} Post Invoice email sent to "${emailAddress}" for invoice ${invoiceNo} (isPickup: ${isPickup})`);
+    console.log(
+      `✅ ${tag} Post Invoice email sent to "${emailAddress}" for invoice ${invoiceNo} (isPickup: ${isPickup})`,
+    );
     return { success: true };
   } catch (err) {
     console.error(`❌ ${tag} Failed to send post invoice email:`, {
@@ -412,4 +426,3 @@ exports.sendSinglePostInvoiceEmail = async (orderIdInput) => {
     return { success: false, error: err.message };
   }
 };
-
