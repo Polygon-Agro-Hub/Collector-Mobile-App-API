@@ -1,9 +1,20 @@
 const jwt = require("jsonwebtoken");
 const userAuthDao = require("../../dao/common/user-auth-dao");
 const bcrypt = require("bcrypt");
-const { loginSchema } = require("../../validation/auth-validation");
+const {
+  loginSchema,
+  refreshTokenSchema,
+} = require("../../validation/auth-validation");
 const { ROLES } = require("../../constants/user-roles");
 const authMiddleware = require("../../middleware/auth.middleware");
+
+// ─── Token Expiration Constants ──────────────────────────────────────────────
+// Modify token expiration times directly via these constants (e.g. "12h", "4d", or "30s" for testing):
+const ACCESS_TOKEN_EXPIRY = "12h";
+const REFRESH_TOKEN_EXPIRY = "4d";
+
+exports.ACCESS_TOKEN_EXPIRY = ACCESS_TOKEN_EXPIRY;
+exports.REFRESH_TOKEN_EXPIRY = REFRESH_TOKEN_EXPIRY;
 
 exports.loginUser = async (req, res) => {
   try {
@@ -118,7 +129,19 @@ exports.loginUser = async (req, res) => {
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: "12h",
+      expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+
+    const refreshSecret =
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh";
+    const refreshPayload = {
+      id: officer.id,
+      empId: officer.empId,
+      role: officer.jobRole,
+      type: "refresh",
+    };
+    const refreshToken = jwt.sign(refreshPayload, refreshSecret, {
+      expiresIn: REFRESH_TOKEN_EXPIRY,
     });
 
     const passwordUpdateRequired = !officer.passwordUpdated;
@@ -131,6 +154,7 @@ exports.loginUser = async (req, res) => {
       officer: payload,
       passwordUpdateRequired,
       token,
+      refreshToken,
       userId: officer.id,
       jobRole: jobRole,
       empId: officer.empId,
@@ -424,6 +448,156 @@ exports.notifyStatusChanged = async (req, res) => {
       success: false,
       message: "An error occurred while notifying status change.",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * Refreshes an expired 12-hour access token using a valid 4-day refresh token.
+ * Validates cryptographic signature, token type, live officer account status,
+ * and issues a fresh 12-hour access token and rotated 4-day refresh token.
+ */
+exports.refreshAccessToken = async (req, res) => {
+  try {
+    const { error } = refreshTokenSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        status: "error",
+        code: "VALIDATION_ERROR",
+        message: error.details[0].message,
+      });
+    }
+
+    const { refreshToken } = req.body;
+    const refreshSecret =
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh";
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, refreshSecret);
+    } catch (jwtErr) {
+      return res.status(401).json({
+        status: "error",
+        code: "INVALID_REFRESH_TOKEN",
+        message:
+          jwtErr.name === "TokenExpiredError"
+            ? "Refresh token expired. Please log in again."
+            : "Invalid refresh token. Please log in again.",
+      });
+    }
+
+    if (!decoded || !decoded.id || decoded.type !== "refresh") {
+      return res.status(401).json({
+        status: "error",
+        code: "INVALID_REFRESH_TOKEN",
+        message: "Invalid refresh token structure.",
+      });
+    }
+
+    // Live account status check
+    const officerStatus = await userAuthDao.getOfficerStatusById(decoded.id);
+    if (!officerStatus) {
+      return res.status(401).json({
+        status: "error",
+        code: "ACCOUNT_NOT_FOUND",
+        message: "Account not found.",
+      });
+    }
+
+    const rawStatus = (officerStatus.status || "").toLowerCase();
+    if (rawStatus !== "approved") {
+      return res.status(403).json({
+        status: "error",
+        code:
+          rawStatus === "rejected" || rawStatus === "banned"
+            ? "ACCOUNT_BANNED"
+            : "NOT_APPROVED",
+        message: `Account is ${officerStatus.status || "not approved"}. Access denied.`,
+      });
+    }
+
+    const ALLOWED_ROLES = Object.values(ROLES).map((r) => r.toLowerCase());
+    if (
+      !officerStatus.jobRole ||
+      !ALLOWED_ROLES.includes(officerStatus.jobRole.toLowerCase())
+    ) {
+      return res.status(403).json({
+        status: "error",
+        code: "ROLE_NOT_ALLOWED",
+        message: "Your role is not authorized to use this application.",
+      });
+    }
+
+    // Fetch full officer details with company & center mappings
+    const officers = await userAuthDao.getOfficerPasswordById(
+      officerStatus.id,
+      officerStatus.jobRole
+    );
+
+    if (!officers || officers.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Officer details not found.",
+      });
+    }
+
+    const officer = officers[0];
+    let center;
+    const normalizedJobRole = (officer.jobRole || "").toLowerCase();
+    if (
+      normalizedJobRole === "collection officer" ||
+      normalizedJobRole === "collection centre manager"
+    ) {
+      center = officer.centerId;
+    } else if (
+      normalizedJobRole === "distribution centre manager" ||
+      normalizedJobRole === "distribution officer"
+    ) {
+      center = officer.distributedCenterId;
+    }
+
+    const payload = {
+      id: officer.id,
+      email: officer.email,
+      firstNameEnglish: officer.firstNameEnglish,
+      lastNameEnglish: officer.lastNameEnglish,
+      phoneNumber01: officer.phoneNumber01,
+      centerId: center,
+      companyId: officer.companyId,
+      empId: officer.empId,
+      role: officer.jobRole,
+      companycenterId: officer.companycenterId,
+      accountStatus: officer.status,
+      status: officer.status,
+    };
+
+    const newAccessToken = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+
+    const newRefreshPayload = {
+      id: officer.id,
+      empId: officer.empId,
+      role: officer.jobRole,
+      type: "refresh",
+    };
+
+    const newRefreshToken = jwt.sign(newRefreshPayload, refreshSecret, {
+      expiresIn: REFRESH_TOKEN_EXPIRY,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Token refreshed successfully",
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      officer: payload,
+    });
+  } catch (error) {
+    console.error("Error in refreshAccessToken:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "An error occurred while refreshing the token.",
     });
   }
 };

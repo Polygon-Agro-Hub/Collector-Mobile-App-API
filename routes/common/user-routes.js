@@ -1,10 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../../middleware/auth.middleware");
-const { authLimiter } = require("../../middleware/rateLimiter");
+const { authLimiter, refreshLimiter } = require("../../middleware/rateLimiter");
 const userAuthEp = require("../../end-point/common/user-auth-ep");
 
 router.post("/login", authLimiter, userAuthEp.loginUser);
+
+router.post("/refresh-token", refreshLimiter, userAuthEp.refreshAccessToken);
 
 router.post("/online-status", userAuthEp.updateOnlineStatus);
 
