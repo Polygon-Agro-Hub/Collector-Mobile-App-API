@@ -9,9 +9,9 @@ const { ROLES } = require("../../constants/user-roles");
 const authMiddleware = require("../../middleware/auth.middleware");
 
 // ─── Token Expiration Constants ──────────────────────────────────────────────
-// Modify token expiration times directly via these constants (e.g. "12h", "4d", or "30s" for testing):
-const ACCESS_TOKEN_EXPIRY = "12h";
-const REFRESH_TOKEN_EXPIRY = "4d";
+// Modify token expiration times directly via these constants (e.g. "16h", "14d", or "30s" for testing):
+const ACCESS_TOKEN_EXPIRY = "16h";
+const REFRESH_TOKEN_EXPIRY = "14d";
 
 exports.ACCESS_TOKEN_EXPIRY = ACCESS_TOKEN_EXPIRY;
 exports.REFRESH_TOKEN_EXPIRY = REFRESH_TOKEN_EXPIRY;
@@ -133,24 +133,48 @@ exports.loginUser = async (req, res) => {
     });
 
     const refreshSecret =
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh";
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
     const refreshPayload = {
       id: officer.id,
       empId: officer.empId,
       role: officer.jobRole,
+      tokenType: "refresh",
       type: "refresh",
     };
     const refreshToken = jwt.sign(refreshPayload, refreshSecret, {
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
 
+    res.cookie("authToken", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 16 * 60 * 60 * 1000,
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 14 * 24 * 60 * 60 * 1000,
+    });
+
     const passwordUpdateRequired = !officer.passwordUpdated;
 
     const response = {
+      success: true,
       status: "success",
       message: passwordUpdateRequired
         ? "Login successful, but password update is required"
         : "Login successful",
+      data: {
+        token,
+        refreshToken,
+        id: officer.id,
+        empId: officer.empId,
+        jobRole: jobRole,
+        passwordUpdate: passwordUpdateRequired,
+      },
       officer: payload,
       passwordUpdateRequired,
       token,
@@ -455,13 +479,14 @@ exports.notifyStatusChanged = async (req, res) => {
 /**
  * Refreshes an expired 12-hour access token using a valid 4-day refresh token.
  * Validates cryptographic signature, token type, live officer account status,
- * and issues a fresh 12-hour access token and rotated 4-day refresh token.
+ * and issues a fresh 16-hour access token and rotated 14-day refresh token.
  */
 exports.refreshAccessToken = async (req, res) => {
   try {
     const { error } = refreshTokenSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
+        success: false,
         status: "error",
         code: "VALIDATION_ERROR",
         message: error.details[0].message,
@@ -470,27 +495,30 @@ exports.refreshAccessToken = async (req, res) => {
 
     const { refreshToken } = req.body;
     const refreshSecret =
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh";
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, refreshSecret);
     } catch (jwtErr) {
       return res.status(401).json({
+        success: false,
         status: "error",
         code: "INVALID_REFRESH_TOKEN",
-        message:
-          jwtErr.name === "TokenExpiredError"
-            ? "Refresh token expired. Please log in again."
-            : "Invalid refresh token. Please log in again.",
+        message: "Invalid or expired refresh token",
       });
     }
 
-    if (!decoded || !decoded.id || decoded.type !== "refresh") {
+    if (
+      !decoded ||
+      !decoded.id ||
+      (decoded.tokenType !== "refresh" && decoded.type !== "refresh")
+    ) {
       return res.status(401).json({
+        success: false,
         status: "error",
         code: "INVALID_REFRESH_TOKEN",
-        message: "Invalid refresh token structure.",
+        message: "Invalid refresh token",
       });
     }
 
@@ -579,6 +607,7 @@ exports.refreshAccessToken = async (req, res) => {
       id: officer.id,
       empId: officer.empId,
       role: officer.jobRole,
+      tokenType: "refresh",
       type: "refresh",
     };
 
@@ -586,9 +615,28 @@ exports.refreshAccessToken = async (req, res) => {
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
 
+    res.cookie("authToken", newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 16 * 60 * 60 * 1000,
+    });
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 14 * 24 * 60 * 60 * 1000,
+    });
+
     return res.status(200).json({
+      success: true,
       status: "success",
       message: "Token refreshed successfully",
+      data: {
+        token: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
       token: newAccessToken,
       refreshToken: newRefreshToken,
       officer: payload,

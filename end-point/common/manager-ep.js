@@ -283,12 +283,27 @@ exports.getClaimOfficer = async (req, res) => {
 
 exports.createClaimOfficer = async (req, res) => {
   const { officerId } = req.body;
-  const token = req.headers.authorization?.split(" ")[1];
+  const authHeader = req.headers["authorization"] || req.headers["Authorization"];
+  let token = null;
+  if (authHeader) {
+    token = authHeader.startsWith("Bearer ") || authHeader.startsWith("bearer ")
+      ? authHeader.substring(7).trim()
+      : authHeader.trim();
+  }
+  if (token) {
+    token = token.replace(/^["']|["']$/g, "").trim();
+  }
+
   if (!token) {
     return res.status(401).json({ message: "Authorization token is missing" });
   }
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET || "T1");
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
   const irmId = decoded.id;
   const centerId = decoded.centerId;
   const mangerJobRole = decoded.role;

@@ -6,6 +6,7 @@ require("dotenv").config();
  */
 const REQUIRED_ENV_VARS = [
   "JWT_SECRET",
+  "JWT_REFRESH_SECRET",
   "DB_HOST",
   "DB_USER",
   "DB_PASSWORD",
@@ -56,7 +57,7 @@ module.exports = {
   port: parseInt(process.env.PORT, 10) || 3000,
   jwtSecret: process.env.JWT_SECRET,
   jwtRefreshSecret:
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh",
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
   isProduction: process.env.NODE_ENV === "production",
   db: {
     host: process.env.DB_HOST,
