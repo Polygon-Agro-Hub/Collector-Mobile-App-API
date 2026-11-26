@@ -52,10 +52,25 @@ const clearOfficerStatusCache = (id) => {
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 const auth = (req, res, next) => {
-  const token = req.headers["authorization"]?.split(" ")[1];
+  const authHeader = req.headers["authorization"] || req.headers["Authorization"];
+  let token = null;
+
+  if (authHeader) {
+    if (authHeader.startsWith("Bearer ") || authHeader.startsWith("bearer ")) {
+      token = authHeader.substring(7).trim();
+    } else {
+      token = authHeader.trim();
+    }
+  }
+
+  // Strip quotes if wrapped in quotes
+  if (token) {
+    token = token.replace(/^["']|["']$/g, "").trim();
+  }
 
   if (!token) {
     return res.status(401).json({
+      success: false,
       status: "error",
       message: "No token provided",
     });
@@ -63,7 +78,9 @@ const auth = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
+      console.error("Token verification error:", err.message || err);
       return res.status(401).json({
+        success: false,
         status: "error",
         message: "Invalid or expired token",
       });
@@ -71,6 +88,7 @@ const auth = (req, res, next) => {
 
     if (!decoded?.id) {
       return res.status(401).json({
+        success: false,
         status: "error",
         message: "Token is missing officer ID",
       });
@@ -87,6 +105,7 @@ const auth = (req, res, next) => {
         // Fail closed — never let a DB error silently pass a user through.
         console.error("[Auth] DB status check failed:", dbError?.message || dbError);
         return res.status(503).json({
+          success: false,
           status: "error",
           message: "Service temporarily unavailable. Please try again.",
         });
@@ -95,6 +114,7 @@ const auth = (req, res, next) => {
 
     if (!officer) {
       return res.status(401).json({
+        success: false,
         status: "error",
         message: "Account not found",
         statusType: "not_found",
@@ -107,6 +127,7 @@ const auth = (req, res, next) => {
     if (normalizedStatus === "rejected" || normalizedStatus === "banned") {
       clearOfficerStatusCache(decoded.id); // force fresh check next time
       return res.status(403).json({
+        success: false,
         status: "error",
         message: "This account has been rejected.",
         accountStatus: "Rejected",
@@ -117,6 +138,7 @@ const auth = (req, res, next) => {
     // ── Not Approved (any status that is not exactly "approved") ──────────
     if (normalizedStatus !== "approved") {
       return res.status(403).json({
+        success: false,
         status: "error",
         message: `This account is not approved (status: ${officer.status || "unknown"}).`,
         accountStatus: officer.status || "Not Approved",

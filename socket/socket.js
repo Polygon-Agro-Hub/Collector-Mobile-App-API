@@ -17,17 +17,15 @@ const initSocket = (httpServer) => {
   // Socket.IO JWT authentication middleware (matching Govi Transport pattern)
   io.use((socket, next) => {
     try {
-      const token =
+      let token =
         socket.handshake.auth?.token ||
         socket.handshake.headers?.authorization?.replace("Bearer ", "") ||
         socket.handshake.query?.token;
 
       if (token) {
+        token = token.replace(/^["']|["']$/g, "").trim();
         try {
-          const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET || "default_jwt_secret_key"
-          );
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
           socket.userId = decoded.id;
           socket.empId = decoded.empId;
           socket.user = decoded;
@@ -89,10 +87,8 @@ const initSocket = (httpServer) => {
 
       if (token && (!socket.userId || !socket.empId)) {
         try {
-          const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET || "default_jwt_secret_key"
-          );
+          const cleanToken = token.replace(/^["']|["']$/g, "").trim();
+          const decoded = jwt.verify(cleanToken, process.env.JWT_SECRET);
           socket.userId = decoded.id;
           socket.empId = decoded.empId;
           socket.user = decoded;
